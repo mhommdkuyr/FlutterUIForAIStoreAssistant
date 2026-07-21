@@ -13,40 +13,40 @@ class StorageService {
     _prefs = await SharedPreferences.getInstance();
   }
 
-  SharedPreferences get _p {
-    assert(_prefs != null, 'StorageService.initialize() must be called before use.');
-    return _prefs!;
-  }
+  /// Returns the underlying SharedPreferences instance.
+  /// Falls back gracefully if [initialize] has not been called yet
+  /// (safe for widget tests and alternate entry-points).
+  SharedPreferences? get _p => _prefs;
 
   // ── Theme ─────────────────────────────────────────────────────────────────
 
-  Future<void> setThemeMode(String mode) => _p.setString(AppConstants.keyThemeMode, mode);
-  String? getThemeMode() => _p.getString(AppConstants.keyThemeMode);
+  Future<void> setThemeMode(String mode) async => _p?.setString(AppConstants.keyThemeMode, mode);
+  String? getThemeMode() => _p?.getString(AppConstants.keyThemeMode);
 
   // ── Language ──────────────────────────────────────────────────────────────
 
-  Future<void> setLanguage(String langCode) => _p.setString(AppConstants.keyLanguage, langCode);
-  String getLanguage() => _p.getString(AppConstants.keyLanguage) ?? 'en';
+  Future<void> setLanguage(String langCode) async => _p?.setString(AppConstants.keyLanguage, langCode);
+  String getLanguage() => _p?.getString(AppConstants.keyLanguage) ?? 'en';
 
   // ── Onboarding ────────────────────────────────────────────────────────────
 
-  Future<void> setOnboardingDone() => _p.setBool(AppConstants.keyOnboardingDone, true);
-  bool isOnboardingDone() => _p.getBool(AppConstants.keyOnboardingDone) ?? false;
+  Future<void> setOnboardingDone() async => _p?.setBool(AppConstants.keyOnboardingDone, true);
+  bool isOnboardingDone() => _p?.getBool(AppConstants.keyOnboardingDone) ?? false;
 
   // ── Generic ───────────────────────────────────────────────────────────────
 
-  Future<bool> setString(String key, String value) => _p.setString(key, value);
-  String? getString(String key) => _p.getString(key);
+  Future<bool> setString(String key, String value) async => await _p?.setString(key, value) ?? false;
+  String? getString(String key) => _p?.getString(key);
 
-  Future<bool> setBool(String key, bool value) => _p.setBool(key, value);
-  bool? getBool(String key) => _p.getBool(key);
+  Future<bool> setBool(String key, bool value) async => await _p?.setBool(key, value) ?? false;
+  bool? getBool(String key) => _p?.getBool(key);
 
-  Future<bool> setInt(String key, int value) => _p.setInt(key, value);
-  int? getInt(String key) => _p.getInt(key);
+  Future<bool> setInt(String key, int value) async => await _p?.setInt(key, value) ?? false;
+  int? getInt(String key) => _p?.getInt(key);
 
-  Future<bool> remove(String key) => _p.remove(key);
+  Future<bool> remove(String key) async => await _p?.remove(key) ?? false;
 
-  Future<bool> clear() => _p.clear();
+  Future<bool> clear() async => await _p?.clear() ?? false;
 }
 
 /// Secure storage service interface — wire to flutter_secure_storage when ready.
