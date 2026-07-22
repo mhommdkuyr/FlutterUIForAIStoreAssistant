@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
+import 'core/database/app_database.dart';
 import 'core/routing/app_router.dart';
 import 'core/theme/app_theme.dart';
 import 'core/utilities/app_date_utils.dart';
@@ -28,6 +29,7 @@ void main() async {
   // Initialize services
   await StorageService.instance.initialize();
   await AuthService.instance.initialize();
+  await AppDatabase.instance.ensureSeeded();
 
   runApp(const AiStoreAssistantApp());
 }

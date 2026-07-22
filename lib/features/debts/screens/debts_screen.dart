@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../shared/repositories/debt_repository.dart';
+import '../../../shared/repositories/repository_exceptions.dart';
 import '../../../shared/widgets/app_card.dart';
 import '../../../shared/widgets/custom_button.dart';
 import '../../../shared/widgets/custom_text_field.dart';
@@ -14,7 +16,41 @@ class DebtsScreen extends StatefulWidget {
 }
 
 class _DebtsScreenState extends State<DebtsScreen> {
-  final List<_DebtEntry> _debts = List.from(_demoDebts);
+  final DebtRepository _repository = DebtRepository();
+  final List<_DebtEntry> _debts = [];
+  bool _isLoading = false;
+  String? _errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadDebts();
+  }
+
+  Future<void> _loadDebts() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+    try {
+      final debts = await _repository.getDebts();
+      setState(() {
+        _debts.clear();
+        _debts.addAll(debts.map((debt) => _DebtEntry(
+              id: debt.id,
+              customerName: debt.customerName,
+              originalAmount: debt.originalAmount,
+              paidAmount: debt.totalPaid,
+              date: debt.createdAt,
+              note: debt.note,
+            )));
+      });
+    } on RepositoryException catch (e) {
+      setState(() => _errorMessage = e.message);
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
 
   double get _totalDebt => _debts.fold(0, (s, d) => s + d.remaining);
 
@@ -67,22 +103,21 @@ class _DebtsScreenState extends State<DebtsScreen> {
               const SizedBox(height: 20),
               CustomButton(
                 label: 'Add Debt',
-                onPressed: () {
+                onPressed: () async {
                   if (formKey.currentState?.validate() ?? false) {
-                    setState(() {
-                      _debts.insert(
-                        0,
-                        _DebtEntry(
-                          id: DateTime.now().millisecondsSinceEpoch.toString(),
-                          customerName: nameCtrl.text.trim(),
-                          originalAmount: double.parse(amountCtrl.text),
-                          paidAmount: 0,
-                          date: DateTime.now(),
-                          note: noteCtrl.text.trim().isEmpty ? null : noteCtrl.text.trim(),
-                        ),
+                    try {
+                      await _repository.createDebt(
+                        customerName: nameCtrl.text.trim(),
+                        amount: double.parse(amountCtrl.text),
+                        note: noteCtrl.text.trim().isEmpty ? null : noteCtrl.text.trim(),
                       );
-                    });
-                    Navigator.pop(ctx);
+                      if (!mounted) return;
+                      Navigator.pop(ctx);
+                      await _loadDebts();
+                    } on RepositoryException catch (e) {
+                      if (!mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message), backgroundColor: AppColors.error));
+                    }
                   }
                 },
               ),
@@ -114,14 +149,18 @@ class _DebtsScreenState extends State<DebtsScreen> {
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
           ElevatedButton(
-            onPressed: () {
+            onPressed: () async {
               final amount = double.tryParse(amountCtrl.text);
               if (amount != null && amount > 0) {
-                setState(() {
-                  final idx = _debts.indexOf(debt);
-                  _debts[idx] = debt.withPayment(amount);
-                });
-                Navigator.pop(ctx);
+                try {
+                  await _repository.recordPayment(debt.id, amount);
+                  if (!mounted) return;
+                  Navigator.pop(ctx);
+                  await _loadDebts();
+                } on RepositoryException catch (e) {
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message), backgroundColor: AppColors.error));
+                }
               }
             },
             child: const Text('Record'),
@@ -167,16 +206,23 @@ class _DebtsScreenState extends State<DebtsScreen> {
             ),
           ),
 
+          if (_errorMessage != null)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingMD),
+              child: Text(_errorMessage!, style: const TextStyle(color: AppColors.error)),
+            ),
           // Debt list
           Expanded(
-            child: _debts.isEmpty
-                ? EmptyState(icon: Icons.people_outline_rounded, title: 'No debts recorded', subtitle: 'All customers are paid up.')
-                : ListView.separated(
-                    padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingMD),
-                    itemCount: _debts.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 8),
-                    itemBuilder: (ctx, i) => _DebtTile(debt: _debts[i], onPay: () => _recordPayment(_debts[i])),
-                  ),
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : _debts.isEmpty
+                    ? EmptyState(icon: Icons.people_outline_rounded, title: 'No debts recorded', subtitle: 'All customers are paid up.')
+                    : ListView.separated(
+                        padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingMD),
+                        itemCount: _debts.length,
+                        separatorBuilder: (_, __) => const SizedBox(height: 8),
+                        itemBuilder: (ctx, i) => _DebtTile(debt: _debts[i], onPay: () => _recordPayment(_debts[i])),
+                      ),
           ),
         ],
       ),

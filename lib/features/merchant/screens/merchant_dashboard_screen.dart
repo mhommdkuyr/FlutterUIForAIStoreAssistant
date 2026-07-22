@@ -4,6 +4,8 @@ import '../../../core/constants/app_constants.dart';
 import '../../../core/constants/app_strings.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utilities/app_date_utils.dart';
+import '../../../shared/repositories/product_repository.dart';
+import '../../../shared/repositories/sale_repository.dart';
 import '../../../shared/services/auth_service.dart';
 import '../../../shared/widgets/app_card.dart';
 import '../../../shared/widgets/stat_card.dart';
@@ -51,8 +53,46 @@ class _MerchantDashboardScreenState extends State<MerchantDashboardScreen> {
   }
 }
 
-class _DashboardTab extends StatelessWidget {
+class _DashboardTab extends StatefulWidget {
   const _DashboardTab();
+
+  @override
+  State<_DashboardTab> createState() => _DashboardTabState();
+}
+
+class _DashboardTabState extends State<_DashboardTab> {
+  final ProductRepository _productRepository = ProductRepository();
+  final SaleRepository _saleRepository = SaleRepository();
+  int _inventoryCount = 0;
+  int _lowStockCount = 0;
+  double _todayRevenue = 0;
+  double _todayProfit = 0;
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadMetrics();
+  }
+
+  Future<void> _loadMetrics() async {
+    setState(() => _isLoading = true);
+    try {
+      final inventoryCount = await _productRepository.getInventoryCount();
+      final lowStockCount = await _productRepository.getLowStockCount();
+      final todayRevenue = await _saleRepository.getTodayRevenue();
+      final todayProfit = await _saleRepository.getTodayProfit();
+      if (!mounted) return;
+      setState(() {
+        _inventoryCount = inventoryCount;
+        _lowStockCount = lowStockCount;
+        _todayRevenue = todayRevenue;
+        _todayProfit = todayProfit;
+      });
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -119,45 +159,50 @@ class _DashboardTab extends StatelessWidget {
                 const SizedBox(height: 16),
 
                 // Stats grid
-                GridView.count(
-                  crossAxisCount: 2,
-                  crossAxisSpacing: 12,
-                  mainAxisSpacing: 12,
-                  childAspectRatio: 1.4,
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  children: const [
-                    StatCard(
-                      label: AppStrings.todaySales,
-                      value: 'YER 18,500',
-                      icon: Icons.trending_up_rounded,
-                      color: AppColors.primary,
-                      change: '12%',
-                    ),
-                    StatCard(
-                      label: AppStrings.todayProfit,
-                      value: 'YER 4,250',
-                      icon: Icons.attach_money_rounded,
-                      color: AppColors.accent,
-                      change: '8%',
-                    ),
-                    StatCard(
-                      label: AppStrings.inventory,
-                      value: '342 items',
-                      icon: Icons.inventory_2_rounded,
-                      color: Color(0xFF7C3AED),
-                      change: null,
-                    ),
-                    StatCard(
-                      label: AppStrings.lowStock,
-                      value: '7 products',
-                      icon: Icons.warning_amber_rounded,
-                      color: AppColors.warning,
-                      change: null,
-                      isPositiveChange: false,
-                    ),
-                  ],
-                ),
+                _isLoading
+                    ? const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 24),
+                        child: Center(child: CircularProgressIndicator()),
+                      )
+                    : GridView.count(
+                        crossAxisCount: 2,
+                        crossAxisSpacing: 12,
+                        mainAxisSpacing: 12,
+                        childAspectRatio: 1.4,
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        children: [
+                          StatCard(
+                            label: AppStrings.todaySales,
+                            value: 'YER ${_todayRevenue.toStringAsFixed(0)}',
+                            icon: Icons.trending_up_rounded,
+                            color: AppColors.primary,
+                            change: null,
+                          ),
+                          StatCard(
+                            label: AppStrings.todayProfit,
+                            value: 'YER ${_todayProfit.toStringAsFixed(0)}',
+                            icon: Icons.attach_money_rounded,
+                            color: AppColors.accent,
+                            change: null,
+                          ),
+                          StatCard(
+                            label: AppStrings.inventory,
+                            value: '$_inventoryCount items',
+                            icon: Icons.inventory_2_rounded,
+                            color: const Color(0xFF7C3AED),
+                            change: null,
+                          ),
+                          StatCard(
+                            label: AppStrings.lowStock,
+                            value: '$_lowStockCount products',
+                            icon: Icons.warning_amber_rounded,
+                            color: AppColors.warning,
+                            change: null,
+                            isPositiveChange: false,
+                          ),
+                        ],
+                      ),
                 const SizedBox(height: 20),
 
                 // Quick actions

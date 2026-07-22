@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../shared/repositories/branch_repository.dart';
+import '../../../shared/repositories/repository_exceptions.dart';
 import '../../../shared/widgets/app_card.dart';
 import '../../../shared/widgets/loading_overlay.dart';
 
@@ -12,7 +14,31 @@ class BranchesScreen extends StatefulWidget {
 }
 
 class _BranchesScreenState extends State<BranchesScreen> {
-  final List<_Branch> _branches = List.from(_demoBranches);
+  final BranchRepository _repository = BranchRepository();
+  List<BranchRecord> _branches = [];
+  bool _isLoading = false;
+  String? _errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadBranches();
+  }
+
+  Future<void> _loadBranches() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+    try {
+      final branches = await _repository.getBranches();
+      setState(() => _branches = branches);
+    } on RepositoryException catch (e) {
+      setState(() => _errorMessage = e.message);
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
 
   void _showAddBranch() {
     final nameCtrl = TextEditingController();
@@ -34,19 +60,17 @@ class _BranchesScreenState extends State<BranchesScreen> {
             TextField(controller: addressCtrl, decoration: const InputDecoration(labelText: 'Address', hintText: 'Full address')),
             const SizedBox(height: 20),
             ElevatedButton(
-              onPressed: () {
+              onPressed: () async {
                 if (nameCtrl.text.trim().isNotEmpty) {
-                  setState(() {
-                    _branches.add(_Branch(
-                      id: DateTime.now().millisecondsSinceEpoch.toString(),
-                      name: nameCtrl.text.trim(),
-                      address: addressCtrl.text.trim(),
-                      isActive: true,
-                      dailySales: 0,
-                      workerCount: 0,
-                    ));
-                  });
-                  Navigator.pop(ctx);
+                  try {
+                    await _repository.createBranch(name: nameCtrl.text.trim(), address: addressCtrl.text.trim());
+                    if (!mounted) return;
+                    Navigator.pop(ctx);
+                    await _loadBranches();
+                  } on RepositoryException catch (e) {
+                    if (!mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message), backgroundColor: AppColors.error));
+                  }
                 }
               },
               style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 48)),
@@ -63,26 +87,36 @@ class _BranchesScreenState extends State<BranchesScreen> {
     final textTheme = Theme.of(context).textTheme;
     return Scaffold(
       appBar: AppBar(title: const Text('Branch Management')),
-      body: _branches.isEmpty
-          ? EmptyState(
-              icon: Icons.store_outlined,
-              title: 'No branches yet',
-              subtitle: 'Add your first store branch to get started.',
-              action: ElevatedButton.icon(
-                onPressed: _showAddBranch,
-                icon: const Icon(Icons.add_rounded),
-                label: const Text('Add Branch'),
-              ),
-            )
-          : ListView.separated(
-              padding: const EdgeInsets.all(AppConstants.paddingMD),
-              itemCount: _branches.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 12),
-              itemBuilder: (ctx, i) => _BranchCard(
-                branch: _branches[i],
-                onToggle: () => setState(() => _branches[i] = _branches[i].toggle()),
-              ),
-            ),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : _branches.isEmpty
+              ? EmptyState(
+                  icon: Icons.store_outlined,
+                  title: 'No branches yet',
+                  subtitle: 'Add your first store branch to get started.',
+                  action: ElevatedButton.icon(
+                    onPressed: _showAddBranch,
+                    icon: const Icon(Icons.add_rounded),
+                    label: const Text('Add Branch'),
+                  ),
+                )
+              : ListView.separated(
+                  padding: const EdgeInsets.all(AppConstants.paddingMD),
+                  itemCount: _branches.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 12),
+                  itemBuilder: (ctx, i) => _BranchCard(
+                    branch: _branches[i],
+                    onToggle: () async {
+                      try {
+                        await _repository.toggleBranch(_branches[i].id);
+                        await _loadBranches();
+                      } on RepositoryException catch (e) {
+                        if (!mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message), backgroundColor: AppColors.error));
+                      }
+                    },
+                  ),
+                ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _showAddBranch,
         backgroundColor: AppColors.primary,
@@ -95,7 +129,7 @@ class _BranchesScreenState extends State<BranchesScreen> {
 
 class _BranchCard extends StatelessWidget {
   const _BranchCard({required this.branch, required this.onToggle});
-  final _Branch branch;
+  final BranchRecord branch;
   final VoidCallback onToggle;
 
   @override
@@ -179,24 +213,3 @@ class _BranchStat extends StatelessWidget {
   }
 }
 
-class _Branch {
-  final String id;
-  final String name;
-  final String address;
-  final bool isActive;
-  final double dailySales;
-  final int workerCount;
-
-  const _Branch({
-    required this.id, required this.name, required this.address,
-    required this.isActive, required this.dailySales, required this.workerCount,
-  });
-
-  _Branch toggle() => _Branch(id: id, name: name, address: address, isActive: !isActive, dailySales: dailySales, workerCount: workerCount);
-}
-
-final _demoBranches = [
-  const _Branch(id: '1', name: 'Main Branch', address: 'Tahrir Square, Sana\'a', isActive: true, dailySales: 18500, workerCount: 4),
-  const _Branch(id: '2', name: 'Al-Hasaba Branch', address: 'Al-Hasaba District, Sana\'a', isActive: true, dailySales: 12300, workerCount: 2),
-  const _Branch(id: '3', name: 'Aden Warehouse', address: 'Al-Ma\'alla, Aden', isActive: false, dailySales: 0, workerCount: 0),
-];

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../shared/repositories/product_repository.dart';
+import '../../../shared/repositories/repository_exceptions.dart';
 import '../../../shared/widgets/custom_button.dart';
 import '../../../shared/widgets/custom_text_field.dart';
 
@@ -19,6 +21,8 @@ class ScannerScreen extends StatefulWidget {
 class _ScannerScreenState extends State<ScannerScreen> {
   _ScanMode _mode = _ScanMode.barcode;
   bool _scanned = false;
+  bool _isSaving = false;
+  final ProductRepository _repository = ProductRepository();
 
   // Form controllers for manual / confirmed entry
   final _formKey = GlobalKey<FormState>();
@@ -53,15 +57,34 @@ class _ScannerScreenState extends State<ScannerScreen> {
     });
   }
 
-  void _saveProduct() {
+  Future<void> _saveProduct() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Product "${_nameCtrl.text}" saved successfully!'),
-        backgroundColor: AppColors.success,
-      ),
-    );
-    Navigator.pop(context);
+    setState(() => _isSaving = true);
+    try {
+      await _repository.createProduct(
+        name: _nameCtrl.text.trim(),
+        category: _categoryCtrl.text.trim(),
+        purchasePrice: double.parse(_purchasePriceCtrl.text),
+        sellingPrice: double.parse(_priceCtrl.text),
+        quantity: int.parse(_qtyCtrl.text),
+        barcode: _barcodeCtrl.text.trim().isEmpty ? null : _barcodeCtrl.text.trim(),
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Product "${_nameCtrl.text}" saved successfully!'),
+          backgroundColor: AppColors.success,
+        ),
+      );
+      Navigator.pop(context);
+    } on RepositoryException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.message), backgroundColor: AppColors.error),
+      );
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
   }
 
   @override
@@ -221,6 +244,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
                           CustomButton(
                             label: 'Save Product',
                             onPressed: _saveProduct,
+                            isLoading: _isSaving,
                             leading: const Icon(Icons.check_rounded, color: Colors.white),
                           ),
                           const SizedBox(height: 24),

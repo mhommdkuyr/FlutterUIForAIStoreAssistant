@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../shared/models/product_model.dart';
+import '../../../shared/repositories/product_repository.dart';
+import '../../../shared/repositories/repository_exceptions.dart';
+import '../../../shared/repositories/sale_repository.dart';
 import '../../../shared/widgets/app_card.dart';
 import '../../../shared/widgets/custom_button.dart';
 
@@ -14,13 +18,39 @@ class SalesScreen extends StatefulWidget {
 class _SalesScreenState extends State<SalesScreen> {
   final List<_CartItem> _cart = [];
   final _searchCtrl = TextEditingController();
+  final ProductRepository _productRepository = ProductRepository();
+  final SaleRepository _saleRepository = SaleRepository();
+  List<ProductModel> _products = [];
   String _query = '';
   double _discount = 0;
+  bool _isLoading = false;
+  String? _errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProducts();
+  }
+
+  Future<void> _loadProducts() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+    try {
+      final products = await _productRepository.getAllProducts(query: _query);
+      setState(() => _products = products);
+    } on RepositoryException catch (e) {
+      setState(() => _errorMessage = e.message);
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
 
   double get _subtotal => _cart.fold(0, (s, i) => s + i.totalPrice);
   double get _total => (_subtotal - _discount).clamp(0, double.infinity);
 
-  void _addToCart(_DemoSaleProduct product) {
+  void _addToCart(ProductModel product) {
     final idx = _cart.indexWhere((c) => c.id == product.id);
     if (idx >= 0) {
       setState(() => _cart[idx] = _cart[idx].increment());
@@ -28,7 +58,7 @@ class _SalesScreenState extends State<SalesScreen> {
       setState(() => _cart.add(_CartItem(
             id: product.id,
             name: product.name,
-            unitPrice: product.price,
+            unitPrice: product.sellingPrice,
             quantity: 1,
           )));
     }
@@ -38,33 +68,54 @@ class _SalesScreenState extends State<SalesScreen> {
     setState(() => _cart.removeWhere((c) => c.id == id));
   }
 
-  void _checkout() {
+  Future<void> _checkout() async {
     if (_cart.isEmpty) return;
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Sale Complete! 🎉'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('${_cart.fold(0, (s, i) => s + i.quantity)} items sold'),
-            const SizedBox(height: 8),
-            Text('Total: ${_fmtAmount(_total)}', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 18)),
+    try {
+      await _saleRepository.createSale(
+        items: _cart.map((item) => ProductModel(
+              id: item.id,
+              name: item.name,
+              category: 'Sale',
+              purchasePrice: 0,
+              sellingPrice: item.unitPrice,
+              quantity: item.quantity,
+              createdAt: DateTime.now(),
+              updatedAt: DateTime.now(),
+            )).toList(),
+        discount: _discount,
+        workerId: 'local-worker',
+        paymentMethod: 'cash',
+      );
+      if (!mounted) return;
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Sale Complete! 🎉'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('${_cart.fold(0, (s, i) => s + i.quantity)} items sold'),
+              const SizedBox(height: 8),
+              Text('Total: ${_fmtAmount(_total)}', style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 18)),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Print Receipt')),
+            ElevatedButton(
+              onPressed: () {
+                setState(() { _cart.clear(); _discount = 0; });
+                Navigator.pop(ctx);
+              },
+              child: const Text('New Sale'),
+            ),
           ],
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Print Receipt')),
-          ElevatedButton(
-            onPressed: () {
-              setState(() { _cart.clear(); _discount = 0; });
-              Navigator.pop(ctx);
-            },
-            child: const Text('New Sale'),
-          ),
-        ],
-      ),
-    );
+      );
+    } on RepositoryException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message), backgroundColor: AppColors.error));
+    }
   }
 
   String _fmtAmount(double v) => 'YER ${v.toStringAsFixed(0).replaceAllMapped(RegExp(r'\B(?=(\d{3})+(?!\d))'), (m) => ',')}';
@@ -78,7 +129,7 @@ class _SalesScreenState extends State<SalesScreen> {
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
-    final filtered = _allProducts.where((p) =>
+    final filtered = _products.where((p) =>
         _query.isEmpty || p.name.toLowerCase().contains(_query.toLowerCase())).toList();
 
     return Scaffold(
@@ -94,7 +145,10 @@ class _SalesScreenState extends State<SalesScreen> {
                 hintText: 'Search products to add...',
                 prefixIcon: Icon(Icons.search_rounded),
               ),
-              onChanged: (v) => setState(() => _query = v),
+              onChanged: (v) {
+                setState(() => _query = v);
+                _loadProducts();
+              },
             ),
           ),
 
@@ -191,8 +245,8 @@ class _SalesScreenState extends State<SalesScreen> {
 
 class _ProductChip extends StatelessWidget {
   const _ProductChip({required this.product, required this.onAdd});
-  final _DemoSaleProduct product;
-  final void Function(_DemoSaleProduct) onAdd;
+  final ProductModel product;
+  final void Function(ProductModel) onAdd;
 
   @override
   Widget build(BuildContext context) {
@@ -222,7 +276,7 @@ class _ProductChip extends StatelessWidget {
             Text(product.name, style: textTheme.labelSmall, maxLines: 2, overflow: TextOverflow.ellipsis),
             const SizedBox(height: 2),
             Text(
-              'YER ${product.price.toStringAsFixed(0)}',
+              'YER ${product.sellingPrice.toStringAsFixed(0)}',
               style: textTheme.labelSmall?.copyWith(color: AppColors.primary, fontWeight: FontWeight.w700),
             ),
           ],
@@ -310,20 +364,3 @@ class _CartItem {
   _CartItem decrement() => _CartItem(id: id, name: name, unitPrice: unitPrice, quantity: quantity - 1);
 }
 
-class _DemoSaleProduct {
-  final String id;
-  final String name;
-  final double price;
-  const _DemoSaleProduct(this.id, this.name, this.price);
-}
-
-const _allProducts = [
-  _DemoSaleProduct('1', 'Rice (5kg)', 2500),
-  _DemoSaleProduct('2', 'Cooking Oil (1L)', 1200),
-  _DemoSaleProduct('3', 'Sugar (1kg)', 800),
-  _DemoSaleProduct('4', 'Tea (250g)', 650),
-  _DemoSaleProduct('5', 'Flour (2kg)', 1100),
-  _DemoSaleProduct('6', 'Lentils (1kg)', 900),
-  _DemoSaleProduct('7', 'Salt (1kg)', 200),
-  _DemoSaleProduct('8', 'Sardines (can)', 450),
-];

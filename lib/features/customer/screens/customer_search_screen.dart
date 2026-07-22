@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../shared/models/product_model.dart';
+import '../../../shared/repositories/product_repository.dart';
+import '../../../shared/repositories/repository_exceptions.dart';
 import '../../../shared/widgets/app_card.dart';
 
 class CustomerSearchScreen extends StatefulWidget {
@@ -13,20 +16,34 @@ class CustomerSearchScreen extends StatefulWidget {
 
 class _CustomerSearchScreenState extends State<CustomerSearchScreen> {
   final _searchCtrl = TextEditingController();
+  final ProductRepository _repository = ProductRepository();
   String _query = '';
+  List<ProductModel> _products = [];
+  bool _isLoading = false;
+  String? _errorMessage;
 
-  final _products = const [
-    _DemoProduct('Rice (5kg)', 'Grains', 'YER 2,500', 'In Stock'),
-    _DemoProduct('Cooking Oil (1L)', 'Oils', 'YER 1,200', 'In Stock'),
-    _DemoProduct('Sugar (1kg)', 'Sweeteners', 'YER 800', 'Low Stock'),
-    _DemoProduct('Tea (250g)', 'Beverages', 'YER 650', 'In Stock'),
-    _DemoProduct('Flour (2kg)', 'Grains', 'YER 1,100', 'In Stock'),
-    _DemoProduct('Tomato Paste (400g)', 'Canned Goods', 'YER 350', 'Out of Stock'),
-    _DemoProduct('Lentils (1kg)', 'Legumes', 'YER 900', 'In Stock'),
-    _DemoProduct('Salt (1kg)', 'Spices', 'YER 200', 'In Stock'),
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _loadProducts();
+  }
 
-  List<_DemoProduct> get _filtered => _query.isEmpty
+  Future<void> _loadProducts() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+    try {
+      final products = await _repository.getAllProducts(query: _query);
+      setState(() => _products = products);
+    } on RepositoryException catch (e) {
+      setState(() => _errorMessage = e.message);
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  List<ProductModel> get _filtered => _query.isEmpty
       ? _products
       : _products
           .where((p) =>
@@ -75,7 +92,10 @@ class _CustomerSearchScreenState extends State<CustomerSearchScreen> {
                           )
                         : null,
                   ),
-                  onChanged: (v) => setState(() => _query = v),
+                  onChanged: (v) {
+                    setState(() => _query = v);
+                    _loadProducts();
+                  },
                 ),
                 const SizedBox(height: 12),
                 // Input type chips
@@ -117,27 +137,34 @@ class _CustomerSearchScreenState extends State<CustomerSearchScreen> {
             ),
           ),
 
+          if (_errorMessage != null)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingMD),
+              child: Text(_errorMessage!, style: const TextStyle(color: AppColors.error)),
+            ),
           // Results
           Expanded(
-            child: _filtered.isEmpty
-                ? Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.search_off_rounded, size: 64, color: Theme.of(context).colorScheme.outline),
-                        const SizedBox(height: 16),
-                        Text('No products found', style: textTheme.titleMedium),
-                        const SizedBox(height: 8),
-                        Text('Try a different search term', style: textTheme.bodySmall),
-                      ],
-                    ),
-                  )
-                : ListView.separated(
-                    padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingMD),
-                    itemCount: _filtered.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 8),
-                    itemBuilder: (ctx, i) => _ProductTile(product: _filtered[i]),
-                  ),
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : _filtered.isEmpty
+                    ? Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.search_off_rounded, size: 64, color: Theme.of(context).colorScheme.outline),
+                            const SizedBox(height: 16),
+                            Text('No products found', style: textTheme.titleMedium),
+                            const SizedBox(height: 8),
+                            Text('Try a different search term', style: textTheme.bodySmall),
+                          ],
+                        ),
+                      )
+                    : ListView.separated(
+                        padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingMD),
+                        itemCount: _filtered.length,
+                        separatorBuilder: (_, __) => const SizedBox(height: 8),
+                        itemBuilder: (ctx, i) => _ProductTile(product: _filtered[i]),
+                      ),
           ),
         ],
       ),
@@ -218,14 +245,12 @@ class _SearchChip extends StatelessWidget {
 
 class _ProductTile extends StatelessWidget {
   const _ProductTile({required this.product});
-  final _DemoProduct product;
+  final ProductModel product;
 
   Color get _stockColor {
-    switch (product.stock) {
-      case 'Out of Stock': return AppColors.error;
-      case 'Low Stock': return AppColors.warning;
-      default: return AppColors.success;
-    }
+    if (product.isOutOfStock) return AppColors.error;
+    if (product.isLowStock) return AppColors.warning;
+    return AppColors.success;
   }
 
   @override
@@ -257,7 +282,7 @@ class _ProductTile extends StatelessWidget {
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Text(product.price, style: textTheme.titleSmall?.copyWith(color: AppColors.primary, fontWeight: FontWeight.w700)),
+              Text('YER ${product.sellingPrice.toStringAsFixed(0)}', style: textTheme.titleSmall?.copyWith(color: AppColors.primary, fontWeight: FontWeight.w700)),
               const SizedBox(height: 2),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
@@ -266,7 +291,7 @@ class _ProductTile extends StatelessWidget {
                   borderRadius: BorderRadius.circular(AppConstants.radiusFull),
                 ),
                 child: Text(
-                  product.stock,
+                  product.stockStatus,
                   style: textTheme.labelSmall?.copyWith(color: _stockColor),
                 ),
               ),
@@ -278,10 +303,3 @@ class _ProductTile extends StatelessWidget {
   }
 }
 
-class _DemoProduct {
-  final String name;
-  final String category;
-  final String price;
-  final String stock;
-  const _DemoProduct(this.name, this.category, this.price, this.stock);
-}
