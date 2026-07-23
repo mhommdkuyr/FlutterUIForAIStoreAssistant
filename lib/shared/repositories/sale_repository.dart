@@ -54,21 +54,6 @@ class SaleRepository {
             throw ValidationException('Quantity must be greater than zero.');
           }
 
-          final productRow = await (_db.select(_db.products)
-                ..where((tbl) => tbl.id.equals(item.id)))
-              .getSingleOrNull();
-          if (productRow == null) {
-            throw ValidationException('Product ${item.name} was not found.');
-          }
-          if (productRow.quantity < quantity) {
-            throw ValidationException('${item.name} does not have enough stock.');
-          }
-
-          final newQty = productRow.quantity - quantity;
-          await (_db.update(_db.products)
-                ..where((tbl) => tbl.id.equals(item.id)))
-              .write(ProductsCompanion(quantity: Value(newQty)));
-
           await _db.into(_db.saleItems).insert(SaleItemsCompanion(
             id: Value(Uuid().v4()),
             saleId: Value(saleId),
