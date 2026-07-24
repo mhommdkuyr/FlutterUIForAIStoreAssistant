@@ -5,6 +5,7 @@ import '../../../core/constants/app_strings.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utilities/app_date_utils.dart';
 import '../../../shared/repositories/product_repository.dart';
+import '../../../shared/models/sale_model.dart';
 import '../../../shared/repositories/sale_repository.dart';
 import '../../../shared/services/auth_service.dart';
 import '../../../shared/widgets/app_card.dart';
@@ -67,6 +68,7 @@ class _DashboardTabState extends State<_DashboardTab> {
   int _lowStockCount = 0;
   double _todayRevenue = 0;
   double _todayProfit = 0;
+  List<SaleModel> _recentSales = [];
   bool _isLoading = true;
 
   @override
@@ -78,16 +80,20 @@ class _DashboardTabState extends State<_DashboardTab> {
   Future<void> _loadMetrics() async {
     setState(() => _isLoading = true);
     try {
-      final inventoryCount = await _productRepository.getInventoryCount();
-      final lowStockCount = await _productRepository.getLowStockCount();
-      final todayRevenue = await _saleRepository.getTodayRevenue();
-      final todayProfit = await _saleRepository.getTodayProfit();
+      final results = await Future.wait([
+        _productRepository.getInventoryCount(),
+        _productRepository.getLowStockCount(),
+        _saleRepository.getTodayRevenue(),
+        _saleRepository.getTodayProfit(),
+        _saleRepository.getRecentSales(),
+      ]);
       if (!mounted) return;
       setState(() {
-        _inventoryCount = inventoryCount;
-        _lowStockCount = lowStockCount;
-        _todayRevenue = todayRevenue;
-        _todayProfit = todayProfit;
+        _inventoryCount = results[0] as int;
+        _lowStockCount = results[1] as int;
+        _todayRevenue = results[2] as double;
+        _todayProfit = results[3] as double;
+        _recentSales = results[4] as List<SaleModel>;
       });
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -271,7 +277,20 @@ class _DashboardTabState extends State<_DashboardTab> {
                   ],
                 ),
                 const SizedBox(height: 8),
-                ..._demoTransactions.map((t) => _TransactionTile(data: t)),
+                if (_recentSales.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    child: Text(
+                      'No transactions yet',
+                      style: textTheme.bodySmall,
+                    ),
+                  )
+                else
+                  ..._recentSales.map((s) => _TransactionTile(data: {
+                        'label': 'Sale — ${s.items.length} item${s.items.length == 1 ? '' : 's'}',
+                        'time': AppDateUtils.relativeTime(s.createdAt),
+                        'amount': '+YER ${s.total.toStringAsFixed(0)}',
+                      })),
                 const SizedBox(height: 24),
               ]),
             ),
@@ -439,9 +458,3 @@ class _TransactionTile extends StatelessWidget {
   }
 }
 
-const _demoTransactions = [
-  {'label': 'Sale #1047 — 5 items', 'time': '10 mins ago', 'amount': '+YER 850'},
-  {'label': 'Sale #1046 — 2 items', 'time': '34 mins ago', 'amount': '+YER 340'},
-  {'label': 'Sale #1045 — 8 items', 'time': '1 hour ago', 'amount': '+YER 1,420'},
-  {'label': 'Sale #1044 — 1 item', 'time': '2 hours ago', 'amount': '+YER 120'},
-];
