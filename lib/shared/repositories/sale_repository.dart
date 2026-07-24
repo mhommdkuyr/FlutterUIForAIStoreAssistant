@@ -228,4 +228,166 @@ class SaleRepository {
       throw DatabaseException('Unable to load today profit: $e');
     }
   }
+
+  // ── Analytics ──────────────────────────────────────────────────────────────
+
+  /// Returns total revenue for the inclusive period [from, to).
+  Future<double> getRevenueForPeriod(DateTime from, DateTime to) async {
+    try {
+      final rows = await (_db.select(_db.sales)
+            ..where((tbl) => tbl.createdAt.isBetweenValues(from, to)))
+          .get();
+      return rows.fold<double>(0, (sum, row) => sum + row.total);
+    } catch (e) {
+      throw DatabaseException('Unable to load revenue: $e');
+    }
+  }
+
+  /// Returns total profit (revenue − COGS) for the period [from, to).
+  Future<double> getProfitForPeriod(DateTime from, DateTime to) async {
+    try {
+      final sales = await (_db.select(_db.sales)
+            ..where((tbl) => tbl.createdAt.isBetweenValues(from, to)))
+          .get();
+      double profit = 0;
+      for (final sale in sales) {
+        final items = await (_db.select(_db.saleItems)
+              ..where((tbl) => tbl.saleId.equals(sale.id)))
+            .get();
+        for (final item in items) {
+          final product = await _products.getProductById(item.productId);
+          if (product != null) {
+            profit += item.totalPrice - (product.purchasePrice * item.quantity);
+          }
+        }
+      }
+      return profit;
+    } catch (e) {
+      throw DatabaseException('Unable to load profit: $e');
+    }
+  }
+
+  /// Returns the number of transactions for the period [from, to).
+  Future<int> getTransactionCountForPeriod(DateTime from, DateTime to) async {
+    try {
+      final rows = await (_db.select(_db.sales)
+            ..where((tbl) => tbl.createdAt.isBetweenValues(from, to)))
+          .get();
+      return rows.length;
+    } catch (e) {
+      throw DatabaseException('Unable to load transaction count: $e');
+    }
+  }
+
+  /// Returns best-selling products by revenue for the period [from, to).
+  ///
+  /// Each map contains: 'name' (String), 'revenue' (double), 'units' (int).
+  Future<List<Map<String, dynamic>>> getBestSellersForPeriod(
+    DateTime from,
+    DateTime to, {
+    int limit = 5,
+  }) async {
+    try {
+      final sales = await (_db.select(_db.sales)
+            ..where((tbl) => tbl.createdAt.isBetweenValues(from, to)))
+          .get();
+
+      final Map<String, Map<String, dynamic>> totals = {};
+      for (final sale in sales) {
+        final items = await (_db.select(_db.saleItems)
+              ..where((tbl) => tbl.saleId.equals(sale.id)))
+            .get();
+        for (final item in items) {
+          totals.update(
+            item.productId,
+            (existing) => {
+              'name': existing['name'],
+              'revenue': (existing['revenue'] as double) + item.totalPrice,
+              'units': (existing['units'] as int) + item.quantity,
+            },
+            ifAbsent: () => {
+              'name': item.productName,
+              'revenue': item.totalPrice,
+              'units': item.quantity,
+            },
+          );
+        }
+      }
+
+      final sorted = totals.values.toList()
+        ..sort((a, b) =>
+            (b['revenue'] as double).compareTo(a['revenue'] as double));
+      return sorted.take(limit).toList();
+    } catch (e) {
+      throw DatabaseException('Unable to load best sellers: $e');
+    }
+  }
+
+  /// Returns daily revenue and profit for the last [days] days (for charts).
+  ///
+  /// Each map contains: 'day' (int, 0 = oldest), 'revenue' (double),
+  /// 'profit' (double).
+  Future<List<Map<String, dynamic>>> getDailyRevenueSeries(int days) async {
+    try {
+      final now = DateTime.now();
+      final series = <Map<String, dynamic>>[];
+      for (int i = days - 1; i >= 0; i--) {
+        final day = DateTime(now.year, now.month, now.day - i);
+        final dayEnd = day.add(const Duration(days: 1));
+        final rev = await getRevenueForPeriod(day, dayEnd);
+        final prof = await getProfitForPeriod(day, dayEnd);
+        series.add({
+          'day': (days - 1 - i).toDouble(),
+          'revenue': rev,
+          'profit': prof,
+        });
+      }
+      return series;
+    } catch (e) {
+      throw DatabaseException('Unable to load daily series: $e');
+    }
+  }
+
+  /// Returns sales grouped by product category for the period [from, to).
+  ///
+  /// Each map contains: 'label' (String), 'pct' (double, 0–100).
+  Future<List<Map<String, dynamic>>> getCategoryBreakdownForPeriod(
+    DateTime from,
+    DateTime to,
+  ) async {
+    try {
+      final sales = await (_db.select(_db.sales)
+            ..where((tbl) => tbl.createdAt.isBetweenValues(from, to)))
+          .get();
+
+      final Map<String, double> totals = {};
+      for (final sale in sales) {
+        final items = await (_db.select(_db.saleItems)
+              ..where((tbl) => tbl.saleId.equals(sale.id)))
+            .get();
+        for (final item in items) {
+          final product = await (_db.select(_db.products)
+                ..where((tbl) => tbl.id.equals(item.productId)))
+              .getSingleOrNull();
+          final category = product?.category ?? 'Other';
+          totals[category] = (totals[category] ?? 0) + item.totalPrice;
+        }
+      }
+
+      final grandTotal = totals.values.fold<double>(0, (a, b) => a + b);
+      if (grandTotal == 0) return [];
+
+      final result = totals.entries
+          .map((e) => {
+                'label': e.key,
+                'pct': (e.value / grandTotal) * 100,
+              })
+          .toList()
+        ..sort(
+            (a, b) => (b['pct'] as double).compareTo(a['pct'] as double));
+      return result;
+    } catch (e) {
+      throw DatabaseException('Unable to load category breakdown: $e');
+    }
+  }
 }
