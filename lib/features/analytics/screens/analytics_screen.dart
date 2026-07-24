@@ -37,15 +37,11 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     try {
       final now = DateTime.now();
       final today = DateTime(now.year, now.month, now.day);
-      final DateTime from;
-      switch (_period) {
-        case _Period.week:
-          from = today.subtract(const Duration(days: 6));
-        case _Period.month:
-          from = today.subtract(const Duration(days: 29));
-        case _Period.year:
-          from = today.subtract(const Duration(days: 364));
-      }
+      final from = switch (_period) {
+        _Period.week => today.subtract(const Duration(days: 6)),
+        _Period.month => today.subtract(const Duration(days: 29)),
+        _Period.year => today.subtract(const Duration(days: 364)),
+      };
       final to = today.add(const Duration(days: 1));
 
       final results = await Future.wait([
@@ -63,7 +59,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
       setState(() {
         _revenue = revenue;
         _profit = profit;
-        _expenses = (revenue - profit).clamp(0, double.infinity);
+        _expenses = revenue > profit ? revenue - profit : 0.0;
         _transactions = results[2] as int;
         _dailySeries = results[3] as List<Map<String, dynamic>>;
         _bestSellers = results[4] as List<Map<String, dynamic>>;
