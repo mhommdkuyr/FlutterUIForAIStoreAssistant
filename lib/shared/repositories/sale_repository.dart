@@ -54,6 +54,17 @@ class SaleRepository {
             throw ValidationException('Quantity must be greater than zero.');
           }
 
+          final product = await (_db.select(_db.products)
+                ..where((tbl) => tbl.id.equals(item.id)))
+              .getSingleOrNull();
+          if (product == null) {
+            throw ValidationException('Product "${item.name}" not found.');
+          }
+          if (product.quantity < quantity) {
+            throw ValidationException(
+                'Insufficient stock for "${item.name}". Available: ${product.quantity}, Requested: $quantity.');
+          }
+
           await _db.into(_db.saleItems).insert(SaleItemsCompanion(
             id: Value(Uuid().v4()),
             saleId: Value(saleId),
@@ -62,6 +73,13 @@ class SaleRepository {
             quantity: Value(quantity),
             unitPrice: Value(item.sellingPrice),
             totalPrice: Value(item.sellingPrice * quantity),
+          ));
+
+          await (_db.update(_db.products)
+                ..where((tbl) => tbl.id.equals(item.id)))
+              .write(ProductsCompanion(
+            quantity: Value(product.quantity - quantity),
+            updatedAt: Value(now),
           ));
         }
       });
