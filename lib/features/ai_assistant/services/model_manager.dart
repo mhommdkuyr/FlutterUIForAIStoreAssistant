@@ -29,7 +29,7 @@ class ModelManager {
   ModelManager._();
   static final ModelManager instance = ModelManager._();
 
-  static const _chatSubPath   = 'models/chat/model.gguf';
+  static const _chatSubPath = 'models/chat/model.gguf';
   static const _visionSubPath = 'models/vision/model.onnx';
   static const _labelsSubPath = 'models/vision/labels.txt';
 

@@ -24,10 +24,8 @@ class Sales extends Table {
   RealColumn get totalPrice => real()();
 
   /// Optional FK to the [Employees.id] who processed the sale.
-  IntColumn get employeeId =>
-      integer().nullable().references(Employees, #id)();
+  IntColumn get employeeId => integer().nullable().references(Employees, #id)();
 
   /// Timestamp when the sale was recorded.
-  DateTimeColumn get createdAt =>
-      dateTime().withDefault(currentDateAndTime)();
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
 }

@@ -82,7 +82,6 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   @override
   Widget build(BuildContext context) {
     final pages = _pages(context);
-    final size = MediaQuery.sizeOf(context);
     return Scaffold(
       body: SafeArea(
         child: Column(
@@ -128,7 +127,8 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                     color: i == _currentPage
                         ? pages[_currentPage].color
                         : Theme.of(context).colorScheme.outline,
-                    borderRadius: BorderRadius.circular(AppConstants.radiusFull),
+                    borderRadius:
+                        BorderRadius.circular(AppConstants.radiusFull),
                   ),
                 ),
               ),

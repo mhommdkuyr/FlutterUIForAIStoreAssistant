@@ -65,8 +65,7 @@ class ServiceLocator {
   // ── Repositories ──────────────────────────────────────────────────────────
 
   /// Repository for [Store] entities.
-  static StoreRepository get stores =>
-      StoreRepository(database.storesDao);
+  static StoreRepository get stores => StoreRepository(database.storesDao);
 
   /// Repository for [Branch] entities.
   static BranchRepository get branches =>
@@ -81,16 +80,14 @@ class ServiceLocator {
       ProductRepository(database.productsDao);
 
   /// Repository for [Sale] entities.
-  static SaleRepository get sales =>
-      SaleRepository(database.salesDao);
+  static SaleRepository get sales => SaleRepository(database.salesDao);
 
   /// Repository for [Customer] entities.
   static CustomerRepository get customers =>
       CustomerRepository(database.customersDao);
 
   /// Repository for [Debt] entities.
-  static DebtRepository get debts =>
-      DebtRepository(database.debtsDao);
+  static DebtRepository get debts => DebtRepository(database.debtsDao);
 
   /// Repository for [InventoryMovement] entities.
   static InventoryMovementRepository get inventoryMovements =>

@@ -92,10 +92,8 @@ class AppRouter {
         builder: (context, state) {
           final extra = state.extra as Map<String, dynamic>?;
           final rawItems = extra?['cartItems'] as List<dynamic>?;
-          final items = rawItems
-                  ?.map((e) => e as Map<String, dynamic>)
-                  .toList() ??
-              [];
+          final items =
+              rawItems?.map((e) => e as Map<String, dynamic>).toList() ?? [];
           return InvoiceScreen(initialItems: items);
         },
       ),
@@ -103,11 +101,9 @@ class AppRouter {
         path: '/sales',
         builder: (context, state) {
           final extra = state.extra as Map<String, dynamic>?;
-          final rawItems =
-              extra?['cartItems'] as List<dynamic>?;
-          final cartItems = rawItems
-              ?.map((e) => e as Map<String, dynamic>)
-              .toList();
+          final rawItems = extra?['cartItems'] as List<dynamic>?;
+          final cartItems =
+              rawItems?.map((e) => e as Map<String, dynamic>).toList();
           return SalesScreen(initialCartItems: cartItems);
         },
       ),
@@ -145,7 +141,8 @@ class AppRouter {
           children: [
             const Icon(Icons.error_outline_rounded, size: 64),
             const SizedBox(height: 16),
-            Text(context.tr.pageNotFound, style: Theme.of(context).textTheme.titleLarge),
+            Text(context.tr.pageNotFound,
+                style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: 8),
             Text(state.uri.path, style: Theme.of(context).textTheme.bodySmall),
             const SizedBox(height: 24),

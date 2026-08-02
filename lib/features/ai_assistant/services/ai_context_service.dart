@@ -37,21 +37,22 @@ class AiContextService {
 
     // All repository calls run concurrently — no sequential blocking.
     final results = await Future.wait<dynamic>([
-      _saleRepo.getTodayRevenue(),      // [0] double
-      _saleRepo.getTodayProfit(),       // [1] double
+      _saleRepo.getTodayRevenue(), // [0] double
+      _saleRepo.getTodayProfit(), // [1] double
       _productRepo.getInventoryCount(), // [2] int
-      _productRepo.getLowStockCount(),  // [3] int
-      _productRepo.getAllProducts(),    // [4] List<ProductModel>
-      _saleRepo.getRecentSales(),       // [5] List<SaleModel>
-      _customerRepo.getCustomers(),     // [6] List<UserModel>
-      _debtRepo.getDebts(),             // [7] List<DebtModel>
+      _productRepo.getLowStockCount(), // [3] int
+      _productRepo.getAllProducts(), // [4] List<ProductModel>
+      _saleRepo.getRecentSales(), // [5] List<SaleModel>
+      _customerRepo.getCustomers(), // [6] List<UserModel>
+      _debtRepo.getDebts(), // [7] List<DebtModel>
     ]);
 
     final allProducts = results[4] as List<ProductModel>;
     final allDebts = results[7] as List<DebtModel>;
 
     final lowStockProducts = allProducts
-        .where((p) => p.isActive && p.quantity <= AppConstants.lowStockThreshold)
+        .where(
+            (p) => p.isActive && p.quantity <= AppConstants.lowStockThreshold)
         .toList();
 
     final unpaidDebts =

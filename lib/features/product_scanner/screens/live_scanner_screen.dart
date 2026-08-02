@@ -144,7 +144,8 @@ class _LiveScannerScreenState extends State<LiveScannerScreen>
         return;
       }
 
-      _cameraController = CameraController(camera, ResolutionPreset.medium, enableAudio: false);
+      _cameraController =
+          CameraController(camera, ResolutionPreset.medium, enableAudio: false);
       await _cameraController!.initialize();
       await _cameraController!.startImageStream(_processCameraFrame);
       if (!mounted) return;
@@ -158,7 +159,8 @@ class _LiveScannerScreenState extends State<LiveScannerScreen>
     if (_isProcessingFrame || _status != _ScanStatus.idle || !mounted) return;
     final now = DateTime.now();
     if (_lastFrameProcessedAt != null &&
-        now.difference(_lastFrameProcessedAt!) < const Duration(milliseconds: 500)) {
+        now.difference(_lastFrameProcessedAt!) <
+            const Duration(milliseconds: 500)) {
       return;
     }
     _lastFrameProcessedAt = now;
@@ -168,7 +170,8 @@ class _LiveScannerScreenState extends State<LiveScannerScreen>
 
   Future<void> _handleCameraFrame(CameraImage image) async {
     try {
-      final product = await OfflineProductRecognizer.matchCameraImage(_products, image);
+      final product =
+          await OfflineProductRecognizer.matchCameraImage(_products, image);
       if (product == null) {
         if (mounted) {
           setState(() => _status = _ScanStatus.notFound);
@@ -182,7 +185,8 @@ class _LiveScannerScreenState extends State<LiveScannerScreen>
 
       if (_lastScanned?.id == product.id &&
           _lastScanTime != null &&
-          DateTime.now().difference(_lastScanTime!) < OfflineProductRecognizer.debounceDuration) {
+          DateTime.now().difference(_lastScanTime!) <
+              OfflineProductRecognizer.debounceDuration) {
         if (mounted) setState(() => _status = _ScanStatus.idle);
         return;
       }
@@ -247,7 +251,9 @@ class _LiveScannerScreenState extends State<LiveScannerScreen>
       body: Stack(
         children: [
           // ── Real camera feed or placeholder ───────────────────────────────
-          if (_cameraStarted && _cameraController != null && _cameraController!.value.isInitialized)
+          if (_cameraStarted &&
+              _cameraController != null &&
+              _cameraController!.value.isInitialized)
             Positioned.fill(
               child: CameraPreview(_cameraController!),
             )
@@ -302,8 +308,7 @@ class _LiveScannerScreenState extends State<LiveScannerScreen>
                               fontSize: 18,
                               fontWeight: FontWeight.w600,
                               shadows: [
-                                Shadow(
-                                    blurRadius: 6, color: Colors.black54),
+                                Shadow(blurRadius: 6, color: Colors.black54),
                               ],
                             ),
                             textAlign: TextAlign.center,
@@ -370,7 +375,8 @@ class _LiveScannerScreenState extends State<LiveScannerScreen>
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: AppColors.primary,
                                 foregroundColor: Colors.white,
-                                padding: const EdgeInsets.symmetric(vertical: 14),
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 14),
                                 textStyle: const TextStyle(
                                   fontSize: 16,
                                   fontWeight: FontWeight.w600,
@@ -422,8 +428,7 @@ class _LiveScannerScreenState extends State<LiveScannerScreen>
             Container(
               color: Colors.black54,
               child: const Center(
-                child:
-                    CircularProgressIndicator(color: AppColors.primary),
+                child: CircularProgressIndicator(color: AppColors.primary),
               ),
             ),
         ],
@@ -673,8 +678,7 @@ class _StatusChip extends StatelessWidget {
       duration: const Duration(milliseconds: 250),
       child: Container(
         key: ValueKey(status),
-        padding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
         decoration: BoxDecoration(
           color: Colors.black.withOpacity(0.55),
           borderRadius: BorderRadius.circular(AppConstants.radiusFull),
@@ -734,8 +738,7 @@ class _CartBadge extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               decoration: BoxDecoration(
                 color: AppColors.success,
-                borderRadius:
-                    BorderRadius.circular(AppConstants.radiusFull),
+                borderRadius: BorderRadius.circular(AppConstants.radiusFull),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
@@ -796,8 +799,8 @@ class _ProductFoundCard extends StatelessWidget {
               color: Colors.white.withOpacity(0.2),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: const Icon(Icons.check_rounded,
-                color: Colors.white, size: 24),
+            child:
+                const Icon(Icons.check_rounded, color: Colors.white, size: 24),
           ),
           const SizedBox(width: 14),
           Expanded(
@@ -828,8 +831,7 @@ class _ProductFoundCard extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
                 color: Colors.white.withOpacity(0.2),
-                borderRadius:
-                    BorderRadius.circular(AppConstants.radiusFull),
+                borderRadius: BorderRadius.circular(AppConstants.radiusFull),
               ),
               child: Text(
                 '${tr.timesScanned}$quantity',
@@ -862,8 +864,7 @@ class _CartSummaryBar extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white.withOpacity(0.12),
         borderRadius: BorderRadius.circular(AppConstants.radiusMedium),
-        border:
-            Border.all(color: Colors.white.withOpacity(0.18)),
+        border: Border.all(color: Colors.white.withOpacity(0.18)),
       ),
       child: Row(
         children: [
@@ -872,7 +873,10 @@ class _CartSummaryBar extends StatelessWidget {
           const SizedBox(width: 8),
           Expanded(
             child: Text(
-              cart.map((c) => c.quantity > 1 ? '${c.name} ×${c.quantity}' : c.name).join('  ·  '),
+              cart
+                  .map((c) =>
+                      c.quantity > 1 ? '${c.name} ×${c.quantity}' : c.name)
+                  .join('  ·  '),
               style: textTheme.bodySmall?.copyWith(color: Colors.white70),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
@@ -880,8 +884,7 @@ class _CartSummaryBar extends StatelessWidget {
           ),
           const SizedBox(width: 8),
           Text(
-            tr.formatCurrency(
-                cart.fold(0.0, (s, c) => s + c.totalPrice)),
+            tr.formatCurrency(cart.fold(0.0, (s, c) => s + c.totalPrice)),
             style: textTheme.labelMedium?.copyWith(
               color: Colors.white,
               fontWeight: FontWeight.w700,

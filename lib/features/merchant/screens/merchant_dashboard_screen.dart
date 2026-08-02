@@ -15,7 +15,8 @@ class MerchantDashboardScreen extends StatefulWidget {
   const MerchantDashboardScreen({super.key});
 
   @override
-  State<MerchantDashboardScreen> createState() => _MerchantDashboardScreenState();
+  State<MerchantDashboardScreen> createState() =>
+      _MerchantDashboardScreenState();
 }
 
 class _MerchantDashboardScreenState extends State<MerchantDashboardScreen> {
@@ -25,9 +26,16 @@ class _MerchantDashboardScreenState extends State<MerchantDashboardScreen> {
     final tr = context.tr;
     return [
       const _DashboardTab(),
-      _PlaceholderTab(label: tr.inventory, icon: Icons.inventory_2_rounded, route: '/inventory'),
-      _PlaceholderTab(label: tr.sales, icon: Icons.receipt_long_rounded, route: '/sales'),
-      _PlaceholderTab(label: tr.analytics, icon: Icons.bar_chart_rounded, route: '/analytics'),
+      _PlaceholderTab(
+          label: tr.inventory,
+          icon: Icons.inventory_2_rounded,
+          route: '/inventory'),
+      _PlaceholderTab(
+          label: tr.sales, icon: Icons.receipt_long_rounded, route: '/sales'),
+      _PlaceholderTab(
+          label: tr.analytics,
+          icon: Icons.bar_chart_rounded,
+          route: '/analytics'),
     ];
   }
 
@@ -39,19 +47,29 @@ class _MerchantDashboardScreenState extends State<MerchantDashboardScreen> {
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _navIndex,
         onTap: (i) {
-          if (i == 0) { setState(() => _navIndex = 0); return; }
+          if (i == 0) {
+            setState(() => _navIndex = 0);
+            return;
+          }
           // Navigate to full screens for other tabs
           switch (i) {
-            case 1: context.push('/inventory');
-            case 2: context.push('/sales');
-            case 3: context.push('/analytics');
+            case 1:
+              context.push('/inventory');
+            case 2:
+              context.push('/sales');
+            case 3:
+              context.push('/analytics');
           }
         },
         items: [
-          BottomNavigationBarItem(icon: const Icon(Icons.dashboard_rounded), label: tr.home),
-          BottomNavigationBarItem(icon: const Icon(Icons.inventory_2_rounded), label: tr.inventory),
-          BottomNavigationBarItem(icon: const Icon(Icons.receipt_long_rounded), label: tr.sales),
-          BottomNavigationBarItem(icon: const Icon(Icons.bar_chart_rounded), label: tr.analytics),
+          BottomNavigationBarItem(
+              icon: const Icon(Icons.dashboard_rounded), label: tr.home),
+          BottomNavigationBarItem(
+              icon: const Icon(Icons.inventory_2_rounded), label: tr.inventory),
+          BottomNavigationBarItem(
+              icon: const Icon(Icons.receipt_long_rounded), label: tr.sales),
+          BottomNavigationBarItem(
+              icon: const Icon(Icons.bar_chart_rounded), label: tr.analytics),
         ],
       ),
     );
@@ -128,7 +146,8 @@ class _DashboardTabState extends State<_DashboardTab> {
                   children: [
                     Text(
                       '$greeting,',
-                      style: textTheme.bodyLarge?.copyWith(color: Colors.white70),
+                      style:
+                          textTheme.bodyLarge?.copyWith(color: Colors.white70),
                     ),
                     Text(
                       user?.fullName ?? tr.merchantFallback,
@@ -143,7 +162,8 @@ class _DashboardTabState extends State<_DashboardTab> {
             ),
             actions: [
               IconButton(
-                icon: const Icon(Icons.notifications_outlined, color: Colors.white),
+                icon: const Icon(Icons.notifications_outlined,
+                    color: Colors.white),
                 onPressed: () {},
               ),
               IconButton(
@@ -273,7 +293,9 @@ class _DashboardTabState extends State<_DashboardTab> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(tr.recentTransactions, style: textTheme.titleMedium),
-                    TextButton(onPressed: () => context.push('/sales'), child: Text(tr.viewAll)),
+                    TextButton(
+                        onPressed: () => context.push('/sales'),
+                        child: Text(tr.viewAll)),
                   ],
                 ),
                 const SizedBox(height: 8),
@@ -285,7 +307,8 @@ class _DashboardTabState extends State<_DashboardTab> {
                         padding: const EdgeInsets.all(8),
                         child: Text(
                           tr.unableLoadSales,
-                          style: textTheme.bodySmall?.copyWith(color: AppColors.error),
+                          style: textTheme.bodySmall
+                              ?.copyWith(color: AppColors.error),
                         ),
                       );
                     }
@@ -330,7 +353,8 @@ class _DashboardTabState extends State<_DashboardTab> {
         onPressed: () => context.push('/ai-assistant'),
         backgroundColor: AppColors.primary,
         icon: const Icon(Icons.psychology_rounded, color: Colors.white),
-        label: Text(tr.aiAssistant, style: const TextStyle(color: Colors.white)),
+        label:
+            Text(tr.aiAssistant, style: const TextStyle(color: Colors.white)),
       ),
     );
   }
@@ -344,7 +368,8 @@ class _DashboardTabState extends State<_DashboardTab> {
 }
 
 class _PlaceholderTab extends StatelessWidget {
-  const _PlaceholderTab({required this.label, required this.icon, required this.route});
+  const _PlaceholderTab(
+      {required this.label, required this.icon, required this.route});
   final String label;
   final IconData icon;
   final String route;
@@ -356,7 +381,8 @@ class _PlaceholderTab extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, size: 64, color: Theme.of(context).colorScheme.outline),
+              Icon(icon,
+                  size: 64, color: Theme.of(context).colorScheme.outline),
               const SizedBox(height: 16),
               ElevatedButton(
                 onPressed: () => context.push(route),
@@ -399,7 +425,10 @@ class _QuickAction extends StatelessWidget {
               const SizedBox(height: 4),
               Text(
                 label,
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(color: color),
+                style: Theme.of(context)
+                    .textTheme
+                    .labelSmall
+                    ?.copyWith(color: color),
                 textAlign: TextAlign.center,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
@@ -429,7 +458,8 @@ class _AiRecommendationCard extends StatelessWidget {
               color: AppColors.accentOrange.withOpacity(0.12),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: const Icon(Icons.psychology_rounded, color: AppColors.accentOrange, size: 18),
+            child: const Icon(Icons.psychology_rounded,
+                color: AppColors.accentOrange, size: 18),
           ),
           const SizedBox(width: 10),
           Expanded(
@@ -449,7 +479,8 @@ class _TransactionTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final tr = context.tr;
     final textTheme = Theme.of(context).textTheme;
-    final itemCount = sale.items.fold<int>(0, (sum, item) => sum + item.quantity);
+    final itemCount =
+        sale.items.fold<int>(0, (sum, item) => sum + item.quantity);
     final timeLabel = AppDateUtils.relativeTime(sale.createdAt.toLocal());
     final amountLabel = '+${tr.formatCurrency(sale.total)}';
 
@@ -466,7 +497,8 @@ class _TransactionTile extends StatelessWidget {
                 color: AppColors.primary.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: const Icon(Icons.receipt_rounded, color: AppColors.primary, size: 20),
+              child: const Icon(Icons.receipt_rounded,
+                  color: AppColors.primary, size: 20),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -475,7 +507,8 @@ class _TransactionTile extends StatelessWidget {
                 children: [
                   Text(
                     '$itemCount ${tr.items}',
-                    style: textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+                    style: textTheme.bodyMedium
+                        ?.copyWith(fontWeight: FontWeight.w600),
                   ),
                   Text(timeLabel, style: textTheme.bodySmall),
                 ],

@@ -67,8 +67,8 @@ typedef _SampleNextDart = int Function(
 
 typedef _TokenToPieceC = Int32 Function(Pointer<LlamaModelHandle> model,
     Int32 token, Pointer<Utf8> buf, Int32 bufSize);
-typedef _TokenToPieceDart = int Function(Pointer<LlamaModelHandle> model,
-    int token, Pointer<Utf8> buf, int bufSize);
+typedef _TokenToPieceDart = int Function(
+    Pointer<LlamaModelHandle> model, int token, Pointer<Utf8> buf, int bufSize);
 
 typedef _TokenEosC = Int32 Function(Pointer<LlamaModelHandle> model);
 typedef _TokenEosDart = int Function(Pointer<LlamaModelHandle> model);
@@ -153,19 +153,29 @@ class LlamaFfi {
   }
 
   void _bind(DynamicLibrary lib) {
-    _backendInit   = lib.lookupFunction<_BackendInitC,   _BackendInitDart>  ('lf_backend_init');
-    _backendFree   = lib.lookupFunction<_BackendFreeC,   _BackendFreeDart>  ('lf_backend_free');
-    _modelLoad     = lib.lookupFunction<_ModelLoadC,     _ModelLoadDart>    ('lf_model_load');
-    _modelFree     = lib.lookupFunction<_ModelFreeC,     _ModelFreeDart>    ('lf_model_free');
-    _contextCreate = lib.lookupFunction<_ContextCreateC, _ContextCreateDart>('lf_context_create');
-    _contextFree   = lib.lookupFunction<_ContextFreeC,   _ContextFreeDart>  ('lf_context_free');
-    _tokenize      = lib.lookupFunction<_TokenizeC,      _TokenizeDart>     ('lf_tokenize');
-    _decodeSingle  = lib.lookupFunction<_DecodeSingleC,  _DecodeSingleDart> ('lf_decode_single');
-    _sampleNext    = lib.lookupFunction<_SampleNextC,    _SampleNextDart>   ('lf_sample_next');
-    _tokenToPiece  = lib.lookupFunction<_TokenToPieceC,  _TokenToPieceDart> ('lf_token_to_piece');
-    _tokenEos      = lib.lookupFunction<_TokenEosC,      _TokenEosDart>     ('lf_token_eos');
-    _tokenBos      = lib.lookupFunction<_TokenBosC,      _TokenBosDart>     ('lf_token_bos');
-    _kvCacheClear  = lib.lookupFunction<_KvCacheClearC,  _KvCacheClearDart> ('lf_kv_cache_clear');
+    _backendInit =
+        lib.lookupFunction<_BackendInitC, _BackendInitDart>('lf_backend_init');
+    _backendFree =
+        lib.lookupFunction<_BackendFreeC, _BackendFreeDart>('lf_backend_free');
+    _modelLoad =
+        lib.lookupFunction<_ModelLoadC, _ModelLoadDart>('lf_model_load');
+    _modelFree =
+        lib.lookupFunction<_ModelFreeC, _ModelFreeDart>('lf_model_free');
+    _contextCreate = lib.lookupFunction<_ContextCreateC, _ContextCreateDart>(
+        'lf_context_create');
+    _contextFree =
+        lib.lookupFunction<_ContextFreeC, _ContextFreeDart>('lf_context_free');
+    _tokenize = lib.lookupFunction<_TokenizeC, _TokenizeDart>('lf_tokenize');
+    _decodeSingle = lib
+        .lookupFunction<_DecodeSingleC, _DecodeSingleDart>('lf_decode_single');
+    _sampleNext =
+        lib.lookupFunction<_SampleNextC, _SampleNextDart>('lf_sample_next');
+    _tokenToPiece = lib
+        .lookupFunction<_TokenToPieceC, _TokenToPieceDart>('lf_token_to_piece');
+    _tokenEos = lib.lookupFunction<_TokenEosC, _TokenEosDart>('lf_token_eos');
+    _tokenBos = lib.lookupFunction<_TokenBosC, _TokenBosDart>('lf_token_bos');
+    _kvCacheClear = lib
+        .lookupFunction<_KvCacheClearC, _KvCacheClearDart>('lf_kv_cache_clear');
   }
 
   // ── Public API (only call when isLoaded == true) ─────────────────────────
@@ -174,7 +184,8 @@ class LlamaFfi {
   void backendFree() => _backendFree();
 
   Pointer<LlamaModelHandle>? modelLoad(String path) {
-    final ptr = using((arena) => _modelLoad(path.toNativeUtf8(allocator: arena)));
+    final ptr =
+        using((arena) => _modelLoad(path.toNativeUtf8(allocator: arena)));
     return ptr == nullptr ? null : ptr;
   }
 
@@ -194,8 +205,8 @@ class LlamaFfi {
   List<int> tokenize(Pointer<LlamaModelHandle> model, String text,
       {int maxTokens = 2048}) {
     return using((arena) {
-      final cText   = text.toNativeUtf8(allocator: arena);
-      final tokBuf  = arena<Int32>(maxTokens);
+      final cText = text.toNativeUtf8(allocator: arena);
+      final tokBuf = arena<Int32>(maxTokens);
       final n = _tokenize(model, cText, tokBuf, maxTokens);
       if (n <= 0) return <int>[];
       return List<int>.generate(n, (i) => tokBuf[i]);
@@ -212,15 +223,14 @@ class LlamaFfi {
   ///
   /// Returns -1 on error.
   int sampleNext(Pointer<LlamaContextHandle> ctx,
-      {double temperature = 0.8, double topP = 0.95}) =>
+          {double temperature = 0.8, double topP = 0.95}) =>
       _sampleNext(ctx, temperature, topP);
 
   /// Convert [token] id to its UTF-8 string piece.
   String tokenToPiece(Pointer<LlamaModelHandle> model, int token) {
     return using((arena) {
       final buf = arena<Uint8>(64);
-      final n = _tokenToPiece(
-          model, token, buf.cast<Utf8>(), 64);
+      final n = _tokenToPiece(model, token, buf.cast<Utf8>(), 64);
       if (n <= 0) return '';
       return buf.cast<Utf8>().toDartString(length: n);
     });

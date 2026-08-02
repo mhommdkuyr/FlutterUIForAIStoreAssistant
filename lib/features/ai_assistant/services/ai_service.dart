@@ -19,6 +19,7 @@ class AiMessage {
   final AiRole role;
   final DateTime timestamp;
   final bool isError;
+
   /// Non-null when the AI resolved a navigation command (e.g. '/scanner/live').
   final String? navRoute;
 
@@ -72,7 +73,8 @@ class AiService {
 
   void clearHistory() => _history.clear();
 
-  Future<AiMessage> sendMessage(String userText, {Map<String, dynamic>? context}) async {
+  Future<AiMessage> sendMessage(String userText,
+      {Map<String, dynamic>? context}) async {
     final userMsg = AiMessage(
       id: 'user-${DateTime.now().millisecondsSinceEpoch}',
       text: userText,
@@ -82,7 +84,8 @@ class AiService {
     _history.add(userMsg);
 
     try {
-      final result = await AiCommandRouter.instance.route(userText, isArabic: _isArabic);
+      final result =
+          await AiCommandRouter.instance.route(userText, isArabic: _isArabic);
 
       final assistantMsg = AiMessage(
         id: 'ai-${DateTime.now().millisecondsSinceEpoch}',
@@ -125,8 +128,14 @@ class AiService {
   ) async {
     await Future.delayed(const Duration(milliseconds: 700));
     return [
-      const AiProductSuggestion(productName: 'Rice (5kg)', reason: 'High demand, low stock', estimatedQuantity: 50),
-      const AiProductSuggestion(productName: 'Cooking Oil (1L)', reason: 'Top seller this week', estimatedQuantity: 30),
+      const AiProductSuggestion(
+          productName: 'Rice (5kg)',
+          reason: 'High demand, low stock',
+          estimatedQuantity: 50),
+      const AiProductSuggestion(
+          productName: 'Cooking Oil (1L)',
+          reason: 'Top seller this week',
+          estimatedQuantity: 30),
     ];
   }
 }

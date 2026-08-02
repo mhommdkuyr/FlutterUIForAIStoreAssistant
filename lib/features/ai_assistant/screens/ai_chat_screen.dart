@@ -37,14 +37,13 @@ class _AiChatScreenState extends State<AiChatScreen> {
   String get _role =>
       AuthService.instance.currentRole ?? AppConstants.roleCustomer;
   bool get _isMerchantOrWorker =>
-      _role == AppConstants.roleMerchant ||
-      _role == AppConstants.roleWorker;
+      _role == AppConstants.roleMerchant || _role == AppConstants.roleWorker;
 
   @override
   void initState() {
     super.initState();
-    _inputCtrl.addListener(
-        () => _hasText.value = _inputCtrl.text.trim().isNotEmpty);
+    _inputCtrl
+        .addListener(() => _hasText.value = _inputCtrl.text.trim().isNotEmpty);
   }
 
   @override
@@ -107,8 +106,7 @@ class _AiChatScreenState extends State<AiChatScreen> {
   Widget build(BuildContext context) {
     final tr = context.tr;
     // Filter out the internal __init__ seed message
-    final messages =
-        _ai.history.where((m) => m.text != '__init__').toList();
+    final messages = _ai.history.where((m) => m.text != '__init__').toList();
 
     return Scaffold(
       key: _scaffoldKey,
@@ -127,8 +125,7 @@ class _AiChatScreenState extends State<AiChatScreen> {
             _ChatHeader(
               role: _role,
               tr: tr,
-              onMenuTap: () =>
-                  _scaffoldKey.currentState?.openDrawer(),
+              onMenuTap: () => _scaffoldKey.currentState?.openDrawer(),
               onClearTap: () {
                 _ai.clearHistory();
                 setState(() {});
@@ -147,10 +144,8 @@ class _AiChatScreenState extends State<AiChatScreen> {
                     )
                   : ListView.builder(
                       controller: _scrollCtrl,
-                      padding:
-                          const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                      itemCount:
-                          messages.length + (_loading ? 1 : 0),
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                      itemCount: messages.length + (_loading ? 1 : 0),
                       itemBuilder: (ctx, i) {
                         if (i == messages.length) {
                           return const _TypingIndicator();
@@ -247,28 +242,23 @@ class _ChatHeader extends StatelessWidget {
                   Text(
                     tr.aiWelcomeTitle,
                     style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600),
+                        fontSize: 14, fontWeight: FontWeight.w600),
                   ),
                   Text(
                     tr.poweredByGemini,
                     style: const TextStyle(
-                        fontSize: 10,
-                        color: AppColors.lightTextSecondary),
+                        fontSize: 10, color: AppColors.lightTextSecondary),
                   ),
                 ],
               ),
             ),
             // Role badge
             Container(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 9, vertical: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
               decoration: BoxDecoration(
                 color: _roleColor.withOpacity(0.1),
-                borderRadius:
-                    BorderRadius.circular(AppConstants.radiusFull),
-                border:
-                    Border.all(color: _roleColor.withOpacity(0.2)),
+                borderRadius: BorderRadius.circular(AppConstants.radiusFull),
+                border: Border.all(color: _roleColor.withOpacity(0.2)),
               ),
               child: Text(
                 _roleLabel(tr),
@@ -327,15 +317,14 @@ class _WelcomePane extends StatelessWidget {
           const SizedBox(height: 12),
           Text(
             tr.aiWelcomeTitle,
-            style: textTheme.titleLarge
-                ?.copyWith(fontWeight: FontWeight.w700),
+            style: textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 4),
           Text(
             tr.homeSubtitle,
-            style: textTheme.bodySmall?.copyWith(
-                color: Theme.of(context).colorScheme.outline),
+            style: textTheme.bodySmall
+                ?.copyWith(color: Theme.of(context).colorScheme.outline),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 22),
@@ -387,16 +376,13 @@ class _WelcomePane extends StatelessWidget {
                 // Suggestion prompts
                 Text(
                   tr.tryAsking,
-                  style: textTheme.labelMedium?.copyWith(
-                      color: Theme.of(context).colorScheme.outline),
+                  style: textTheme.labelMedium
+                      ?.copyWith(color: Theme.of(context).colorScheme.outline),
                 ),
                 const SizedBox(height: 8),
-                _SuggestionChip(
-                    text: tr.suggestion1, onTap: onSuggestion),
-                _SuggestionChip(
-                    text: tr.suggestion2, onTap: onSuggestion),
-                _SuggestionChip(
-                    text: tr.suggestion3, onTap: onSuggestion),
+                _SuggestionChip(text: tr.suggestion1, onTap: onSuggestion),
+                _SuggestionChip(text: tr.suggestion2, onTap: onSuggestion),
+                _SuggestionChip(text: tr.suggestion3, onTap: onSuggestion),
               ],
             ),
           ),
@@ -420,12 +406,10 @@ class _CapCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Expanded(
       child: Container(
-        padding: const EdgeInsets.symmetric(
-            horizontal: 12, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
         decoration: BoxDecoration(
           color: color.withOpacity(0.06),
-          borderRadius:
-              BorderRadius.circular(AppConstants.radiusMedium),
+          borderRadius: BorderRadius.circular(AppConstants.radiusMedium),
           border: Border.all(color: color.withOpacity(0.14)),
         ),
         child: Row(
@@ -449,8 +433,7 @@ class _CapCard extends StatelessWidget {
 }
 
 class _SuggestionChip extends StatelessWidget {
-  const _SuggestionChip(
-      {required this.text, required this.onTap});
+  const _SuggestionChip({required this.text, required this.onTap});
   final String text;
   final void Function(String) onTap;
 
@@ -461,31 +444,23 @@ class _SuggestionChip extends StatelessWidget {
       child: Container(
         width: double.infinity,
         margin: const EdgeInsets.only(bottom: 6),
-        padding: const EdgeInsets.symmetric(
-            horizontal: 14, vertical: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
           border: Border.all(
-            color: Theme.of(context)
-                .colorScheme
-                .outline
-                .withOpacity(0.25),
+            color: Theme.of(context).colorScheme.outline.withOpacity(0.25),
           ),
-          borderRadius:
-              BorderRadius.circular(AppConstants.radiusMedium),
+          borderRadius: BorderRadius.circular(AppConstants.radiusMedium),
         ),
         child: Row(
           children: [
             Icon(Icons.chat_bubble_outline_rounded,
-                size: 15,
-                color: Theme.of(context).colorScheme.outline),
+                size: 15, color: Theme.of(context).colorScheme.outline),
             const SizedBox(width: 8),
             Expanded(
-              child: Text(text,
-                  style: Theme.of(context).textTheme.bodySmall),
+              child: Text(text, style: Theme.of(context).textTheme.bodySmall),
             ),
             Icon(Icons.north_west_rounded,
-                size: 13,
-                color: Theme.of(context).colorScheme.outline),
+                size: 13, color: Theme.of(context).colorScheme.outline),
           ],
         ),
       ),
@@ -507,9 +482,8 @@ class _MessageBubble extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: Row(
-        mainAxisAlignment: isUser
-            ? MainAxisAlignment.end
-            : MainAxisAlignment.start,
+        mainAxisAlignment:
+            isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (!isUser) ...[
@@ -527,8 +501,7 @@ class _MessageBubble extends StatelessWidget {
           ],
           Flexible(
             child: Container(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 14, vertical: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               decoration: BoxDecoration(
                 color: isUser
                     ? AppColors.primary
@@ -579,8 +552,7 @@ class _TypingIndicator extends StatelessWidget {
                 color: AppColors.accentOrange, size: 15),
           ),
           Container(
-            padding: const EdgeInsets.symmetric(
-                horizontal: 16, vertical: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
               color: Theme.of(context).cardTheme.color,
               borderRadius: const BorderRadius.only(
@@ -592,8 +564,7 @@ class _TypingIndicator extends StatelessWidget {
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
-              children: List.generate(
-                  3, (i) => _AnimatedDot(delay: i * 200)),
+              children: List.generate(3, (i) => _AnimatedDot(delay: i * 200)),
             ),
           ),
         ],
@@ -619,10 +590,9 @@ class _AnimatedDotState extends State<_AnimatedDot>
   void initState() {
     super.initState();
     _ctrl = AnimationController(
-        vsync: this,
-        duration: const Duration(milliseconds: 600));
-    _anim = Tween<double>(begin: 0, end: 1).animate(
-        CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut));
+        vsync: this, duration: const Duration(milliseconds: 600));
+    _anim = Tween<double>(begin: 0, end: 1)
+        .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut));
     Future.delayed(Duration(milliseconds: widget.delay), () {
       if (mounted) _ctrl.repeat(reverse: true);
     });
@@ -643,8 +613,7 @@ class _AnimatedDotState extends State<_AnimatedDot>
         height: 7 + (_anim.value * 4),
         margin: const EdgeInsets.symmetric(horizontal: 2),
         decoration: BoxDecoration(
-          color: AppColors.primary
-              .withOpacity(0.4 + _anim.value * 0.6),
+          color: AppColors.primary.withOpacity(0.4 + _anim.value * 0.6),
           borderRadius: BorderRadius.circular(4),
         ),
       ),
@@ -680,10 +649,7 @@ class _InputBar extends StatelessWidget {
         color: Theme.of(context).colorScheme.surface,
         border: Border(
           top: BorderSide(
-            color: Theme.of(context)
-                .colorScheme
-                .outline
-                .withOpacity(0.15),
+            color: Theme.of(context).colorScheme.outline.withOpacity(0.15),
           ),
         ),
       ),
@@ -715,10 +681,7 @@ class _InputBar extends StatelessWidget {
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(24),
                 border: Border.all(
-                  color: Theme.of(context)
-                      .colorScheme
-                      .outline
-                      .withOpacity(0.3),
+                  color: Theme.of(context).colorScheme.outline.withOpacity(0.3),
                 ),
               ),
               child: TextField(
@@ -730,8 +693,8 @@ class _InputBar extends StatelessWidget {
                 decoration: InputDecoration(
                   hintText: tr.typeMessage,
                   border: InputBorder.none,
-                  contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 16, vertical: 10),
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 ),
               ),
             ),
@@ -791,10 +754,7 @@ class _MicButton extends StatelessWidget {
       height: 42,
       decoration: BoxDecoration(
         border: Border.all(
-          color: Theme.of(context)
-              .colorScheme
-              .outline
-              .withOpacity(0.4),
+          color: Theme.of(context).colorScheme.outline.withOpacity(0.4),
         ),
         shape: BoxShape.circle,
       ),
@@ -828,8 +788,7 @@ class _QuickActionsSheet extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface,
-        borderRadius:
-            const BorderRadius.vertical(top: Radius.circular(24)),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -840,10 +799,7 @@ class _QuickActionsSheet extends StatelessWidget {
             height: 4,
             margin: const EdgeInsets.only(bottom: 16),
             decoration: BoxDecoration(
-              color: Theme.of(context)
-                  .colorScheme
-                  .outline
-                  .withOpacity(0.3),
+              color: Theme.of(context).colorScheme.outline.withOpacity(0.3),
               borderRadius: BorderRadius.circular(2),
             ),
           ),
@@ -854,8 +810,8 @@ class _QuickActionsSheet extends StatelessWidget {
                   ?.copyWith(fontWeight: FontWeight.w700)),
           const SizedBox(height: 12),
           ...items.map((item) => ListTile(
-                contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 4, vertical: 2),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
                 leading: Container(
                   width: 44,
                   height: 44,
@@ -863,17 +819,13 @@ class _QuickActionsSheet extends StatelessWidget {
                     color: item.color.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child:
-                      Icon(item.icon, color: item.color, size: 22),
+                  child: Icon(item.icon, color: item.color, size: 22),
                 ),
                 title: Text(item.label,
                     style: const TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600)),
+                        fontSize: 15, fontWeight: FontWeight.w600)),
                 trailing: Icon(Icons.arrow_forward_ios_rounded,
-                    size: 14,
-                    color:
-                        Theme.of(context).colorScheme.outline),
+                    size: 14, color: Theme.of(context).colorScheme.outline),
                 onTap: () => onSelect(item.route),
               )),
         ],
@@ -971,9 +923,7 @@ class _AppDrawer extends StatelessWidget {
                   radius: 24,
                   backgroundColor: Colors.white.withOpacity(0.2),
                   child: Text(
-                    (user?.fullName ?? 'U')
-                        .substring(0, 1)
-                        .toUpperCase(),
+                    (user?.fullName ?? 'U').substring(0, 1).toUpperCase(),
                     style: const TextStyle(
                         color: Colors.white,
                         fontSize: 20,
@@ -992,8 +942,7 @@ class _AppDrawer extends StatelessWidget {
                   Text(
                     user!.storeName!,
                     style: TextStyle(
-                        color: Colors.white.withOpacity(0.7),
-                        fontSize: 12),
+                        color: Colors.white.withOpacity(0.7), fontSize: 12),
                   ),
               ],
             ),
@@ -1001,24 +950,22 @@ class _AppDrawer extends StatelessWidget {
 
           // ── Chat history ──────────────────────────────────────────────────
           Padding(
-            padding:
-                const EdgeInsets.fromLTRB(16, 8, 8, 4),
+            padding: const EdgeInsets.fromLTRB(16, 8, 8, 4),
             child: Row(
               children: [
                 Text(
                   tr.chatHistory,
-                  style: textTheme.labelMedium?.copyWith(
-                      color: Theme.of(context).colorScheme.outline),
+                  style: textTheme.labelMedium
+                      ?.copyWith(color: Theme.of(context).colorScheme.outline),
                 ),
                 const Spacer(),
                 TextButton(
                   onPressed: onClearHistory,
                   style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 8, vertical: 4),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     minimumSize: Size.zero,
-                    tapTargetSize:
-                        MaterialTapTargetSize.shrinkWrap,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   ),
                   child: Text(tr.clearHistory,
                       style: const TextStyle(fontSize: 12)),
@@ -1038,13 +985,10 @@ class _AppDrawer extends StatelessWidget {
               child: const Icon(Icons.chat_rounded,
                   color: AppColors.primary, size: 17),
             ),
-            title: Text(tr.newChat,
-                style: const TextStyle(fontSize: 13)),
-            subtitle: Text(tr.noChatsYet,
-                style: const TextStyle(fontSize: 11)),
+            title: Text(tr.newChat, style: const TextStyle(fontSize: 13)),
+            subtitle: Text(tr.noChatsYet, style: const TextStyle(fontSize: 11)),
             selected: true,
-            selectedTileColor:
-                AppColors.primary.withOpacity(0.05),
+            selectedTileColor: AppColors.primary.withOpacity(0.05),
           ),
 
           const Divider(height: 1),
@@ -1074,8 +1018,7 @@ class _AppDrawer extends StatelessWidget {
 
           // ── Settings ──────────────────────────────────────────────────────
           ListTile(
-            leading:
-                const Icon(Icons.settings_outlined, size: 22),
+            leading: const Icon(Icons.settings_outlined, size: 22),
             title: Text(tr.settings),
             onTap: () {
               Navigator.pop(context);

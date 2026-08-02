@@ -118,9 +118,9 @@ class CustomerRepository {
 
   Future<void> deleteCustomer(String id) async {
     try {
-      final deleted =
-          await (_db.delete(_db.customers)..where((tbl) => tbl.id.equals(id)))
-              .go();
+      final deleted = await (_db.delete(_db.customers)
+            ..where((tbl) => tbl.id.equals(id)))
+          .go();
       if (deleted == 0) {
         throw ValidationException('Customer not found.');
       }

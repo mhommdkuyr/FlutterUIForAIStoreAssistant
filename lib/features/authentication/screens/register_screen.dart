@@ -31,23 +31,32 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   IconData get _roleIcon {
     switch (widget.role) {
-      case AppConstants.roleMerchant: return Icons.store_rounded;
-      case AppConstants.roleWorker: return Icons.badge_rounded;
-      default: return Icons.person_rounded;
+      case AppConstants.roleMerchant:
+        return Icons.store_rounded;
+      case AppConstants.roleWorker:
+        return Icons.badge_rounded;
+      default:
+        return Icons.person_rounded;
     }
   }
 
   String _roleLabel(BuildContext context) {
     switch (widget.role) {
-      case AppConstants.roleMerchant: return context.tr.merchant;
-      case AppConstants.roleWorker: return context.tr.worker;
-      default: return context.tr.customerLabel;
+      case AppConstants.roleMerchant:
+        return context.tr.merchant;
+      case AppConstants.roleWorker:
+        return context.tr.worker;
+      default:
+        return context.tr.customerLabel;
     }
   }
 
   Future<void> _submit() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
-    setState(() { _loading = true; _error = null; });
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
 
     final result = await AuthService.instance.register(
       fullName: _nameCtrl.text.trim(),
@@ -64,15 +73,19 @@ class _RegisterScreenState extends State<RegisterScreen> {
     if (result.success) {
       _goHome();
     } else {
-      setState(() => _error = result.errorMessage ?? context.tr.registrationFailed);
+      setState(
+          () => _error = result.errorMessage ?? context.tr.registrationFailed);
     }
   }
 
   void _goHome() {
     switch (widget.role) {
-      case AppConstants.roleMerchant: context.go('/merchant/dashboard');
-      case AppConstants.roleWorker: context.go('/worker/dashboard');
-      default: context.go('/customer/search');
+      case AppConstants.roleMerchant:
+        context.go('/merchant/dashboard');
+      case AppConstants.roleWorker:
+        context.go('/worker/dashboard');
+      default:
+        context.go('/customer/search');
     }
   }
 
@@ -105,7 +118,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
             children: [
               // Role badge
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 decoration: BoxDecoration(
                   color: AppColors.primary.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(AppConstants.radiusFull),
@@ -115,7 +129,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   children: [
                     Icon(_roleIcon, size: 16, color: AppColors.primary),
                     const SizedBox(width: 6),
-                    Text(roleLabel, style: textTheme.labelMedium?.copyWith(color: AppColors.primary)),
+                    Text(roleLabel,
+                        style: textTheme.labelMedium
+                            ?.copyWith(color: AppColors.primary)),
                   ],
                 ),
               ),
@@ -126,10 +142,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
                     color: AppColors.error.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(AppConstants.radiusMedium),
+                    borderRadius:
+                        BorderRadius.circular(AppConstants.radiusMedium),
                     border: Border.all(color: AppColors.error.withOpacity(0.3)),
                   ),
-                  child: Text(_error!, style: textTheme.bodySmall?.copyWith(color: AppColors.error)),
+                  child: Text(_error!,
+                      style: textTheme.bodySmall
+                          ?.copyWith(color: AppColors.error)),
                 ),
                 const SizedBox(height: 16),
               ],
@@ -140,7 +159,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 controller: _nameCtrl,
                 prefixIcon: const Icon(Icons.person_outlined),
                 textInputAction: TextInputAction.next,
-                validator: (v) => AppValidators.required(v, context.tr.yourFullName),
+                validator: (v) =>
+                    AppValidators.required(v, context.tr.yourFullName),
               ),
               const SizedBox(height: 16),
               CustomTextField(
@@ -170,7 +190,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   controller: _storeCtrl,
                   prefixIcon: const Icon(Icons.store_outlined),
                   textInputAction: TextInputAction.next,
-                  validator: (v) => AppValidators.required(v, context.tr.storeName),
+                  validator: (v) =>
+                      AppValidators.required(v, context.tr.storeName),
                 ),
               ],
               const SizedBox(height: 16),
@@ -191,7 +212,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 obscureText: true,
                 textInputAction: TextInputAction.done,
                 prefixIcon: const Icon(Icons.lock_outlined),
-                validator: (v) => AppValidators.confirmPassword(v, _passCtrl.text),
+                validator: (v) =>
+                    AppValidators.confirmPassword(v, _passCtrl.text),
                 onSubmitted: (_) => _submit(),
               ),
               const SizedBox(height: 32),

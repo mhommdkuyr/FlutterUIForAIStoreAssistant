@@ -1,4 +1,4 @@
-name: FlutterUIForAIStoreAssistant
+name: ai_store_assistant
 description: "AI Store Assistant — a Flutter app for small shops and grocery stores with AI-powered inventory, sales, and analytics."
 publish_to: 'none'
 version: 1.0.0+1

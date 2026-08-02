@@ -18,7 +18,6 @@ class _BranchesScreenState extends State<BranchesScreen> {
   final BranchRepository _repository = BranchRepository();
   List<BranchRecord> _branches = [];
   bool _isLoading = false;
-  String? _errorMessage;
 
   @override
   void initState() {
@@ -27,15 +26,16 @@ class _BranchesScreenState extends State<BranchesScreen> {
   }
 
   Future<void> _loadBranches() async {
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null;
-    });
+    setState(() => _isLoading = true);
     try {
       final branches = await _repository.getBranches();
       setState(() => _branches = branches);
     } on RepositoryException catch (e) {
-      setState(() => _errorMessage = e.message);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message), backgroundColor: AppColors.error),
+        );
+      }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -47,34 +47,50 @@ class _BranchesScreenState extends State<BranchesScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (ctx) => Padding(
-        padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.viewInsetsOf(ctx).bottom + 20),
+        padding: EdgeInsets.fromLTRB(
+            20, 20, 20, MediaQuery.viewInsetsOf(ctx).bottom + 20),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(context.tr.addBranch, style: Theme.of(context).textTheme.titleLarge),
+            Text(context.tr.addBranch,
+                style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: 16),
-            TextField(controller: nameCtrl, decoration: InputDecoration(labelText: context.tr.branchName, hintText: context.tr.branchNameHint)),
+            TextField(
+                controller: nameCtrl,
+                decoration: InputDecoration(
+                    labelText: context.tr.branchName,
+                    hintText: context.tr.branchNameHint)),
             const SizedBox(height: 12),
-            TextField(controller: addressCtrl, decoration: InputDecoration(labelText: context.tr.address, hintText: context.tr.addressHint)),
+            TextField(
+                controller: addressCtrl,
+                decoration: InputDecoration(
+                    labelText: context.tr.address,
+                    hintText: context.tr.addressHint)),
             const SizedBox(height: 20),
             ElevatedButton(
               onPressed: () async {
                 if (nameCtrl.text.trim().isNotEmpty) {
                   try {
-                    await _repository.createBranch(name: nameCtrl.text.trim(), address: addressCtrl.text.trim());
+                    await _repository.createBranch(
+                        name: nameCtrl.text.trim(),
+                        address: addressCtrl.text.trim());
                     if (!mounted) return;
                     Navigator.pop(ctx);
                     await _loadBranches();
                   } on RepositoryException catch (e) {
                     if (!mounted) return;
-                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message), backgroundColor: AppColors.error));
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                        content: Text(e.message),
+                        backgroundColor: AppColors.error));
                   }
                 }
               },
-              style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 48)),
+              style: ElevatedButton.styleFrom(
+                  minimumSize: const Size(double.infinity, 48)),
               child: Text(context.tr.addBranch),
             ),
           ],
@@ -85,7 +101,6 @@ class _BranchesScreenState extends State<BranchesScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
     return Scaffold(
       appBar: AppBar(title: Text(context.tr.branchManagement)),
       body: _isLoading
@@ -113,7 +128,9 @@ class _BranchesScreenState extends State<BranchesScreen> {
                         await _loadBranches();
                       } on RepositoryException catch (e) {
                         if (!mounted) return;
-                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message), backgroundColor: AppColors.error));
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                            content: Text(e.message),
+                            backgroundColor: AppColors.error));
                       }
                     },
                   ),
@@ -122,7 +139,8 @@ class _BranchesScreenState extends State<BranchesScreen> {
         onPressed: _showAddBranch,
         backgroundColor: AppColors.primary,
         icon: const Icon(Icons.add_rounded, color: Colors.white),
-        label: Text(context.tr.addBranch, style: const TextStyle(color: Colors.white)),
+        label: Text(context.tr.addBranch,
+            style: const TextStyle(color: Colors.white)),
       ),
     );
   }
@@ -145,12 +163,17 @@ class _BranchCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: (branch.isActive ? AppColors.primary : AppColors.lightTextHint).withOpacity(0.12),
+                  color: (branch.isActive
+                          ? AppColors.primary
+                          : AppColors.lightTextHint)
+                      .withOpacity(0.12),
                   borderRadius: BorderRadius.circular(AppConstants.radiusSmall),
                 ),
                 child: Icon(
                   Icons.store_rounded,
-                  color: branch.isActive ? AppColors.primary : AppColors.lightTextHint,
+                  color: branch.isActive
+                      ? AppColors.primary
+                      : AppColors.lightTextHint,
                   size: 22,
                 ),
               ),
@@ -161,11 +184,17 @@ class _BranchCard extends StatelessWidget {
                   children: [
                     Text(branch.name, style: textTheme.titleMedium),
                     if (branch.address.isNotEmpty)
-                      Text(branch.address, style: textTheme.bodySmall, maxLines: 1, overflow: TextOverflow.ellipsis),
+                      Text(branch.address,
+                          style: textTheme.bodySmall,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis),
                   ],
                 ),
               ),
-              Switch(value: branch.isActive, onChanged: (_) => onToggle(), activeColor: AppColors.primary),
+              Switch(
+                  value: branch.isActive,
+                  onChanged: (_) => onToggle(),
+                  activeColor: AppColors.primary),
             ],
           ),
           const SizedBox(height: 12),
@@ -173,19 +202,26 @@ class _BranchCard extends StatelessWidget {
           const SizedBox(height: 12),
           Row(
             children: [
-              _BranchStat(label: context.tr.todaySales, value: context.tr.formatCurrency(branch.dailySales)),
+              _BranchStat(
+                  label: context.tr.todaySales,
+                  value: context.tr.formatCurrency(branch.dailySales)),
               const SizedBox(width: 12),
-              _BranchStat(label: context.tr.workers, value: '${branch.workerCount}'),
+              _BranchStat(
+                  label: context.tr.workers, value: '${branch.workerCount}'),
               const SizedBox(width: 12),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: (branch.isActive ? AppColors.success : AppColors.error).withOpacity(0.1),
+                  color: (branch.isActive ? AppColors.success : AppColors.error)
+                      .withOpacity(0.1),
                   borderRadius: BorderRadius.circular(AppConstants.radiusFull),
                 ),
                 child: Text(
                   branch.isActive ? context.tr.active : context.tr.inactive,
-                  style: textTheme.labelSmall?.copyWith(color: branch.isActive ? AppColors.success : AppColors.error),
+                  style: textTheme.labelSmall?.copyWith(
+                      color: branch.isActive
+                          ? AppColors.success
+                          : AppColors.error),
                 ),
               ),
             ],
@@ -207,7 +243,8 @@ class _BranchStat extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(value, style: textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700)),
+        Text(value,
+            style: textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700)),
         Text(label, style: textTheme.bodySmall),
       ],
     );

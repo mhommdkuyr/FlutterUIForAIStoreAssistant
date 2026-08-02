@@ -2,7 +2,6 @@ import 'package:drift/drift.dart';
 
 import '../app_database.dart';
 import '../tables/inventory_movements_table.dart';
-import '../tables/products_table.dart';
 
 part 'inventory_movements_dao.g.dart';
 
@@ -17,16 +16,14 @@ class InventoryMovementsDao extends DatabaseAccessor<AppDatabase>
   // ── Queries ───────────────────────────────────────────────────────────────
 
   /// Watches all inventory movements, newest first.
-  Stream<List<InventoryMovement>> watchAll() =>
-      (select(inventoryMovements)
-            ..orderBy([(t) => OrderingTerm.desc(t.createdAt)]))
-          .watch();
+  Stream<List<InventoryMovement>> watchAll() => (select(inventoryMovements)
+        ..orderBy([(t) => OrderingTerm.desc(t.createdAt)]))
+      .watch();
 
   /// Returns all inventory movements as a one-time snapshot.
-  Future<List<InventoryMovement>> getAll() =>
-      (select(inventoryMovements)
-            ..orderBy([(t) => OrderingTerm.desc(t.createdAt)]))
-          .get();
+  Future<List<InventoryMovement>> getAll() => (select(inventoryMovements)
+        ..orderBy([(t) => OrderingTerm.desc(t.createdAt)]))
+      .get();
 
   /// Returns all movements for the given [productId].
   Future<List<InventoryMovement>> getByProduct(int productId) =>

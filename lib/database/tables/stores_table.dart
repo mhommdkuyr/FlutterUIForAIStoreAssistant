@@ -21,6 +21,5 @@ class Stores extends Table {
   TextColumn get address => text()();
 
   /// Timestamp when the store was created.
-  DateTimeColumn get createdAt =>
-      dateTime().withDefault(currentDateAndTime)();
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
 }

@@ -22,8 +22,7 @@ class BranchRepository {
   Future<Branche?> getById(int id) => _dao.getById(id);
 
   /// Watches all branches belonging to [storeId].
-  Stream<List<Branche>> watchByStore(int storeId) =>
-      _dao.watchByStore(storeId);
+  Stream<List<Branche>> watchByStore(int storeId) => _dao.watchByStore(storeId);
 
   /// Returns all branches belonging to [storeId].
   Future<List<Branche>> getByStore(int storeId) => _dao.getByStore(storeId);

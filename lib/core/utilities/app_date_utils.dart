@@ -9,14 +9,12 @@ class AppDateUtils {
   static String formatDateTime(DateTime date) =>
       DateFormat('dd MMM yyyy • HH:mm').format(date);
 
-  static String formatTime(DateTime date) =>
-      DateFormat('HH:mm').format(date);
+  static String formatTime(DateTime date) => DateFormat('HH:mm').format(date);
 
   static String formatCurrency(double amount, {String symbol = 'YER'}) =>
       '$symbol ${NumberFormat('#,##0.00').format(amount)}';
 
-  static String formatNumber(num value) =>
-      NumberFormat('#,##0').format(value);
+  static String formatNumber(num value) => NumberFormat('#,##0').format(value);
 
   static String relativeTime(DateTime date) {
     final diff = DateTime.now().difference(date);
@@ -29,7 +27,9 @@ class AppDateUtils {
 
   static bool isToday(DateTime date) {
     final now = DateTime.now();
-    return date.year == now.year && date.month == now.month && date.day == now.day;
+    return date.year == now.year &&
+        date.month == now.month &&
+        date.day == now.day;
   }
 
   /// Returns ThemeMode recommendation based on device time:

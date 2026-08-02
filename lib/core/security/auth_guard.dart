@@ -16,7 +16,13 @@ class AuthGuard {
     final currentPath = state.uri.path;
 
     // Public routes that don't require authentication
-    const publicRoutes = ['/splash', '/welcome', '/account-type', '/login', '/register'];
+    const publicRoutes = [
+      '/splash',
+      '/welcome',
+      '/account-type',
+      '/login',
+      '/register'
+    ];
     final isPublic = publicRoutes.any((r) => currentPath.startsWith(r));
 
     if (!isLoggedIn && !isPublic) {

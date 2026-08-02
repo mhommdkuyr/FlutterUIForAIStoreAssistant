@@ -67,8 +67,7 @@ class AppDatabase extends _$AppDatabase {
   /// ```dart
   /// AppDatabase(NativeDatabase.memory())
   /// ```
-  AppDatabase([QueryExecutor? executor])
-      : super(executor ?? _openConnection());
+  AppDatabase([QueryExecutor? executor]) : super(executor ?? _openConnection());
 
   static QueryExecutor _openConnection() {
     return LazyDatabase(() async {

@@ -5,5 +5,6 @@ abstract class AiProvider {
   String get name;
   bool get isAvailable;
 
-  Future<String> respond(String userMessage, AiContext context, {bool isArabic = false});
+  Future<String> respond(String userMessage, AiContext context,
+      {bool isArabic = false});
 }

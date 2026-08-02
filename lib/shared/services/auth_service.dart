@@ -24,7 +24,8 @@ class AuthService {
     final userJson = prefs.getString('_current_user');
     if (userJson != null) {
       try {
-        _currentUser = UserModel.fromJson(jsonDecode(userJson) as Map<String, dynamic>);
+        _currentUser =
+            UserModel.fromJson(jsonDecode(userJson) as Map<String, dynamic>);
         _isAuthenticated = true;
       } catch (_) {
         await _clearSession(prefs);
@@ -51,11 +52,13 @@ class AuthService {
   // ── Auth operations ───────────────────────────────────────────────────────
 
   /// Login — replace body with real API call when backend is ready.
-  Future<AuthResult> login({required String email, required String password}) async {
+  Future<AuthResult> login(
+      {required String email, required String password}) async {
     try {
       // TODO: Replace with real API call
       // final response = await ApiService.instance.post('/auth/login', { 'email': email, 'password': password });
-      await Future.delayed(const Duration(milliseconds: 800)); // simulate network
+      await Future.delayed(
+          const Duration(milliseconds: 800)); // simulate network
 
       // Demo: accept any credentials and map to merchant role
       final user = UserModel(

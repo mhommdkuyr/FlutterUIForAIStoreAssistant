@@ -93,8 +93,7 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
     } on RepositoryException catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-            content: Text(e.message), backgroundColor: AppColors.error),
+        SnackBar(content: Text(e.message), backgroundColor: AppColors.error),
       );
     } finally {
       if (mounted) setState(() => _isSaving = false);
@@ -161,11 +160,9 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(Icons.receipt_long_outlined,
-                      size: 56,
-                      color: Theme.of(context).colorScheme.outline),
+                      size: 56, color: Theme.of(context).colorScheme.outline),
                   const SizedBox(height: 12),
-                  Text(tr.invoiceEmpty,
-                      style: textTheme.bodyLarge),
+                  Text(tr.invoiceEmpty, style: textTheme.bodyLarge),
                 ],
               ),
             )
@@ -174,23 +171,19 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                 // ── Items list ─────────────────────────────────────────────
                 Expanded(
                   child: ListView.separated(
-                    padding:
-                        const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
                     itemCount: _items.length,
-                    separatorBuilder: (_, __) =>
-                        const SizedBox(height: 8),
+                    separatorBuilder: (_, __) => const SizedBox(height: 8),
                     itemBuilder: (ctx, i) => _ItemTile(
                       item: _items[i],
                       editMode: _editMode,
-                      onIncrement: () =>
-                          setState(() => _items[i].quantity++),
+                      onIncrement: () => setState(() => _items[i].quantity++),
                       onDecrement: () {
                         if (_items[i].quantity > 1) {
                           setState(() => _items[i].quantity--);
                         }
                       },
-                      onDelete: () =>
-                          setState(() => _items.removeAt(i)),
+                      onDelete: () => setState(() => _items.removeAt(i)),
                       tr: tr,
                     ),
                   ),
@@ -198,8 +191,7 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
 
                 // ── Bottom panel ───────────────────────────────────────────
                 Container(
-                  padding:
-                      const EdgeInsets.fromLTRB(16, 14, 16, 0),
+                  padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
                   decoration: BoxDecoration(
                     color: Theme.of(context).colorScheme.surface,
                     border: Border(
@@ -217,8 +209,7 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                       children: [
                         // Total row
                         Row(
-                          mainAxisAlignment:
-                              MainAxisAlignment.spaceBetween,
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Text(
                               '$_totalItems ${tr.items}',
@@ -226,8 +217,7 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                             ),
                             Text(
                               tr.formatCurrency(_total),
-                              style: textTheme.headlineSmall
-                                  ?.copyWith(
+                              style: textTheme.headlineSmall?.copyWith(
                                 color: AppColors.success,
                                 fontWeight: FontWeight.w800,
                               ),
@@ -238,8 +228,7 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
 
                         if (_isSaving)
                           const Padding(
-                            padding:
-                                EdgeInsets.symmetric(vertical: 16),
+                            padding: EdgeInsets.symmetric(vertical: 16),
                             child: CircularProgressIndicator(),
                           )
                         else ...[
@@ -248,18 +237,16 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                             width: double.infinity,
                             child: ElevatedButton.icon(
                               onPressed: _completeSale,
-                              icon: const Icon(
-                                  Icons.check_circle_rounded,
+                              icon: const Icon(Icons.check_circle_rounded,
                                   color: Colors.white),
                               label: Text(tr.completeSale),
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: AppColors.success,
                                 foregroundColor: Colors.white,
-                                padding: const EdgeInsets.symmetric(
-                                    vertical: 14),
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 14),
                                 textStyle: const TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w700),
+                                    fontSize: 16, fontWeight: FontWeight.w700),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(
                                       AppConstants.radiusMedium),
@@ -277,12 +264,10 @@ class _InvoiceScreenState extends State<InvoiceScreen> {
                                   icon: _editMode
                                       ? Icons.lock_rounded
                                       : Icons.edit_rounded,
-                                  label: _editMode
-                                      ? tr.done
-                                      : tr.edit,
+                                  label: _editMode ? tr.done : tr.edit,
                                   color: AppColors.primary,
-                                  onTap: () => setState(
-                                      () => _editMode = !_editMode),
+                                  onTap: () =>
+                                      setState(() => _editMode = !_editMode),
                                 ),
                               ),
                               const SizedBox(width: 8),
@@ -383,8 +368,7 @@ class _ItemTile extends StatelessWidget {
             ),
           ] else ...[
             Container(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 10, vertical: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(
                 color: AppColors.primary.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(20),
@@ -413,8 +397,7 @@ class _ItemTile extends StatelessWidget {
 }
 
 class _QtyRow extends StatelessWidget {
-  const _QtyRow(
-      {required this.qty, required this.onInc, required this.onDec});
+  const _QtyRow({required this.qty, required this.onInc, required this.onDec});
   final int qty;
   final VoidCallback onInc;
   final VoidCallback onDec;
@@ -427,8 +410,7 @@ class _QtyRow extends StatelessWidget {
         _IconBtn(icon: Icons.remove_rounded, onTap: onDec),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 10),
-          child: Text('$qty',
-              style: Theme.of(context).textTheme.titleSmall),
+          child: Text('$qty', style: Theme.of(context).textTheme.titleSmall),
         ),
         _IconBtn(icon: Icons.add_rounded, onTap: onInc),
       ],
@@ -448,8 +430,7 @@ class _IconBtn extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(4),
         decoration: BoxDecoration(
-          border: Border.all(
-              color: Theme.of(context).colorScheme.outline),
+          border: Border.all(color: Theme.of(context).colorScheme.outline),
           borderRadius: BorderRadius.circular(6),
         ),
         child: Icon(icon, size: 16),
@@ -477,16 +458,12 @@ class _SecondaryBtn extends StatelessWidget {
       icon: Icon(icon, size: 16, color: color),
       label: Text(label,
           style: TextStyle(
-              color: color,
-              fontSize: 12,
-              fontWeight: FontWeight.w600)),
+              color: color, fontSize: 12, fontWeight: FontWeight.w600)),
       style: OutlinedButton.styleFrom(
         side: BorderSide(color: color.withOpacity(0.4)),
-        padding: const EdgeInsets.symmetric(
-            horizontal: 10, vertical: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
         shape: RoundedRectangleBorder(
-          borderRadius:
-              BorderRadius.circular(AppConstants.radiusMedium),
+          borderRadius: BorderRadius.circular(AppConstants.radiusMedium),
         ),
       ),
     );
@@ -512,8 +489,7 @@ class _ElectronicPaymentSheet extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(24, 8, 24, 32),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface,
-        borderRadius:
-            const BorderRadius.vertical(top: Radius.circular(24)),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -524,18 +500,15 @@ class _ElectronicPaymentSheet extends StatelessWidget {
             height: 4,
             margin: const EdgeInsets.only(bottom: 20),
             decoration: BoxDecoration(
-              color: Theme.of(context)
-                  .colorScheme
-                  .outline
-                  .withOpacity(0.3),
+              color: Theme.of(context).colorScheme.outline.withOpacity(0.3),
               borderRadius: BorderRadius.circular(2),
             ),
           ),
 
           // Title + amount
           Text(tr.electronicPayment,
-              style: textTheme.titleLarge
-                  ?.copyWith(fontWeight: FontWeight.w700)),
+              style:
+                  textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700)),
           const SizedBox(height: 6),
           Text(
             tr.formatCurrency(total),
@@ -552,26 +525,24 @@ class _ElectronicPaymentSheet extends StatelessWidget {
             height: 180,
             decoration: BoxDecoration(
               border: Border.all(
-                  color: AppColors.primary.withOpacity(0.3),
-                  width: 2),
+                  color: AppColors.primary.withOpacity(0.3), width: 2),
               borderRadius: BorderRadius.circular(16),
             ),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Icon(Icons.qr_code_2_rounded,
-                    size: 80,
-                    color: AppColors.primary.withOpacity(0.6)),
+                    size: 80, color: AppColors.primary.withOpacity(0.6)),
                 const SizedBox(height: 8),
                 Text(
                   'QR Code',
-                  style: textTheme.bodySmall?.copyWith(
-                      color: AppColors.primary.withOpacity(0.6)),
+                  style: textTheme.bodySmall
+                      ?.copyWith(color: AppColors.primary.withOpacity(0.6)),
                 ),
                 Text(
                   '— ${tr.paymentQRHint} —',
-                  style: textTheme.labelSmall?.copyWith(
-                      color: Theme.of(context).colorScheme.outline),
+                  style: textTheme.labelSmall
+                      ?.copyWith(color: Theme.of(context).colorScheme.outline),
                   textAlign: TextAlign.center,
                 ),
               ],
@@ -584,19 +555,17 @@ class _ElectronicPaymentSheet extends StatelessWidget {
             width: double.infinity,
             child: ElevatedButton.icon(
               onPressed: onConfirm,
-              icon: const Icon(Icons.check_circle_rounded,
-                  color: Colors.white),
+              icon: const Icon(Icons.check_circle_rounded, color: Colors.white),
               label: Text(tr.confirmPayment),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.success,
                 foregroundColor: Colors.white,
-                padding:
-                    const EdgeInsets.symmetric(vertical: 14),
-                textStyle: const TextStyle(
-                    fontSize: 16, fontWeight: FontWeight.w700),
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                textStyle:
+                    const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(
-                      AppConstants.radiusMedium),
+                  borderRadius:
+                      BorderRadius.circular(AppConstants.radiusMedium),
                 ),
               ),
             ),

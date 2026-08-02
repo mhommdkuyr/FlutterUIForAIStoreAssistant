@@ -35,8 +35,7 @@ class EmployeeRepository {
   // ── Write ─────────────────────────────────────────────────────────────────
 
   /// Creates a new employee from the provided companion and returns their id.
-  Future<int> create(EmployeesCompanion companion) =>
-      _dao.insertOne(companion);
+  Future<int> create(EmployeesCompanion companion) => _dao.insertOne(companion);
 
   /// Fully replaces the employee row for [entity].
   Future<bool> save(Employee entity) => _dao.updateOne(entity);

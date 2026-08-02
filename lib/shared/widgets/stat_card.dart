@@ -45,25 +45,34 @@ class StatCard extends StatelessWidget {
               const Spacer(),
               if (change != null)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                   decoration: BoxDecoration(
-                    color: (isPositiveChange ? AppColors.success : AppColors.error)
-                        .withOpacity(0.12),
-                    borderRadius: BorderRadius.circular(AppConstants.radiusFull),
+                    color:
+                        (isPositiveChange ? AppColors.success : AppColors.error)
+                            .withOpacity(0.12),
+                    borderRadius:
+                        BorderRadius.circular(AppConstants.radiusFull),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(
-                        isPositiveChange ? Icons.trending_up : Icons.trending_down,
+                        isPositiveChange
+                            ? Icons.trending_up
+                            : Icons.trending_down,
                         size: 12,
-                        color: isPositiveChange ? AppColors.success : AppColors.error,
+                        color: isPositiveChange
+                            ? AppColors.success
+                            : AppColors.error,
                       ),
                       const SizedBox(width: 2),
                       Text(
                         change!,
                         style: textTheme.labelSmall?.copyWith(
-                          color: isPositiveChange ? AppColors.success : AppColors.error,
+                          color: isPositiveChange
+                              ? AppColors.success
+                              : AppColors.error,
                           fontWeight: FontWeight.w600,
                         ),
                       ),

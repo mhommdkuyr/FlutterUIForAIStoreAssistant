@@ -34,7 +34,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
         title: Text(tr.logout),
         content: Text(tr.logoutConfirm),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(tr.cancel)),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text(tr.cancel)),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
@@ -80,7 +82,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     backgroundColor: AppColors.primary.withOpacity(0.12),
                     child: Text(
                       user?.initials ?? '?',
-                      style: textTheme.titleLarge?.copyWith(color: AppColors.primary),
+                      style: textTheme.titleLarge
+                          ?.copyWith(color: AppColors.primary),
                     ),
                   ),
                   const SizedBox(width: 14),
@@ -88,24 +91,29 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(user?.fullName ?? tr.user, style: textTheme.titleMedium),
+                        Text(user?.fullName ?? tr.user,
+                            style: textTheme.titleMedium),
                         Text(user?.email ?? '', style: textTheme.bodySmall),
                         const SizedBox(height: 4),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 2),
                           decoration: BoxDecoration(
                             color: AppColors.primary.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(AppConstants.radiusFull),
+                            borderRadius:
+                                BorderRadius.circular(AppConstants.radiusFull),
                           ),
                           child: Text(
                             _capitalize(user?.role ?? tr.user),
-                            style: textTheme.labelSmall?.copyWith(color: AppColors.primary),
+                            style: textTheme.labelSmall
+                                ?.copyWith(color: AppColors.primary),
                           ),
                         ),
                       ],
                     ),
                   ),
-                  IconButton(icon: const Icon(Icons.edit_outlined), onPressed: () {}),
+                  IconButton(
+                      icon: const Icon(Icons.edit_outlined), onPressed: () {}),
                 ],
               ),
             ),
@@ -121,11 +129,29 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   const SizedBox(height: 12),
                   Row(
                     children: [
-                      Expanded(child: _ThemeOption(label: tr.light, icon: Icons.light_mode_rounded, value: 'light', current: _themeMode, onTap: _setTheme)),
+                      Expanded(
+                          child: _ThemeOption(
+                              label: tr.light,
+                              icon: Icons.light_mode_rounded,
+                              value: 'light',
+                              current: _themeMode,
+                              onTap: _setTheme)),
                       const SizedBox(width: 8),
-                      Expanded(child: _ThemeOption(label: tr.dark, icon: Icons.dark_mode_rounded, value: 'dark', current: _themeMode, onTap: _setTheme)),
+                      Expanded(
+                          child: _ThemeOption(
+                              label: tr.dark,
+                              icon: Icons.dark_mode_rounded,
+                              value: 'dark',
+                              current: _themeMode,
+                              onTap: _setTheme)),
                       const SizedBox(width: 8),
-                      Expanded(child: _ThemeOption(label: tr.system, icon: Icons.brightness_auto_rounded, value: 'system', current: _themeMode, onTap: _setTheme)),
+                      Expanded(
+                          child: _ThemeOption(
+                              label: tr.system,
+                              icon: Icons.brightness_auto_rounded,
+                              value: 'system',
+                              current: _themeMode,
+                              onTap: _setTheme)),
                     ],
                   ),
                 ],
@@ -142,17 +168,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   Row(
                     children: [
                       Expanded(
-                        child: _LangOption(label: tr.english, value: 'en', current: _language, onTap: (v) {
-                          LocaleProvider.instance.setLocale(Locale(v));
-                          setState(() => _language = v);
-                        }),
+                        child: _LangOption(
+                            label: tr.english,
+                            value: 'en',
+                            current: _language,
+                            onTap: (v) {
+                              LocaleProvider.instance.setLocale(Locale(v));
+                              setState(() => _language = v);
+                            }),
                       ),
                       const SizedBox(width: 8),
                       Expanded(
-                        child: _LangOption(label: tr.arabic, value: 'ar', current: _language, onTap: (v) {
-                          LocaleProvider.instance.setLocale(Locale(v));
-                          setState(() => _language = v);
-                        }),
+                        child: _LangOption(
+                            label: tr.arabic,
+                            value: 'ar',
+                            current: _language,
+                            onTap: (v) {
+                              LocaleProvider.instance.setLocale(Locale(v));
+                              setState(() => _language = v);
+                            }),
                       ),
                     ],
                   ),
@@ -189,11 +223,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
               padding: EdgeInsets.zero,
               child: Column(
                 children: [
-                  _NavTile(icon: Icons.lock_outline_rounded, label: tr.changePassword, onTap: () {}),
+                  _NavTile(
+                      icon: Icons.lock_outline_rounded,
+                      label: tr.changePassword,
+                      onTap: () {}),
                   const Divider(height: 1),
-                  _NavTile(icon: Icons.fingerprint_rounded, label: tr.biometricLogin, onTap: () {}),
+                  _NavTile(
+                      icon: Icons.fingerprint_rounded,
+                      label: tr.biometricLogin,
+                      onTap: () {}),
                   const Divider(height: 1),
-                  _NavTile(icon: Icons.delete_outline_rounded, label: tr.deleteAccount, onTap: () {}, color: AppColors.error),
+                  _NavTile(
+                      icon: Icons.delete_outline_rounded,
+                      label: tr.deleteAccount,
+                      onTap: () {},
+                      color: AppColors.error),
                 ],
               ),
             ),
@@ -207,9 +251,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
                       color: AppColors.warning.withOpacity(0.12),
-                      borderRadius: BorderRadius.circular(AppConstants.radiusSmall),
+                      borderRadius:
+                          BorderRadius.circular(AppConstants.radiusSmall),
                     ),
-                    child: const Icon(Icons.workspace_premium_rounded, color: AppColors.warning, size: 24),
+                    child: const Icon(Icons.workspace_premium_rounded,
+                        color: AppColors.warning, size: 24),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -227,7 +273,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       backgroundColor: AppColors.warning,
                       foregroundColor: Colors.white,
                       minimumSize: Size.zero,
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 8),
                     ),
                     child: Text(tr.upgrade),
                   ),
@@ -241,13 +288,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
               padding: EdgeInsets.zero,
               child: Column(
                 children: [
-                  _NavTile(icon: Icons.info_outline_rounded, label: tr.aboutApp, onTap: () {}),
+                  _NavTile(
+                      icon: Icons.info_outline_rounded,
+                      label: tr.aboutApp,
+                      onTap: () {}),
                   const Divider(height: 1),
-                  _NavTile(icon: Icons.privacy_tip_outlined, label: tr.privacyPolicy, onTap: () {}),
+                  _NavTile(
+                      icon: Icons.privacy_tip_outlined,
+                      label: tr.privacyPolicy,
+                      onTap: () {}),
                   const Divider(height: 1),
-                  _NavTile(icon: Icons.description_outlined, label: tr.termsOfService, onTap: () {}),
+                  _NavTile(
+                      icon: Icons.description_outlined,
+                      label: tr.termsOfService,
+                      onTap: () {}),
                   const Divider(height: 1),
-                  _NavTile(icon: Icons.star_outline_rounded, label: tr.rateTheApp, onTap: () {}),
+                  _NavTile(
+                      icon: Icons.star_outline_rounded,
+                      label: tr.rateTheApp,
+                      onTap: () {}),
                 ],
               ),
             ),
@@ -279,7 +338,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  String _capitalize(String s) => s.isEmpty ? s : '${s[0].toUpperCase()}${s.substring(1)}';
+  String _capitalize(String s) =>
+      s.isEmpty ? s : '${s[0].toUpperCase()}${s.substring(1)}';
 }
 
 class _SectionHeader extends StatelessWidget {
@@ -299,7 +359,12 @@ class _SectionHeader extends StatelessWidget {
 }
 
 class _ThemeOption extends StatelessWidget {
-  const _ThemeOption({required this.label, required this.icon, required this.value, required this.current, required this.onTap});
+  const _ThemeOption(
+      {required this.label,
+      required this.icon,
+      required this.value,
+      required this.current,
+      required this.onTap});
   final String label;
   final IconData icon;
   final String value;
@@ -314,15 +379,23 @@ class _ThemeOption extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 10),
         decoration: BoxDecoration(
-          color: active ? AppColors.primary.withOpacity(0.1) : Colors.transparent,
+          color:
+              active ? AppColors.primary.withOpacity(0.1) : Colors.transparent,
           borderRadius: BorderRadius.circular(AppConstants.radiusMedium),
-          border: Border.all(color: active ? AppColors.primary : Theme.of(context).colorScheme.outline),
+          border: Border.all(
+              color: active
+                  ? AppColors.primary
+                  : Theme.of(context).colorScheme.outline),
         ),
         child: Column(
           children: [
             Icon(icon, size: 20, color: active ? AppColors.primary : null),
             const SizedBox(height: 4),
-            Text(label, style: Theme.of(context).textTheme.labelSmall?.copyWith(color: active ? AppColors.primary : null)),
+            Text(label,
+                style: Theme.of(context)
+                    .textTheme
+                    .labelSmall
+                    ?.copyWith(color: active ? AppColors.primary : null)),
           ],
         ),
       ),
@@ -331,7 +404,11 @@ class _ThemeOption extends StatelessWidget {
 }
 
 class _LangOption extends StatelessWidget {
-  const _LangOption({required this.label, required this.value, required this.current, required this.onTap});
+  const _LangOption(
+      {required this.label,
+      required this.value,
+      required this.current,
+      required this.onTap});
   final String label;
   final String value;
   final String current;
@@ -345,12 +422,20 @@ class _LangOption extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 10),
         decoration: BoxDecoration(
-          color: active ? AppColors.primary.withOpacity(0.1) : Colors.transparent,
+          color:
+              active ? AppColors.primary.withOpacity(0.1) : Colors.transparent,
           borderRadius: BorderRadius.circular(AppConstants.radiusMedium),
-          border: Border.all(color: active ? AppColors.primary : Theme.of(context).colorScheme.outline),
+          border: Border.all(
+              color: active
+                  ? AppColors.primary
+                  : Theme.of(context).colorScheme.outline),
         ),
         child: Center(
-          child: Text(label, style: Theme.of(context).textTheme.labelMedium?.copyWith(color: active ? AppColors.primary : null)),
+          child: Text(label,
+              style: Theme.of(context)
+                  .textTheme
+                  .labelMedium
+                  ?.copyWith(color: active ? AppColors.primary : null)),
         ),
       ),
     );
@@ -358,7 +443,11 @@ class _LangOption extends StatelessWidget {
 }
 
 class _ToggleTile extends StatelessWidget {
-  const _ToggleTile({required this.label, required this.subtitle, required this.value, required this.onChanged});
+  const _ToggleTile(
+      {required this.label,
+      required this.subtitle,
+      required this.value,
+      required this.onChanged});
   final String label;
   final String subtitle;
   final bool value;
@@ -375,12 +464,17 @@ class _ToggleTile extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(label, style: textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w500)),
+                Text(label,
+                    style: textTheme.bodyMedium
+                        ?.copyWith(fontWeight: FontWeight.w500)),
                 Text(subtitle, style: textTheme.bodySmall),
               ],
             ),
           ),
-          Switch(value: value, onChanged: onChanged, activeColor: AppColors.primary),
+          Switch(
+              value: value,
+              onChanged: onChanged,
+              activeColor: AppColors.primary),
         ],
       ),
     );
@@ -388,7 +482,11 @@ class _ToggleTile extends StatelessWidget {
 }
 
 class _NavTile extends StatelessWidget {
-  const _NavTile({required this.icon, required this.label, required this.onTap, this.color});
+  const _NavTile(
+      {required this.icon,
+      required this.label,
+      required this.onTap,
+      this.color});
   final IconData icon;
   final String label;
   final VoidCallback onTap;

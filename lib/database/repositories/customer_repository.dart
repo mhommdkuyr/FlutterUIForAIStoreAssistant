@@ -30,8 +30,7 @@ class CustomerRepository {
   // ── Write ─────────────────────────────────────────────────────────────────
 
   /// Creates a new customer from the provided companion and returns their id.
-  Future<int> create(CustomersCompanion companion) =>
-      _dao.insertOne(companion);
+  Future<int> create(CustomersCompanion companion) => _dao.insertOne(companion);
 
   /// Fully replaces the customer row for [entity].
   Future<bool> save(Customer entity) => _dao.updateOne(entity);

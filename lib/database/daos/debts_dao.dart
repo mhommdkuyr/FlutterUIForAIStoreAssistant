@@ -1,7 +1,6 @@
 import 'package:drift/drift.dart';
 
 import '../app_database.dart';
-import '../tables/customers_table.dart';
 import '../tables/debts_table.dart';
 
 part 'debts_dao.g.dart';
@@ -15,15 +14,11 @@ class DebtsDao extends DatabaseAccessor<AppDatabase> with _$DebtsDaoMixin {
 
   /// Watches all debts, newest first, as a reactive stream.
   Stream<List<Debt>> watchAll() =>
-      (select(debts)
-            ..orderBy([(t) => OrderingTerm.desc(t.createdAt)]))
-          .watch();
+      (select(debts)..orderBy([(t) => OrderingTerm.desc(t.createdAt)])).watch();
 
   /// Returns all debts as a one-time snapshot.
   Future<List<Debt>> getAll() =>
-      (select(debts)
-            ..orderBy([(t) => OrderingTerm.desc(t.createdAt)]))
-          .get();
+      (select(debts)..orderBy([(t) => OrderingTerm.desc(t.createdAt)])).get();
 
   /// Returns a single debt by its primary key, or `null` if not found.
   Future<Debt?> getById(int id) =>
@@ -35,8 +30,7 @@ class DebtsDao extends DatabaseAccessor<AppDatabase> with _$DebtsDaoMixin {
 
   /// Watches debts where [remaining] is greater than zero (unpaid/partial).
   Stream<List<Debt>> watchUnpaid() =>
-      (select(debts)..where((t) => t.remaining.isBiggerThanValue(0.0)))
-          .watch();
+      (select(debts)..where((t) => t.remaining.isBiggerThanValue(0.0))).watch();
 
   // ── Mutations ─────────────────────────────────────────────────────────────
 

@@ -56,5 +56,7 @@ class DebtModel {
   }
 
   bool get isOverdue =>
-      dueDate != null && dueDate!.isBefore(DateTime.now()) && status != DebtStatus.paid;
+      dueDate != null &&
+      dueDate!.isBefore(DateTime.now()) &&
+      status != DebtStatus.paid;
 }

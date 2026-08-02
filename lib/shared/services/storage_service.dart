@@ -20,28 +20,35 @@ class StorageService {
 
   // ── Theme ─────────────────────────────────────────────────────────────────
 
-  Future<void> setThemeMode(String mode) async => _p?.setString(AppConstants.keyThemeMode, mode);
+  Future<void> setThemeMode(String mode) async =>
+      _p?.setString(AppConstants.keyThemeMode, mode);
   String? getThemeMode() => _p?.getString(AppConstants.keyThemeMode);
 
   // ── Language ──────────────────────────────────────────────────────────────
 
-  Future<void> setLanguage(String langCode) async => _p?.setString(AppConstants.keyLanguage, langCode);
+  Future<void> setLanguage(String langCode) async =>
+      _p?.setString(AppConstants.keyLanguage, langCode);
   String getLanguage() => _p?.getString(AppConstants.keyLanguage) ?? 'en';
 
   // ── Onboarding ────────────────────────────────────────────────────────────
 
-  Future<void> setOnboardingDone() async => _p?.setBool(AppConstants.keyOnboardingDone, true);
-  bool isOnboardingDone() => _p?.getBool(AppConstants.keyOnboardingDone) ?? false;
+  Future<void> setOnboardingDone() async =>
+      _p?.setBool(AppConstants.keyOnboardingDone, true);
+  bool isOnboardingDone() =>
+      _p?.getBool(AppConstants.keyOnboardingDone) ?? false;
 
   // ── Generic ───────────────────────────────────────────────────────────────
 
-  Future<bool> setString(String key, String value) async => await _p?.setString(key, value) ?? false;
+  Future<bool> setString(String key, String value) async =>
+      await _p?.setString(key, value) ?? false;
   String? getString(String key) => _p?.getString(key);
 
-  Future<bool> setBool(String key, bool value) async => await _p?.setBool(key, value) ?? false;
+  Future<bool> setBool(String key, bool value) async =>
+      await _p?.setBool(key, value) ?? false;
   bool? getBool(String key) => _p?.getBool(key);
 
-  Future<bool> setInt(String key, int value) async => await _p?.setInt(key, value) ?? false;
+  Future<bool> setInt(String key, int value) async =>
+      await _p?.setInt(key, value) ?? false;
   int? getInt(String key) => _p?.getInt(key);
 
   Future<bool> remove(String key) async => await _p?.remove(key) ?? false;

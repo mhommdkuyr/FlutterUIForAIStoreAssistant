@@ -34,7 +34,8 @@ class AppStrings {
   static const String passwordMismatch = 'Passwords do not match.';
   static const String fieldRequired = 'This field is required.';
   static const String invalidEmail = 'Please enter a valid email.';
-  static const String passwordTooShort = 'Password must be at least 8 characters.';
+  static const String passwordTooShort =
+      'Password must be at least 8 characters.';
 
   // Onboarding
   static const String welcomeTitle = 'Welcome to AI Store Assistant';

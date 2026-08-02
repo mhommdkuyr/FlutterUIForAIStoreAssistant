@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:FlutterUIForAIStoreAssistant/shared/models/product_model.dart';
-import 'package:FlutterUIForAIStoreAssistant/shared/services/offline_product_recognizer.dart';
+import 'package:ai_store_assistant/shared/models/product_model.dart';
+import 'package:ai_store_assistant/shared/services/offline_product_recognizer.dart';
 
 void main() {
   group('OfflineProductRecognizer', () {
@@ -19,7 +19,8 @@ void main() {
         ),
       ];
 
-      final match = OfflineProductRecognizer.findBestMatch(products, ' 6281234567890 ');
+      final match =
+          OfflineProductRecognizer.findBestMatch(products, ' 6281234567890 ');
 
       expect(match?.id, 'p1');
       expect(match?.name, 'Rice');
@@ -40,7 +41,8 @@ void main() {
         ),
       ];
 
-      final match = OfflineProductRecognizer.findBestMatch(products, '9999999999999');
+      final match =
+          OfflineProductRecognizer.findBestMatch(products, '9999999999999');
 
       expect(match, isNull);
     });

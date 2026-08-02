@@ -133,20 +133,18 @@ class _InventoryScreenState extends State<InventoryScreen>
                           label: tr.purchasePrice,
                           controller: purchasePriceCtrl,
                           keyboardType: TextInputType.number,
-                          validator: (v) =>
-                              (double.tryParse(v ?? '') ?? -1) < 0
-                                  ? tr.mustBeNumber
-                                  : null)),
+                          validator: (v) => (double.tryParse(v ?? '') ?? -1) < 0
+                              ? tr.mustBeNumber
+                              : null)),
                   const SizedBox(width: 12),
                   Expanded(
                       child: CustomTextField(
                           label: tr.sellingPrice,
                           controller: sellingPriceCtrl,
                           keyboardType: TextInputType.number,
-                          validator: (v) =>
-                              (double.tryParse(v ?? '') ?? -1) < 0
-                                  ? tr.mustBeNumber
-                                  : null)),
+                          validator: (v) => (double.tryParse(v ?? '') ?? -1) < 0
+                              ? tr.mustBeNumber
+                              : null)),
                 ]),
                 const SizedBox(height: 12),
                 Row(children: [
@@ -155,15 +153,13 @@ class _InventoryScreenState extends State<InventoryScreen>
                           label: tr.quantity,
                           controller: quantityCtrl,
                           keyboardType: TextInputType.number,
-                          validator: (v) =>
-                              (int.tryParse(v ?? '') ?? -1) < 0
-                                  ? tr.mustBeNumber
-                                  : null)),
+                          validator: (v) => (int.tryParse(v ?? '') ?? -1) < 0
+                              ? tr.mustBeNumber
+                              : null)),
                   const SizedBox(width: 12),
                   Expanded(
                       child: CustomTextField(
-                          label: tr.barcodeOptional,
-                          controller: barcodeCtrl)),
+                          label: tr.barcodeOptional, controller: barcodeCtrl)),
                 ]),
                 const SizedBox(height: 12),
                 CustomTextField(
@@ -419,8 +415,7 @@ class _ProductRow extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   _IconBtn(
-                      icon: Icons.edit_outlined,
-                      onTap: () => onEdit(product)),
+                      icon: Icons.edit_outlined, onTap: () => onEdit(product)),
                   const SizedBox(width: 4),
                   _IconBtn(
                       icon: Icons.delete_outline_rounded,
@@ -451,10 +446,7 @@ class _InfoBadge extends StatelessWidget {
       ),
       child: Text(
         label,
-        style: Theme.of(context)
-            .textTheme
-            .labelSmall
-            ?.copyWith(color: color),
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(color: color),
       ),
     );
   }

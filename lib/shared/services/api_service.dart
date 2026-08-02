@@ -62,8 +62,10 @@ class ApiService {
 
   // ── Internal helpers ──────────────────────────────────────────────────────
 
+  // ignore: unused_element
   Map<String, String> _authHeaders(Map<String, String>? extra) {
-    // TODO: Retrieve token from SecureStorageService
+    // TODO(backend): Retrieve token from SecureStorageService when a real
+    // backend is connected (Step 2+).
     return {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
@@ -72,9 +74,12 @@ class ApiService {
     };
   }
 
+  // ignore: unused_element
   Map<String, dynamic> _handleResponse(dynamic response) {
-    // TODO: Parse status codes, throw typed exceptions for 4xx/5xx
-    throw UnimplementedError('_handleResponse not yet wired to a real HTTP client');
+    // TODO(backend): Parse status codes, throw typed exceptions for 4xx/5xx
+    // when a real HTTP client is wired up (Step 2+).
+    throw UnimplementedError(
+        '_handleResponse not yet wired to a real HTTP client');
   }
 
   String get baseUrl => _baseUrl;
@@ -85,7 +90,8 @@ class ApiException implements Exception {
   final String message;
   final String? code;
 
-  const ApiException({required this.statusCode, required this.message, this.code});
+  const ApiException(
+      {required this.statusCode, required this.message, this.code});
 
   @override
   String toString() => 'ApiException($statusCode): $message';

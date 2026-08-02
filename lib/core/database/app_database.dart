@@ -89,12 +89,38 @@ class Promotions extends Table {
   DateTimeColumn get createdAt => dateTime()();
 }
 
-@DriftDatabase(tables: [Products, Sales, SaleItems, Debts, Branches, Customers, Promotions])
+@DriftDatabase(tables: [
+  Products,
+  Sales,
+  SaleItems,
+  Debts,
+  Branches,
+  Customers,
+  Promotions
+])
 class AppDatabase extends _$AppDatabase {
   AppDatabase([QueryExecutor? executor]) : super(executor ?? _openConnection());
 
   static AppDatabase? _instance;
   static AppDatabase get instance => _instance ??= AppDatabase();
+
+  // ── Test helpers ─────────────────────────────────────────────────────────
+
+  /// Replaces the singleton with a custom executor (e.g. in-memory for tests).
+  ///
+  /// Call before creating any repository instance in a test's [setUp].
+  // ignore: invalid_use_of_visible_for_testing_member
+  static void overrideForTest(QueryExecutor executor) {
+    _instance = AppDatabase(executor);
+  }
+
+  /// Clears the singleton so [instance] creates a fresh connection next time.
+  ///
+  /// Call in a test's [tearDown] after [AppDatabase.instance.close()].
+  // ignore: invalid_use_of_visible_for_testing_member
+  static void resetForTest() {
+    _instance = null;
+  }
 
   @override
   int get schemaVersion => 2;

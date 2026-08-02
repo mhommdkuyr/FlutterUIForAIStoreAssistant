@@ -64,7 +64,8 @@ class CustomButton extends StatelessWidget {
             style: ElevatedButton.styleFrom(
               backgroundColor: backgroundColor ?? AppColors.primary,
               foregroundColor: foregroundColor ?? Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(radius)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(radius)),
             ),
             child: child,
           ),
@@ -78,7 +79,8 @@ class CustomButton extends StatelessWidget {
             style: OutlinedButton.styleFrom(
               foregroundColor: foregroundColor ?? AppColors.primary,
               side: BorderSide(color: foregroundColor ?? AppColors.primary),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(radius)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(radius)),
             ),
             child: child,
           ),
@@ -91,7 +93,8 @@ class CustomButton extends StatelessWidget {
             onPressed: isLoading ? null : onPressed,
             style: TextButton.styleFrom(
               foregroundColor: foregroundColor ?? AppColors.primary,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(radius)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(radius)),
             ),
             child: child,
           ),
@@ -105,7 +108,8 @@ class CustomButton extends StatelessWidget {
             style: ElevatedButton.styleFrom(
               backgroundColor: backgroundColor ?? AppColors.error,
               foregroundColor: foregroundColor ?? Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(radius)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(radius)),
             ),
             child: child,
           ),

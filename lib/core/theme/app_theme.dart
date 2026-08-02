@@ -16,7 +16,9 @@ class AppTheme {
       brightness: brightness,
       primary: AppColors.primary,
       onPrimary: Colors.white,
-      primaryContainer: isDark ? AppColors.primaryDark : AppColors.primaryLight.withOpacity(0.15),
+      primaryContainer: isDark
+          ? AppColors.primaryDark
+          : AppColors.primaryLight.withOpacity(0.15),
       onPrimaryContainer: isDark ? Colors.white : AppColors.primaryDark,
       secondary: AppColors.accent,
       onSecondary: Colors.white,
@@ -27,28 +29,46 @@ class AppTheme {
       errorContainer: AppColors.error.withOpacity(0.12),
       onErrorContainer: AppColors.error,
       surface: isDark ? AppColors.darkSurface : AppColors.lightSurface,
-      onSurface: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
-      surfaceContainerHighest: isDark ? AppColors.darkCard : AppColors.lightCard,
+      onSurface:
+          isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+      surfaceContainerHighest:
+          isDark ? AppColors.darkCard : AppColors.lightCard,
       outline: isDark ? AppColors.darkBorder : AppColors.lightBorder,
     );
 
     final textTheme = GoogleFonts.interTextTheme(
       TextTheme(
-        displayLarge: TextStyle(color: colorScheme.onSurface, fontWeight: FontWeight.w700),
-        displayMedium: TextStyle(color: colorScheme.onSurface, fontWeight: FontWeight.w700),
-        displaySmall: TextStyle(color: colorScheme.onSurface, fontWeight: FontWeight.w700),
-        headlineLarge: TextStyle(color: colorScheme.onSurface, fontWeight: FontWeight.w700),
-        headlineMedium: TextStyle(color: colorScheme.onSurface, fontWeight: FontWeight.w600),
-        headlineSmall: TextStyle(color: colorScheme.onSurface, fontWeight: FontWeight.w600),
-        titleLarge: TextStyle(color: colorScheme.onSurface, fontWeight: FontWeight.w600),
-        titleMedium: TextStyle(color: colorScheme.onSurface, fontWeight: FontWeight.w500),
-        titleSmall: TextStyle(color: colorScheme.onSurface, fontWeight: FontWeight.w500),
+        displayLarge: TextStyle(
+            color: colorScheme.onSurface, fontWeight: FontWeight.w700),
+        displayMedium: TextStyle(
+            color: colorScheme.onSurface, fontWeight: FontWeight.w700),
+        displaySmall: TextStyle(
+            color: colorScheme.onSurface, fontWeight: FontWeight.w700),
+        headlineLarge: TextStyle(
+            color: colorScheme.onSurface, fontWeight: FontWeight.w700),
+        headlineMedium: TextStyle(
+            color: colorScheme.onSurface, fontWeight: FontWeight.w600),
+        headlineSmall: TextStyle(
+            color: colorScheme.onSurface, fontWeight: FontWeight.w600),
+        titleLarge: TextStyle(
+            color: colorScheme.onSurface, fontWeight: FontWeight.w600),
+        titleMedium: TextStyle(
+            color: colorScheme.onSurface, fontWeight: FontWeight.w500),
+        titleSmall: TextStyle(
+            color: colorScheme.onSurface, fontWeight: FontWeight.w500),
         bodyLarge: TextStyle(color: colorScheme.onSurface),
         bodyMedium: TextStyle(color: colorScheme.onSurface),
-        bodySmall: TextStyle(color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary),
-        labelLarge: TextStyle(color: colorScheme.onSurface, fontWeight: FontWeight.w600),
+        bodySmall: TextStyle(
+            color: isDark
+                ? AppColors.darkTextSecondary
+                : AppColors.lightTextSecondary),
+        labelLarge: TextStyle(
+            color: colorScheme.onSurface, fontWeight: FontWeight.w600),
         labelMedium: TextStyle(color: colorScheme.onSurface),
-        labelSmall: TextStyle(color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary),
+        labelSmall: TextStyle(
+            color: isDark
+                ? AppColors.darkTextSecondary
+                : AppColors.lightTextSecondary),
       ),
     );
 
@@ -56,10 +76,13 @@ class AppTheme {
       useMaterial3: true,
       colorScheme: colorScheme,
       textTheme: textTheme,
-      scaffoldBackgroundColor: isDark ? AppColors.darkBackground : AppColors.lightBackground,
+      scaffoldBackgroundColor:
+          isDark ? AppColors.darkBackground : AppColors.lightBackground,
       appBarTheme: AppBarTheme(
-        backgroundColor: isDark ? AppColors.darkSurface : AppColors.lightSurface,
-        foregroundColor: isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
+        backgroundColor:
+            isDark ? AppColors.darkSurface : AppColors.lightSurface,
+        foregroundColor:
+            isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary,
         elevation: 0,
         centerTitle: false,
         titleTextStyle: textTheme.titleLarge,
@@ -69,7 +92,8 @@ class AppTheme {
         elevation: 0,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppConstants.radiusMedium),
-          side: BorderSide(color: isDark ? AppColors.darkBorder : AppColors.lightBorder),
+          side: BorderSide(
+              color: isDark ? AppColors.darkBorder : AppColors.lightBorder),
         ),
         margin: EdgeInsets.zero,
       ),
@@ -104,11 +128,13 @@ class AppTheme {
         fillColor: isDark ? AppColors.darkCard : AppColors.lightCard,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppConstants.radiusMedium),
-          borderSide: BorderSide(color: isDark ? AppColors.darkBorder : AppColors.lightBorder),
+          borderSide: BorderSide(
+              color: isDark ? AppColors.darkBorder : AppColors.lightBorder),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppConstants.radiusMedium),
-          borderSide: BorderSide(color: isDark ? AppColors.darkBorder : AppColors.lightBorder),
+          borderSide: BorderSide(
+              color: isDark ? AppColors.darkBorder : AppColors.lightBorder),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppConstants.radiusMedium),
@@ -125,20 +151,25 @@ class AppTheme {
         hintStyle: TextStyle(
           color: isDark ? AppColors.darkTextHint : AppColors.lightTextHint,
         ),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       ),
       bottomNavigationBarTheme: BottomNavigationBarThemeData(
-        backgroundColor: isDark ? AppColors.darkSurface : AppColors.lightSurface,
+        backgroundColor:
+            isDark ? AppColors.darkSurface : AppColors.lightSurface,
         selectedItemColor: AppColors.primary,
-        unselectedItemColor: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
+        unselectedItemColor:
+            isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary,
         type: BottomNavigationBarType.fixed,
         elevation: 8,
       ),
       chipTheme: ChipThemeData(
         backgroundColor: isDark ? AppColors.darkCard : AppColors.lightCard,
         labelStyle: textTheme.labelSmall,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppConstants.radiusFull)),
-        side: BorderSide(color: isDark ? AppColors.darkBorder : AppColors.lightBorder),
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppConstants.radiusFull)),
+        side: BorderSide(
+            color: isDark ? AppColors.darkBorder : AppColors.lightBorder),
       ),
       dividerTheme: DividerThemeData(
         color: isDark ? AppColors.darkBorder : AppColors.lightBorder,

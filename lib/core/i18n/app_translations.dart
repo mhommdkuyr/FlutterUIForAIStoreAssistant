@@ -32,24 +32,28 @@ class LocaleProvider extends ChangeNotifier {
   }
 
   Future<void> toggleLanguage() async {
-    final newLocale = _locale.languageCode == 'ar' ? const Locale('en') : const Locale('ar');
+    final newLocale =
+        _locale.languageCode == 'ar' ? const Locale('en') : const Locale('ar');
     await setLocale(newLocale);
   }
 }
 
 /// InheritedWidget that provides the current locale to descendants.
 class LocaleInheritedWidget extends InheritedWidget {
-  const LocaleInheritedWidget({super.key, required this.locale, required super.child});
+  const LocaleInheritedWidget(
+      {super.key, required this.locale, required super.child});
 
   final Locale locale;
 
   static Locale? of(BuildContext context) {
-    final w = context.dependOnInheritedWidgetOfExactType<LocaleInheritedWidget>();
+    final w =
+        context.dependOnInheritedWidgetOfExactType<LocaleInheritedWidget>();
     return w?.locale;
   }
 
   @override
-  bool updateShouldNotify(LocaleInheritedWidget oldWidget) => locale != oldWidget.locale;
+  bool updateShouldNotify(LocaleInheritedWidget oldWidget) =>
+      locale != oldWidget.locale;
 }
 
 /// Extension providing `context.tr` for translation access.
@@ -63,7 +67,8 @@ class AppTranslations {
   final String _lang;
 
   static AppTranslations of(BuildContext context) {
-    final locale = LocaleInheritedWidget.of(context) ?? LocaleProvider.instance.locale;
+    final locale =
+        LocaleInheritedWidget.of(context) ?? LocaleProvider.instance.locale;
     return AppTranslations._(locale.languageCode);
   }
 
@@ -522,17 +527,22 @@ const _en = <String, String>{
   'phoneHint': '+967 700 000 000',
   'passwordHint': '••••••••',
   'welcomeTitle': 'Welcome to AI Store Assistant',
-  'welcomeSubtitle': 'Empowering small shops and grocery stores with the power of AI.',
+  'welcomeSubtitle':
+      'Empowering small shops and grocery stores with the power of AI.',
   'onboarding1Title': 'Smart Inventory',
-  'onboarding1Subtitle': 'Track products, get low-stock alerts, and scan items instantly.',
+  'onboarding1Subtitle':
+      'Track products, get low-stock alerts, and scan items instantly.',
   'onboarding2Title': 'AI Business Insights',
-  'onboarding2Subtitle': 'Ask anything about your store — profits, top products, and recommendations.',
+  'onboarding2Subtitle':
+      'Ask anything about your store — profits, top products, and recommendations.',
   'onboarding3Title': 'Fast Sales & Debts',
-  'onboarding3Subtitle': 'Record sales instantly and manage customer debts with ease.',
+  'onboarding3Subtitle':
+      'Record sales instantly and manage customer debts with ease.',
   'getStarted': 'Get Started',
   'skip': 'Skip',
   'selectAccountType': 'Who are you?',
-  'accountTypeSubtitle': 'Choose the account type that fits your role in the store.',
+  'accountTypeSubtitle':
+      'Choose the account type that fits your role in the store.',
   'merchant': 'Merchant',
   'worker': 'Worker',
   'customerRole': 'Customer',
@@ -575,8 +585,10 @@ const _en = <String, String>{
   'unableLoadSales': 'Unable to load recent sales.',
   'noSalesToday': 'No sales yet today.',
   'merchantFallback': 'Merchant',
-  'aiRec1': '📦 Rice (5kg) is running low (8 units). Consider ordering at least 50 bags before the weekend rush.',
-  'aiRec2': '📈 Cooking Oil sales are up 24% this week. You could increase the price slightly for better margins.',
+  'aiRec1':
+      '📦 Rice (5kg) is running low (8 units). Consider ordering at least 50 bags before the weekend rush.',
+  'aiRec2':
+      '📈 Cooking Oil sales are up 24% this week. You could increase the price slightly for better margins.',
   'workerPanel': 'Worker Panel',
   'workerFallback': 'Worker',
   'workerStoreFallback': 'Store',
@@ -589,12 +601,14 @@ const _en = <String, String>{
   'todaysActivity': "Today's Activity",
   'salesProcessed': 'Sales Processed',
   'itemsScanned': 'Items Scanned',
-  'workerNotice': 'Worker mode: Profits, analytics, and merchant-only data are not accessible from this account.',
+  'workerNotice':
+      'Worker mode: Profits, analytics, and merchant-only data are not accessible from this account.',
   'poweredByGemini': 'Powered by Gemini',
   'clearHistory': 'Clear history',
   'typeMessage': 'Ask me anything about your store...',
   'aiWelcomeTitle': 'AI Store Assistant',
-  'aiWelcomeSubtitle': 'Hello! Ask me anything about your store — profits, inventory, restocking, slow-selling products, and more.',
+  'aiWelcomeSubtitle':
+      'Hello! Ask me anything about your store — profits, inventory, restocking, slow-selling products, and more.',
   'tryAsking': 'Try asking:',
   'suggestion1': 'How much profit did I make today?',
   'suggestion2': 'What products should I order?',
@@ -772,20 +786,25 @@ const _en = <String, String>{
   'promotionTitleHint': 'e.g. Weekend Special',
   'discountPercent': 'Discount %',
   'noPromotionsYet': 'No promotions yet',
-  'createFirstPromotion': 'Create your first promotion to attract more customers.',
+  'createFirstPromotion':
+      'Create your first promotion to attract more customers.',
   'expires': 'Expires',
   'messageSent': 'Message sent to all customers!',
   'broadcastMessage': 'Broadcast Message',
   'broadcastDesc': 'Send a message to all your customers',
-  'broadcastHint': 'Type your message here... (e.g. Weekend sale: 20% off all beverages!)',
+  'broadcastHint':
+      'Type your message here... (e.g. Weekend sale: 20% off all beverages!)',
   'sendToAllCustomers': 'Send to All Customers',
   'messageTemplates': 'Message Templates',
   'weekendSaleTitle': 'Weekend Sale',
-  'weekendSaleBody': '🎉 Weekend Special! Get 15% off on all beverages and snacks this Friday and Saturday. Visit us now!',
+  'weekendSaleBody':
+      '🎉 Weekend Special! Get 15% off on all beverages and snacks this Friday and Saturday. Visit us now!',
   'newStockTitle': 'New Stock Arrival',
-  'newStockBody': '📦 New stock just arrived! Fresh products, great prices. Come visit your favorite store today.',
+  'newStockBody':
+      '📦 New stock just arrived! Fresh products, great prices. Come visit your favorite store today.',
   'loyaltyTitle': 'Loyalty Appreciation',
-  'loyaltyBody': '❤️ Thank you for being a loyal customer! Enjoy an exclusive 10% discount on your next purchase.',
+  'loyaltyBody':
+      '❤️ Thank you for being a loyal customer! Enjoy an exclusive 10% discount on your next purchase.',
   'settings': 'Settings',
   'theme': 'Theme',
   'language': 'Language',
@@ -877,11 +896,14 @@ const _ar = <String, String>{
   'phoneHint': '+967 700 000 000',
   'passwordHint': '••••••••',
   'welcomeTitle': 'مرحباً بك في مساعد المتجر الذكي',
-  'welcomeSubtitle': 'تمكين المتاجر الصغيرة ومحلات البقالة بقوة الذكاء الاصطناعي.',
+  'welcomeSubtitle':
+      'تمكين المتاجر الصغيرة ومحلات البقالة بقوة الذكاء الاصطناعي.',
   'onboarding1Title': 'إدارة مخزون ذكية',
-  'onboarding1Subtitle': 'تتبع المنتجات، احصل على تنبيهات المخزون المنخفض، وامسح الأصناف فوراً.',
+  'onboarding1Subtitle':
+      'تتبع المنتجات، احصل على تنبيهات المخزون المنخفض، وامسح الأصناف فوراً.',
   'onboarding2Title': 'رؤى أعمال بالذكاء الاصطناعي',
-  'onboarding2Subtitle': 'اسأل أي شيء عن متجرك — الأرباح، أفضل المنتجات، والتوصيات.',
+  'onboarding2Subtitle':
+      'اسأل أي شيء عن متجرك — الأرباح، أفضل المنتجات، والتوصيات.',
   'onboarding3Title': 'مبيعات وديون سريعة',
   'onboarding3Subtitle': 'سجّل المبيعات فوراً وأدارة ديون العملاء بسهولة.',
   'getStarted': 'ابدأ الآن',
@@ -930,8 +952,10 @@ const _ar = <String, String>{
   'unableLoadSales': 'تعذّر تحميل المبيعات الأخيرة.',
   'noSalesToday': 'لا مبيعات اليوم بعد.',
   'merchantFallback': 'تاجر',
-  'aiRec1': '📦 الأرز (5كجم) ينفد (8 وحدات). يُنصح بطلب 50 كيس على الأقل قبل ازدحام نهاية الأسبوع.',
-  'aiRec2': '📈 مبيعات زيت الطبخ ارتفعت 24% هذا الأسبوع. يمكنك رفع السعر قليلاً لتحسين هامش الربح.',
+  'aiRec1':
+      '📦 الأرز (5كجم) ينفد (8 وحدات). يُنصح بطلب 50 كيس على الأقل قبل ازدحام نهاية الأسبوع.',
+  'aiRec2':
+      '📈 مبيعات زيت الطبخ ارتفعت 24% هذا الأسبوع. يمكنك رفع السعر قليلاً لتحسين هامش الربح.',
   'workerPanel': 'لوحة العامل',
   'workerFallback': 'عامل',
   'workerStoreFallback': 'متجر',
@@ -944,12 +968,14 @@ const _ar = <String, String>{
   'todaysActivity': 'نشاط اليوم',
   'salesProcessed': 'مبيعات مُعالجة',
   'itemsScanned': 'أصناف ممسوحة',
-  'workerNotice': 'وضع العامل: الأرباح والتحليلات وبيانات التاجر غير متاحة من هذا الحساب.',
+  'workerNotice':
+      'وضع العامل: الأرباح والتحليلات وبيانات التاجر غير متاحة من هذا الحساب.',
   'poweredByGemini': 'مدعوم بـ Gemini',
   'clearHistory': 'مسح المحادثة',
   'typeMessage': 'اسألني أي شيء عن متجرك...',
   'aiWelcomeTitle': 'مساعد المتجر الذكي',
-  'aiWelcomeSubtitle': 'مرحباً! اسألني أي شيء عن متجرك — الأرباح، المخزون، إعادة الطلب، المنتجات بطيئة البيع، والمزيد.',
+  'aiWelcomeSubtitle':
+      'مرحباً! اسألني أي شيء عن متجرك — الأرباح، المخزون، إعادة الطلب، المنتجات بطيئة البيع، والمزيد.',
   'tryAsking': 'جرّب السؤال:',
   'suggestion1': 'كم ربحت اليوم؟',
   'suggestion2': 'ما المنتجات التي يجب أن أطلبها؟',
@@ -1132,15 +1158,19 @@ const _ar = <String, String>{
   'messageSent': 'تم إرسال الرسالة لجميع العملاء!',
   'broadcastMessage': 'رسالة جماعية',
   'broadcastDesc': 'أرسل رسالة لجميع عملائك',
-  'broadcastHint': 'اكتب رسالتك هنا... (مثال: عرض نهاية الأسبوع: خصم 20% على جميع المشروبات!)',
+  'broadcastHint':
+      'اكتب رسالتك هنا... (مثال: عرض نهاية الأسبوع: خصم 20% على جميع المشروبات!)',
   'sendToAllCustomers': 'إرسال لجميع العملاء',
   'messageTemplates': 'قوالب الرسائل',
   'weekendSaleTitle': 'عرض نهاية الأسبوع',
-  'weekendSaleBody': '🎉 عرض نهاية الأسبوع! احصل على خصم 15% على جميع المشروبات والوجبات الخفيفة يومي الجمعة والسبت. زورونا الآن!',
+  'weekendSaleBody':
+      '🎉 عرض نهاية الأسبوع! احصل على خصم 15% على جميع المشروبات والوجبات الخفيفة يومي الجمعة والسبت. زورونا الآن!',
   'newStockTitle': 'وصول مخزون جديد',
-  'newStockBody': '📦 وصل مخزون جديد! منتجات طازجة، أسعار رائعة. زور متجرك المفضل اليوم.',
+  'newStockBody':
+      '📦 وصل مخزون جديد! منتجات طازجة، أسعار رائعة. زور متجرك المفضل اليوم.',
   'loyaltyTitle': 'تقدير الولاء',
-  'loyaltyBody': '❤️ شكراً لكونك عميلاً وفيّاً! استمتع بخصم حصري 10% على مشترياتك القادمة.',
+  'loyaltyBody':
+      '❤️ شكراً لكونك عميلاً وفيّاً! استمتع بخصم حصري 10% على مشترياتك القادمة.',
   'settings': 'الإعدادات',
   'theme': 'المظهر',
   'language': 'اللغة',

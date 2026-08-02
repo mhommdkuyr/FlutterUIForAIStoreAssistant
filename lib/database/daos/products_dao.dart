@@ -34,9 +34,9 @@ class ProductsDao extends DatabaseAccessor<AppDatabase>
           .getSingleOrNull();
 
   /// Watches products whose current [quantity] is below [minimumStock].
-  Stream<List<Product>> watchLowStock() => (select(products)
-        ..where((t) => t.quantity.isSmallerThan(t.minimumStock)))
-      .watch();
+  Stream<List<Product>> watchLowStock() =>
+      (select(products)..where((t) => t.quantity.isSmallerThan(t.minimumStock)))
+          .watch();
 
   /// Watches products whose [quantity] is zero.
   Stream<List<Product>> watchOutOfStock() =>
@@ -47,9 +47,8 @@ class ProductsDao extends DatabaseAccessor<AppDatabase>
       (select(products)..where((t) => t.category.equals(category))).watch();
 
   /// Returns products whose name contains [query] (case-insensitive).
-  Future<List<Product>> searchByName(String query) => (select(products)
-        ..where((t) => t.name.like('%$query%')))
-      .get();
+  Future<List<Product>> searchByName(String query) =>
+      (select(products)..where((t) => t.name.like('%$query%'))).get();
 
   // ── Mutations ─────────────────────────────────────────────────────────────
 
@@ -58,8 +57,7 @@ class ProductsDao extends DatabaseAccessor<AppDatabase>
       into(products).insert(companion);
 
   /// Replaces an existing product row entirely.
-  Future<bool> updateOne(Product entity) =>
-      update(products).replace(entity);
+  Future<bool> updateOne(Product entity) => update(products).replace(entity);
 
   /// Partially updates a product identified by [id].
   Future<int> updateById(int id, ProductsCompanion companion) =>

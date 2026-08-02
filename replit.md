@@ -1,75 +1,89 @@
-# AI Store Assistant — Flutter Mobile Application
+# AI Store Assistant — Flutter Mobile App
 
-## Project Overview
+An AI-powered retail management platform for grocery stores and small businesses in Yemen and beyond.
 
-A complete Flutter mobile application foundation for an AI-powered retail management platform targeting grocery stores and small businesses in Yemen.
+## Stack
 
-Originally imported as a Figma Make React/Vite prototype, this project has been fully converted into a production-ready Flutter application.
+- **Framework**: Flutter 3.32.0 (Dart 3.5)
+- **Database**: Drift (SQLite, offline-first) — `lib/core/database/app_database.dart`
+- **Routing**: GoRouter — `lib/core/routing/app_router.dart`
+- **Architecture**: Clean Architecture · Repository pattern · Offline-first
+- **State**: Local state + Drift reactive streams (no separate state manager)
+- **Localization**: English + Arabic (RTL) via `lib/core/i18n/app_translations.dart`
 
-## Tech Stack
+## Running the app
 
-- **Framework:** Flutter 3.32.0
-- **Language:** Dart 3.8.0
-- **Navigation:** go_router
-- **State Management:** Provider (wired, not yet populated with business logic)
-- **Charts:** fl_chart
-- **Typography:** Google Fonts (Inter)
-- **Storage:** shared_preferences + flutter_secure_storage interface
-- **Localization:** flutter_localizations (English + Arabic RTL)
-
-## Running the Project
-
-Since this is a Flutter mobile app, it cannot be previewed directly in Replit's web preview. To build and run:
+The app targets **Android and iOS**. It cannot run in a browser preview — use a connected device or emulator.
 
 ```bash
+# Install dependencies
 flutter pub get
-flutter build apk --debug   # Android APK
-flutter build ios            # iOS (requires macOS + Xcode)
-flutter analyze              # Static analysis
+
+# Analyze (exits 0 for info-only issues)
+flutter analyze --no-fatal-warnings
+
+# Run tests (widget tests + DB repository tests with SQLite graceful skip)
+flutter test
+
+# Build debug APK
+flutter build apk --debug
 ```
 
-## Project Structure
+## Key directory layout
 
 ```
 lib/
-├── main.dart                   — App entry point, theme + localization setup
 ├── core/
-│   ├── constants/              — AppConstants, AppStrings
-│   ├── routing/                — AppRouter (GoRouter)
-│   ├── security/               — AuthGuard (RBAC)
-│   ├── theme/                  — AppTheme, AppColors
-│   └── utilities/              — Validators, DateUtils
-├── features/
-│   ├── onboarding/             — Splash, Welcome, AccountType screens
-│   ├── authentication/         — Login, Register screens
-│   ├── merchant/               — Merchant Dashboard
-│   ├── worker/                 — Worker Panel (restricted permissions)
-│   ├── customer/               — Customer Product Search
-│   ├── inventory/              — Inventory Management
-│   ├── product_scanner/        — Barcode + Image Scanner
-│   ├── sales/                  — Fast Sales Screen
-│   ├── debts/                  — Debt Management
-│   ├── analytics/              — Charts (fl_chart: line + pie)
-│   ├── branches/               — Branch Management
-│   ├── marketing/              — Promotions + Customer Messages
-│   ├── ai_assistant/           — AI Chat (Gemini interface ready)
-│   └── settings/               — Theme, Language, Account, Subscription
+│   ├── database/app_database.dart     ← primary Drift DB (used by all screens)
+│   ├── di/service_locator.dart        ← future DI; not yet wired to screens
+│   ├── i18n/app_translations.dart     ← translations (en/ar)
+│   ├── routing/app_router.dart        ← GoRouter configuration
+│   └── theme/                         ← light + dark Material3 themes
+├── database/                          ← second Drift layer (DAOs + repositories)
+│   ├── app_database.dart              ← 8-table schema + DAOs
+│   └── repositories/                  ← repository implementations (Step 2 target)
+├── features/                          ← one directory per app feature
+│   ├── merchant/                      ← merchant dashboard
+│   ├── inventory/                     ← product inventory CRUD
+│   ├── sales/                         ← fast sales + history
+│   ├── debts/                         ← customer debt management
+│   ├── analytics/                     ← revenue/profit charts (fl_chart)
+│   ├── branches/                      ← branch management
+│   ├── customer/                      ← customer search + CRUD
+│   ├── ai_assistant/                  ← AI chat (rule-based; Gemini/llama.cpp in Step 2)
+│   └── ...
 └── shared/
-    ├── models/                 — User, Product, Sale, Debt models
-    ├── services/               — AuthService, ApiService, StorageService
-    └── widgets/                — CustomButton, CustomTextField, AppCard, StatCard, LoadingOverlay
+    ├── models/                        ← ProductModel, SaleModel, DebtModel, ...
+    ├── repositories/                  ← active repositories used by screens
+    └── services/                      ← auth, storage, api stubs
 ```
 
-## Key Design Decisions
+## Architecture notes
 
-- **Theme:** Auto dark/light based on device time (dark after 20:00); manual override in Settings
-- **RBAC:** Worker accounts cannot see profit, analytics, or private merchant data
-- **AI:** Full service interface prepared for Gemini API — no fake API keys committed
-- **Security:** Sensitive tokens go through SecureStorageService (flutter_secure_storage); API keys loaded via --dart-define
-- **RTL:** Arabic locale registered; full RTL testing needed
+- **Two Drift database files** coexist intentionally:
+  - `lib/core/database/app_database.dart` — the **active** DB, used by all screens via `AppDatabase.instance`
+  - `lib/database/app_database.dart` — a richer 8-table schema registered with `ServiceLocator`, targeted for Step 2 migration
+- `ServiceLocator` in `lib/core/di/service_locator.dart` is wired to the second DB but not yet used by any screen
+- `lib/shared/repositories/` contains the **active** repository layer; `lib/database/repositories/` is the Step 2 target
 
-## User Preferences
+## CI / GitHub Actions
 
-- Keep Flutter project structure clean — one screen per file
-- Never commit secrets or API keys
-- Stub implementations should be clearly marked with `// TODO: Replace with real API call`
+- `.github/workflows/ci.yml` — Format · Analyze · Test on every push/PR
+- `.github/workflows/build.yml` — Release APK build on push to `main`
+
+The build workflow requires three GitHub secrets for signing:
+`KEYSTORE_BASE64`, `KEY_STORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD`
+
+## Step 2 roadmap (not yet started)
+
+- Connect the Gemini API / llama.cpp AI assistant
+- Migrate screens from `lib/shared/repositories/` to the richer `lib/database/repositories/`
+- Add offline barcode scanning via `mobile_scanner`
+- Enable ONNX vision provider (`lib/features/ai_assistant/services/onnx_vision_provider.dart` — currently a stub)
+- Add push notifications (FCM)
+
+## User preferences
+
+- Preserve Clean Architecture and offline-first approach
+- Do not increase minimum Dart/Flutter SDK requirements without necessity
+- Keep Arabic (RTL) support working

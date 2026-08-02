@@ -41,8 +41,7 @@ class BranchesDao extends DatabaseAccessor<AppDatabase>
       into(branches).insert(companion);
 
   /// Replaces an existing branch row entirely.
-  Future<bool> updateOne(Branche entity) =>
-      update(branches).replace(entity);
+  Future<bool> updateOne(Branche entity) => update(branches).replace(entity);
 
   /// Partially updates a branch identified by [id].
   Future<int> updateById(int id, BranchesCompanion companion) =>

@@ -26,6 +26,5 @@ class Debts extends Table {
   RealColumn get remaining => real()();
 
   /// Timestamp when the debt was recorded.
-  DateTimeColumn get createdAt =>
-      dateTime().withDefault(currentDateAndTime)();
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
 }

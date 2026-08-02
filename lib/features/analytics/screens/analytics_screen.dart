@@ -59,11 +59,14 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
 
             // KPI cards — driven by daily revenue/profit stream
             StreamBuilder<List<DailyRevenueProfit>>(
-              stream: _saleRepository.watchDailyRevenueProfit(days: _periodDays),
+              stream:
+                  _saleRepository.watchDailyRevenueProfit(days: _periodDays),
               builder: (context, snapshot) {
                 final data = snapshot.data ?? [];
-                final totalRevenue = data.fold<double>(0, (s, e) => s + e.revenue);
-                final totalProfit = data.fold<double>(0, (s, e) => s + e.profit);
+                final totalRevenue =
+                    data.fold<double>(0, (s, e) => s + e.revenue);
+                final totalProfit =
+                    data.fold<double>(0, (s, e) => s + e.profit);
                 final totalExpenses = totalRevenue - totalProfit;
                 final transactionCount = data.length;
 
@@ -118,7 +121,8 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
               child: SizedBox(
                 height: 200,
                 child: StreamBuilder<List<DailyRevenueProfit>>(
-                  stream: _saleRepository.watchDailyRevenueProfit(days: _periodDays),
+                  stream: _saleRepository.watchDailyRevenueProfit(
+                      days: _periodDays),
                   builder: (context, snapshot) {
                     final data = snapshot.data ?? [];
                     final revenueSpots = <FlSpot>[];
@@ -134,7 +138,10 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                           show: true,
                           drawVerticalLine: false,
                           getDrawingHorizontalLine: (v) => FlLine(
-                            color: Theme.of(context).colorScheme.outline.withOpacity(0.5),
+                            color: Theme.of(context)
+                                .colorScheme
+                                .outline
+                                .withOpacity(0.5),
                             strokeWidth: 1,
                           ),
                         ),
@@ -148,14 +155,19 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                                   return const SizedBox.shrink();
                                 }
                                 final label = _dayLabel(data[idx].date);
-                                return Text(label, style: Theme.of(context).textTheme.labelSmall);
+                                return Text(label,
+                                    style:
+                                        Theme.of(context).textTheme.labelSmall);
                               },
                               reservedSize: 20,
                             ),
                           ),
-                          leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                          topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                          rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                          leftTitles: const AxisTitles(
+                              sideTitles: SideTitles(showTitles: false)),
+                          topTitles: const AxisTitles(
+                              sideTitles: SideTitles(showTitles: false)),
+                          rightTitles: const AxisTitles(
+                              sideTitles: SideTitles(showTitles: false)),
                         ),
                         borderData: FlBorderData(show: false),
                         lineBarsData: [
@@ -201,15 +213,21 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                   return Padding(
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     child: Center(
-                      child: Text(context.tr.noSalesDataPeriod, style: textTheme.bodySmall),
+                      child: Text(context.tr.noSalesDataPeriod,
+                          style: textTheme.bodySmall),
                     ),
                   );
                 }
                 return Column(
-                  children: data.asMap().entries.map((e) => Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: _BestSellerRow(rank: e.key + 1, entry: e.value),
-                  )).toList(),
+                  children: data
+                      .asMap()
+                      .entries
+                      .map((e) => Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child:
+                                _BestSellerRow(rank: e.key + 1, entry: e.value),
+                          ))
+                      .toList(),
                 );
               },
             ),
@@ -226,7 +244,8 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                   return Padding(
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     child: Center(
-                      child: Text(context.tr.noCategoryData, style: textTheme.bodySmall),
+                      child: Text(context.tr.noCategoryData,
+                          style: textTheme.bodySmall),
                     ),
                   );
                 }
@@ -242,10 +261,15 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                             sections: data.asMap().entries.map((e) {
                               return PieChartSectionData(
                                 value: e.value.percentage,
-                                color: AppColors.chartColors[e.key % AppColors.chartColors.length],
+                                color: AppColors.chartColors[
+                                    e.key % AppColors.chartColors.length],
                                 radius: 50,
-                                title: '${e.value.percentage.toStringAsFixed(0)}%',
-                                titleStyle: const TextStyle(fontSize: 11, color: Colors.white, fontWeight: FontWeight.w700),
+                                title:
+                                    '${e.value.percentage.toStringAsFixed(0)}%',
+                                titleStyle: const TextStyle(
+                                    fontSize: 11,
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w700),
                               );
                             }).toList(),
                             centerSpaceRadius: 20,
@@ -257,24 +281,33 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
-                          children: data.asMap().entries.map((e) => Padding(
-                            padding: const EdgeInsets.only(bottom: 6),
-                            child: Row(
-                              children: [
-                                Container(
-                                  width: 10,
-                                  height: 10,
-                                  decoration: BoxDecoration(
-                                    color: AppColors.chartColors[e.key % AppColors.chartColors.length],
-                                    shape: BoxShape.circle,
-                                  ),
-                                ),
-                                const SizedBox(width: 6),
-                                Expanded(child: Text(e.value.category, style: textTheme.bodySmall)),
-                                Text('${e.value.percentage.toStringAsFixed(0)}%', style: textTheme.labelSmall),
-                              ],
-                            ),
-                          )).toList(),
+                          children: data
+                              .asMap()
+                              .entries
+                              .map((e) => Padding(
+                                    padding: const EdgeInsets.only(bottom: 6),
+                                    child: Row(
+                                      children: [
+                                        Container(
+                                          width: 10,
+                                          height: 10,
+                                          decoration: BoxDecoration(
+                                            color: AppColors.chartColors[e.key %
+                                                AppColors.chartColors.length],
+                                            shape: BoxShape.circle,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 6),
+                                        Expanded(
+                                            child: Text(e.value.category,
+                                                style: textTheme.bodySmall)),
+                                        Text(
+                                            '${e.value.percentage.toStringAsFixed(0)}%',
+                                            style: textTheme.labelSmall),
+                                      ],
+                                    ),
+                                  ))
+                              .toList(),
                         ),
                       ),
                     ],
@@ -286,16 +319,6 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
           ],
         ),
       ),
-    );
-  }
-
-  String _fmt(double value) {
-    if (value >= 1000000) {
-      return '${(value / 1000000).toStringAsFixed(1)}M';
-    }
-    return value.toStringAsFixed(0).replaceAllMapped(
-      RegExp(r'\B(?=(\d{3})+(?!\d))'),
-      (m) => ',',
     );
   }
 
@@ -318,39 +341,43 @@ class _BestSellerRow extends StatelessWidget {
       child: Row(
         children: [
           Container(
-            width: 28, height: 28,
+            width: 28,
+            height: 28,
             decoration: BoxDecoration(
-              color: rank == 1 ? const Color(0xFFFFD700).withOpacity(0.15)
-                  : rank == 2 ? const Color(0xFFC0C0C0).withOpacity(0.15)
-                  : rank == 3 ? const Color(0xFFCD7F32).withOpacity(0.15)
-                  : AppColors.primary.withOpacity(0.08),
+              color: rank == 1
+                  ? const Color(0xFFFFD700).withOpacity(0.15)
+                  : rank == 2
+                      ? const Color(0xFFC0C0C0).withOpacity(0.15)
+                      : rank == 3
+                          ? const Color(0xFFCD7F32).withOpacity(0.15)
+                          : AppColors.primary.withOpacity(0.08),
               shape: BoxShape.circle,
             ),
             child: Center(
               child: Text(
                 '#$rank',
-                style: textTheme.labelSmall?.copyWith(fontWeight: FontWeight.w700),
+                style:
+                    textTheme.labelSmall?.copyWith(fontWeight: FontWeight.w700),
               ),
             ),
           ),
           const SizedBox(width: 12),
-          Expanded(child: Text(entry.productName, style: textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w500))),
+          Expanded(
+              child: Text(entry.productName,
+                  style: textTheme.bodyMedium
+                      ?.copyWith(fontWeight: FontWeight.w500))),
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Text(context.tr.formatCurrency(entry.revenue), style: textTheme.titleSmall?.copyWith(color: AppColors.primary, fontWeight: FontWeight.w700)),
-              Text('${entry.units} ${context.tr.units}', style: textTheme.bodySmall),
+              Text(context.tr.formatCurrency(entry.revenue),
+                  style: textTheme.titleSmall?.copyWith(
+                      color: AppColors.primary, fontWeight: FontWeight.w700)),
+              Text('${entry.units} ${context.tr.units}',
+                  style: textTheme.bodySmall),
             ],
           ),
         ],
       ),
-    );
-  }
-
-  String _fmtRevenue(double value) {
-    return value.toStringAsFixed(0).replaceAllMapped(
-      RegExp(r'\B(?=(\d{3})+(?!\d))'),
-      (m) => ',',
     );
   }
 }
@@ -362,9 +389,12 @@ enum _Period {
 
   String label(BuildContext context) {
     switch (this) {
-      case week: return context.tr.thisWeek;
-      case month: return context.tr.thisMonth;
-      case year: return context.tr.thisYear;
+      case week:
+        return context.tr.thisWeek;
+      case month:
+        return context.tr.thisMonth;
+      case year:
+        return context.tr.thisYear;
     }
   }
 }

@@ -32,7 +32,8 @@ class ProductModel {
   });
 
   double get profit => sellingPrice - purchasePrice;
-  double get profitMargin => purchasePrice == 0 ? 0 : (profit / purchasePrice) * 100;
+  double get profitMargin =>
+      purchasePrice == 0 ? 0 : (profit / purchasePrice) * 100;
   bool get isLowStock => quantity > 0 && quantity <= 10;
   bool get isOutOfStock => quantity == 0;
 

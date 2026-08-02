@@ -13,7 +13,8 @@ class MarketingScreen extends StatefulWidget {
   State<MarketingScreen> createState() => _MarketingScreenState();
 }
 
-class _MarketingScreenState extends State<MarketingScreen> with SingleTickerProviderStateMixin {
+class _MarketingScreenState extends State<MarketingScreen>
+    with SingleTickerProviderStateMixin {
   late TabController _tabController;
 
   @override
@@ -70,35 +71,50 @@ class _PromotionsTabState extends State<_PromotionsTab> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (ctx) => Padding(
-        padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.viewInsetsOf(ctx).bottom + 20),
+        padding: EdgeInsets.fromLTRB(
+            20, 20, 20, MediaQuery.viewInsetsOf(ctx).bottom + 20),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(tr.createPromotion, style: Theme.of(context).textTheme.titleLarge),
+            Text(tr.createPromotion,
+                style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: 16),
-            TextField(controller: titleCtrl, decoration: InputDecoration(labelText: tr.promotionTitle, hintText: tr.promotionTitleHint)),
+            TextField(
+                controller: titleCtrl,
+                decoration: InputDecoration(
+                    labelText: tr.promotionTitle,
+                    hintText: tr.promotionTitleHint)),
             const SizedBox(height: 12),
-            TextField(controller: discountCtrl, keyboardType: TextInputType.number, decoration: InputDecoration(labelText: tr.discountPercent, hintText: '10')),
+            TextField(
+                controller: discountCtrl,
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(
+                    labelText: tr.discountPercent, hintText: '10')),
             const SizedBox(height: 20),
             ElevatedButton(
               onPressed: () {
                 if (titleCtrl.text.trim().isNotEmpty) {
                   setState(() {
-                    _promotions.insert(0, _Promotion(
-                      id: DateTime.now().millisecondsSinceEpoch.toString(),
-                      title: titleCtrl.text.trim(),
-                      discount: '${discountCtrl.text.trim()}%',
-                      isActive: true,
-                      expiresAt: DateTime.now().add(const Duration(days: 7)),
-                    ));
+                    _promotions.insert(
+                        0,
+                        _Promotion(
+                          id: DateTime.now().millisecondsSinceEpoch.toString(),
+                          title: titleCtrl.text.trim(),
+                          discount: '${discountCtrl.text.trim()}%',
+                          isActive: true,
+                          expiresAt:
+                              DateTime.now().add(const Duration(days: 7)),
+                        ));
                   });
                   Navigator.pop(ctx);
                 }
               },
-              style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 48)),
+              style: ElevatedButton.styleFrom(
+                  minimumSize: const Size(double.infinity, 48)),
               child: Text(tr.createPromotion),
             ),
           ],
@@ -123,14 +139,16 @@ class _PromotionsTabState extends State<_PromotionsTab> {
               separatorBuilder: (_, __) => const SizedBox(height: 8),
               itemBuilder: (ctx, i) => _PromotionCard(
                 promo: _promotions[i],
-                onToggle: () => setState(() => _promotions[i] = _promotions[i].toggle()),
+                onToggle: () =>
+                    setState(() => _promotions[i] = _promotions[i].toggle()),
               ),
             ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _showCreatePromotion,
         backgroundColor: AppColors.accentOrange,
         icon: const Icon(Icons.add_rounded, color: Colors.white),
-        label: Text(tr.createPromotion, style: const TextStyle(color: Colors.white)),
+        label: Text(tr.createPromotion,
+            style: const TextStyle(color: Colors.white)),
       ),
     );
   }
@@ -156,7 +174,8 @@ class _PromotionCard extends StatelessWidget {
             ),
             child: Text(
               promo.discount,
-              style: textTheme.titleMedium?.copyWith(color: AppColors.accentOrange, fontWeight: FontWeight.w700),
+              style: textTheme.titleMedium?.copyWith(
+                  color: AppColors.accentOrange, fontWeight: FontWeight.w700),
             ),
           ),
           const SizedBox(width: 12),
@@ -172,7 +191,10 @@ class _PromotionCard extends StatelessWidget {
               ],
             ),
           ),
-          Switch(value: promo.isActive, onChanged: (_) => onToggle(), activeColor: AppColors.primary),
+          Switch(
+              value: promo.isActive,
+              onChanged: (_) => onToggle(),
+              activeColor: AppColors.primary),
         ],
       ),
     );
@@ -211,9 +233,14 @@ class _MessagesTabState extends State<_MessagesTab> {
     if (_msgCtrl.text.trim().isEmpty) return;
     setState(() => _sending = true);
     await Future.delayed(const Duration(seconds: 1));
-    setState(() { _sending = false; _msgCtrl.clear(); });
+    setState(() {
+      _sending = false;
+      _msgCtrl.clear();
+    });
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(context.tr.messageSent), backgroundColor: AppColors.success),
+      SnackBar(
+          content: Text(context.tr.messageSent),
+          backgroundColor: AppColors.success),
     );
   }
 
@@ -245,7 +272,8 @@ class _MessagesTabState extends State<_MessagesTab> {
                   label: _sending ? tr.sending : tr.sendToAllCustomers,
                   onPressed: _sending ? null : _sendMessage,
                   isLoading: _sending,
-                  leading: const Icon(Icons.send_rounded, color: Colors.white, size: 18),
+                  leading: const Icon(Icons.send_rounded,
+                      color: Colors.white, size: 18),
                 ),
               ],
             ),
@@ -265,7 +293,10 @@ class _MessagesTabState extends State<_MessagesTab> {
                           children: [
                             Text(t['title']!, style: textTheme.titleSmall),
                             const SizedBox(height: 2),
-                            Text(t['body']!, style: textTheme.bodySmall, maxLines: 2, overflow: TextOverflow.ellipsis),
+                            Text(t['body']!,
+                                style: textTheme.bodySmall,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis),
                           ],
                         ),
                       ),
@@ -287,12 +318,37 @@ class _Promotion {
   final bool isActive;
   final DateTime expiresAt;
 
-  const _Promotion({required this.id, required this.title, required this.discount, required this.isActive, required this.expiresAt});
-  _Promotion toggle() => _Promotion(id: id, title: title, discount: discount, isActive: !isActive, expiresAt: expiresAt);
+  const _Promotion(
+      {required this.id,
+      required this.title,
+      required this.discount,
+      required this.isActive,
+      required this.expiresAt});
+  _Promotion toggle() => _Promotion(
+      id: id,
+      title: title,
+      discount: discount,
+      isActive: !isActive,
+      expiresAt: expiresAt);
 }
 
 final _demoPromotions = [
-  _Promotion(id: '1', title: 'Weekend Special', discount: '15%', isActive: true, expiresAt: DateTime.now().add(const Duration(days: 2))),
-  _Promotion(id: '2', title: 'Bulk Buy Deal', discount: '10%', isActive: true, expiresAt: DateTime.now().add(const Duration(days: 14))),
-  _Promotion(id: '3', title: 'Ramadan Offer', discount: '20%', isActive: false, expiresAt: DateTime.now().subtract(const Duration(days: 30))),
+  _Promotion(
+      id: '1',
+      title: 'Weekend Special',
+      discount: '15%',
+      isActive: true,
+      expiresAt: DateTime.now().add(const Duration(days: 2))),
+  _Promotion(
+      id: '2',
+      title: 'Bulk Buy Deal',
+      discount: '10%',
+      isActive: true,
+      expiresAt: DateTime.now().add(const Duration(days: 14))),
+  _Promotion(
+      id: '3',
+      title: 'Ramadan Offer',
+      discount: '20%',
+      isActive: false,
+      expiresAt: DateTime.now().subtract(const Duration(days: 30))),
 ];

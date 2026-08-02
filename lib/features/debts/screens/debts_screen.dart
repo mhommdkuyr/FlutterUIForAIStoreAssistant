@@ -109,8 +109,7 @@ class _DebtsScreenState extends State<DebtsScreen> {
                         });
                       }
                     },
-                    onClear: () =>
-                        setSheetState(() => selectedCustomer = null),
+                    onClear: () => setSheetState(() => selectedCustomer = null),
                   ),
                   const SizedBox(height: 12),
 
@@ -235,8 +234,7 @@ class _DebtsScreenState extends State<DebtsScreen> {
                         return null;
                       }),
                   const SizedBox(height: 12),
-                  CustomTextField(
-                      label: tr.noteOptional, controller: noteCtrl),
+                  CustomTextField(label: tr.noteOptional, controller: noteCtrl),
                   const SizedBox(height: 20),
                   CustomButton(
                       label: tr.saveChanges,
@@ -319,15 +317,13 @@ class _DebtsScreenState extends State<DebtsScreen> {
             TextField(
               controller: amountCtrl,
               keyboardType: TextInputType.number,
-              decoration:
-                  InputDecoration(labelText: tr.paymentAmount),
+              decoration: InputDecoration(labelText: tr.paymentAmount),
             ),
           ],
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: Text(tr.cancel)),
+              onPressed: () => Navigator.pop(ctx), child: Text(tr.cancel)),
           ElevatedButton(
             onPressed: () async {
               final amount = double.tryParse(amountCtrl.text);
@@ -391,8 +387,7 @@ class _DebtsScreenState extends State<DebtsScreen> {
                   gradient: const LinearGradient(
                     colors: [AppColors.error, Color(0xFFDC2626)],
                   ),
-                  borderRadius:
-                      BorderRadius.circular(AppConstants.radiusLarge),
+                  borderRadius: BorderRadius.circular(AppConstants.radiusLarge),
                 ),
                 child: Row(
                   children: [
@@ -405,11 +400,10 @@ class _DebtsScreenState extends State<DebtsScreen> {
                         Text(
                           tr.formatCurrency(totalDebt),
                           style: textTheme.headlineMedium?.copyWith(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w700),
+                              color: Colors.white, fontWeight: FontWeight.w700),
                         ),
                         Text(
-                          '${debts.where((d) => d.remaining > 0).length} ${tr.customersWithDebt}',
+                            '${debts.where((d) => d.remaining > 0).length} ${tr.customersWithDebt}',
                             style: textTheme.bodySmall
                                 ?.copyWith(color: Colors.white70)),
                       ],
@@ -431,8 +425,7 @@ class _DebtsScreenState extends State<DebtsScreen> {
                         padding: const EdgeInsets.symmetric(
                             horizontal: AppConstants.paddingMD),
                         itemCount: debts.length,
-                        separatorBuilder: (_, __) =>
-                            const SizedBox(height: 8),
+                        separatorBuilder: (_, __) => const SizedBox(height: 8),
                         itemBuilder: (ctx, i) => _DebtTile(
                           debt: debts[i],
                           onPay: () => _recordPayment(debts[i]),
@@ -449,8 +442,7 @@ class _DebtsScreenState extends State<DebtsScreen> {
         onPressed: _showAddDebtDialog,
         backgroundColor: AppColors.error,
         icon: const Icon(Icons.person_add_rounded, color: Colors.white),
-        label:
-            Text(tr.addDebt, style: const TextStyle(color: Colors.white)),
+        label: Text(tr.addDebt, style: const TextStyle(color: Colors.white)),
       ),
     );
   }
@@ -494,9 +486,7 @@ class _CustomerSelectorField extends StatelessWidget {
         child: Row(
           children: [
             Icon(
-              hasSelection
-                  ? Icons.person_rounded
-                  : Icons.person_search_rounded,
+              hasSelection ? Icons.person_rounded : Icons.person_search_rounded,
               color: hasSelection ? AppColors.primary : colorScheme.outline,
               size: 20,
             ),
@@ -507,8 +497,8 @@ class _CustomerSelectorField extends StatelessWidget {
                 children: [
                   Text(
                     tr.customerLabel,
-                    style:
-                        textTheme.labelSmall?.copyWith(color: colorScheme.outline),
+                    style: textTheme.labelSmall
+                        ?.copyWith(color: colorScheme.outline),
                   ),
                   Text(
                     hasSelection
@@ -692,20 +682,18 @@ class _CustomerPickerSheetState extends State<_CustomerPickerSheet> {
                           )
                         : ListView.separated(
                             controller: scrollCtrl,
-                            padding:
-                                const EdgeInsets.fromLTRB(20, 4, 20, 24),
+                            padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
                             itemCount: _filtered.length,
                             separatorBuilder: (_, __) =>
                                 const SizedBox(height: 8),
                             itemBuilder: (ctx, i) {
                               final c = _filtered[i];
                               return ListTile(
-                                contentPadding:
-                                    const EdgeInsets.symmetric(
-                                        horizontal: 12, vertical: 4),
+                                contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 4),
                                 leading: CircleAvatar(
-                                  backgroundColor: AppColors.primary
-                                      .withOpacity(0.1),
+                                  backgroundColor:
+                                      AppColors.primary.withOpacity(0.1),
                                   child: Text(
                                     c.initials,
                                     style: textTheme.labelMedium
@@ -715,8 +703,7 @@ class _CustomerPickerSheetState extends State<_CustomerPickerSheet> {
                                 title: Text(c.fullName,
                                     style: textTheme.titleSmall),
                                 subtitle: c.phone.isNotEmpty
-                                    ? Text(c.phone,
-                                        style: textTheme.bodySmall)
+                                    ? Text(c.phone, style: textTheme.bodySmall)
                                     : null,
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(
@@ -763,9 +750,8 @@ class _DebtTile extends StatelessWidget {
             children: [
               CircleAvatar(
                 radius: 20,
-                backgroundColor:
-                    (isPaid ? AppColors.success : AppColors.error)
-                        .withOpacity(0.12),
+                backgroundColor: (isPaid ? AppColors.success : AppColors.error)
+                    .withOpacity(0.12),
                 child: Text(
                   debt.customerName.isNotEmpty
                       ? debt.customerName.substring(0, 1).toUpperCase()
@@ -789,8 +775,7 @@ class _DebtTile extends StatelessWidget {
                         children: [
                           Icon(Icons.link_rounded,
                               size: 11,
-                              color:
-                                  AppColors.primary.withOpacity(0.7)),
+                              color: AppColors.primary.withOpacity(0.7)),
                           const SizedBox(width: 2),
                           Text(
                             tr.linkedToCustomer,
@@ -807,8 +792,8 @@ class _DebtTile extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 8, vertical: 2),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                     decoration: BoxDecoration(
                       color: (isPaid ? AppColors.success : AppColors.error)
                           .withOpacity(0.1),
@@ -818,9 +803,7 @@ class _DebtTile extends StatelessWidget {
                     child: Text(
                       isPaid ? tr.paid : tr.unpaid,
                       style: textTheme.labelSmall?.copyWith(
-                          color: isPaid
-                              ? AppColors.success
-                              : AppColors.error),
+                          color: isPaid ? AppColors.success : AppColors.error),
                     ),
                   ),
                   const SizedBox(height: 4),
@@ -836,8 +819,7 @@ class _DebtTile extends StatelessWidget {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         if (onEdit != null)
-                          _IconBtn(
-                              icon: Icons.edit_outlined, onTap: onEdit!),
+                          _IconBtn(icon: Icons.edit_outlined, onTap: onEdit!),
                         if (onEdit != null && onDelete != null)
                           const SizedBox(width: 4),
                         if (onDelete != null)

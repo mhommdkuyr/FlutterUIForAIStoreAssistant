@@ -30,7 +30,8 @@ class LlamaCppProvider implements AiProvider {
   }
 
   @override
-  Future<String> respond(String userMessage, AiContext context, {bool isArabic = false}) async {
+  Future<String> respond(String userMessage, AiContext context,
+      {bool isArabic = false}) async {
     try {
       final prompt = isArabic
           ? 'أنت مساعد متجر ذكي. أجب بالعربية باختصار. سؤال: $userMessage'
@@ -52,7 +53,8 @@ class LlamaCppProvider implements AiProvider {
 
     final model = ffi.modelLoad(LocalAiConfig.llamaModelPath);
     if (model == null) {
-      throw StateError('Failed to load model at ${LocalAiConfig.llamaModelPath}');
+      throw StateError(
+          'Failed to load model at ${LocalAiConfig.llamaModelPath}');
     }
 
     try {

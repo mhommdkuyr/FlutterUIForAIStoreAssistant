@@ -32,7 +32,12 @@ List<_AccountOption> _options(BuildContext context) {
       description: tr.merchantDesc,
       icon: Icons.store_rounded,
       color: AppColors.primary,
-      features: [tr.featFullAnalytics, tr.featManageBranches, tr.featViewProfits, tr.featAiInsights],
+      features: [
+        tr.featFullAnalytics,
+        tr.featManageBranches,
+        tr.featViewProfits,
+        tr.featAiInsights
+      ],
     ),
     _AccountOption(
       role: AppConstants.roleWorker,
@@ -40,7 +45,12 @@ List<_AccountOption> _options(BuildContext context) {
       description: tr.workerDesc,
       icon: Icons.badge_rounded,
       color: Color(0xFF059669),
-      features: [tr.featScanAdd, tr.featRegisterSales, tr.featUpdateStock, tr.featNoPrivateData],
+      features: [
+        tr.featScanAdd,
+        tr.featRegisterSales,
+        tr.featUpdateStock,
+        tr.featNoPrivateData
+      ],
     ),
     _AccountOption(
       role: AppConstants.roleCustomer,
@@ -48,7 +58,12 @@ List<_AccountOption> _options(BuildContext context) {
       description: tr.customerDesc,
       icon: Icons.person_rounded,
       color: Color(0xFF7C3AED),
-      features: [tr.featSearchImage, tr.featViewPrices, tr.featCheckAvailability, tr.featAiProductAssistant],
+      features: [
+        tr.featSearchImage,
+        tr.featViewPrices,
+        tr.featCheckAvailability,
+        tr.featAiProductAssistant
+      ],
     ),
   ];
 }
@@ -110,8 +125,8 @@ class _AccountCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
     return AppCard(
-      onTap: () =>
-          context.go('/register', extra: {'role': option.role, 'color': option.color.value}),
+      onTap: () => context.go('/register',
+          extra: {'role': option.role, 'color': option.color.value}),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -121,7 +136,8 @@ class _AccountCard extends StatelessWidget {
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
                   color: option.color.withOpacity(0.12),
-                  borderRadius: BorderRadius.circular(AppConstants.radiusMedium),
+                  borderRadius:
+                      BorderRadius.circular(AppConstants.radiusMedium),
                 ),
                 child: Icon(option.icon, color: option.color, size: 28),
               ),

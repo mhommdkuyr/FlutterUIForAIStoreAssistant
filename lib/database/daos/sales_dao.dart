@@ -1,8 +1,6 @@
 import 'package:drift/drift.dart';
 
 import '../app_database.dart';
-import '../tables/employees_table.dart';
-import '../tables/products_table.dart';
 import '../tables/sales_table.dart';
 
 part 'sales_dao.g.dart';
@@ -16,15 +14,11 @@ class SalesDao extends DatabaseAccessor<AppDatabase> with _$SalesDaoMixin {
 
   /// Watches all sales, newest first.
   Stream<List<Sale>> watchAll() =>
-      (select(sales)
-            ..orderBy([(t) => OrderingTerm.desc(t.createdAt)]))
-          .watch();
+      (select(sales)..orderBy([(t) => OrderingTerm.desc(t.createdAt)])).watch();
 
   /// Returns all sales as a one-time snapshot, newest first.
   Future<List<Sale>> getAll() =>
-      (select(sales)
-            ..orderBy([(t) => OrderingTerm.desc(t.createdAt)]))
-          .get();
+      (select(sales)..orderBy([(t) => OrderingTerm.desc(t.createdAt)])).get();
 
   /// Returns a single sale by its primary key, or `null` if not found.
   Future<Sale?> getById(int id) =>

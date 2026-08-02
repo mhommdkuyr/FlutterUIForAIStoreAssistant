@@ -5,7 +5,9 @@ class AppValidators {
 
   static String? required(String? value, [String? fieldName]) {
     if (value == null || value.trim().isEmpty) {
-      return fieldName != null ? '$fieldName is required.' : AppStrings.fieldRequired;
+      return fieldName != null
+          ? '$fieldName is required.'
+          : AppStrings.fieldRequired;
     }
     return null;
   }
@@ -33,7 +35,8 @@ class AppValidators {
   static String? phone(String? value) {
     if (value == null || value.trim().isEmpty) return AppStrings.fieldRequired;
     final phoneRegex = RegExp(r'^\+?[0-9]{7,15}$');
-    if (!phoneRegex.hasMatch(value.trim())) return 'Please enter a valid phone number.';
+    if (!phoneRegex.hasMatch(value.trim()))
+      return 'Please enter a valid phone number.';
     return null;
   }
 

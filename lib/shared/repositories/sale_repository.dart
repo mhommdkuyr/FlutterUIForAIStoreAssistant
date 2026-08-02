@@ -12,7 +12,8 @@ class DailyRevenueProfit {
   final DateTime date;
   final double revenue;
   final double profit;
-  const DailyRevenueProfit({required this.date, required this.revenue, required this.profit});
+  const DailyRevenueProfit(
+      {required this.date, required this.revenue, required this.profit});
 }
 
 /// Data class for best-selling product entries.
@@ -20,7 +21,8 @@ class BestSellerEntry {
   final String productName;
   final double revenue;
   final int units;
-  const BestSellerEntry({required this.productName, required this.revenue, required this.units});
+  const BestSellerEntry(
+      {required this.productName, required this.revenue, required this.units});
 }
 
 /// Data class for category breakdown pie chart.
@@ -44,14 +46,16 @@ class SaleRepository {
     String paymentMethod = 'cash',
   }) async {
     if (items.isEmpty) {
-      throw ValidationException('Add at least one product to complete the sale.');
+      throw ValidationException(
+          'Add at least one product to complete the sale.');
     }
     if (discount < 0) {
       throw ValidationException('Discount cannot be negative.');
     }
 
     try {
-      final subtotal = items.fold<double>(0, (sum, item) => sum + (item.sellingPrice * item.quantity));
+      final subtotal = items.fold<double>(
+          0, (sum, item) => sum + (item.sellingPrice * item.quantity));
       final total = (subtotal - discount).clamp(0, double.infinity).toDouble();
 
       final saleId = Uuid().v4();
@@ -59,17 +63,17 @@ class SaleRepository {
 
       await _db.transaction(() async {
         await _db.into(_db.sales).insert(SalesCompanion(
-          id: Value(saleId),
-          subtotal: Value(subtotal),
-          discount: Value(discount),
-          total: Value(total),
-          customerId: Value(customerId),
-          customerName: Value(customerName),
-          workerId: Value(workerId),
-          branchId: Value(branchId),
-          createdAt: Value(now),
-          paymentMethod: Value(paymentMethod),
-        ));
+              id: Value(saleId),
+              subtotal: Value(subtotal),
+              discount: Value(discount),
+              total: Value(total),
+              customerId: Value(customerId),
+              customerName: Value(customerName),
+              workerId: Value(workerId),
+              branchId: Value(branchId),
+              createdAt: Value(now),
+              paymentMethod: Value(paymentMethod),
+            ));
 
         for (final item in items) {
           final quantity = item.quantity;
@@ -89,14 +93,14 @@ class SaleRepository {
           }
 
           await _db.into(_db.saleItems).insert(SaleItemsCompanion(
-            id: Value(Uuid().v4()),
-            saleId: Value(saleId),
-            productId: Value(item.id),
-            productName: Value(item.name),
-            quantity: Value(quantity),
-            unitPrice: Value(item.sellingPrice),
-            totalPrice: Value(item.sellingPrice * quantity),
-          ));
+                id: Value(Uuid().v4()),
+                saleId: Value(saleId),
+                productId: Value(item.id),
+                productName: Value(item.name),
+                quantity: Value(quantity),
+                unitPrice: Value(item.sellingPrice),
+                totalPrice: Value(item.sellingPrice * quantity),
+              ));
 
           await (_db.update(_db.products)
                 ..where((tbl) => tbl.id.equals(item.id)))
@@ -109,13 +113,15 @@ class SaleRepository {
 
       return SaleModel(
         id: saleId,
-        items: items.map((p) => SaleItemModel(
-              productId: p.id,
-              productName: p.name,
-              quantity: p.quantity,
-              unitPrice: p.sellingPrice,
-              totalPrice: p.sellingPrice * p.quantity,
-            )).toList(),
+        items: items
+            .map((p) => SaleItemModel(
+                  productId: p.id,
+                  productName: p.name,
+                  quantity: p.quantity,
+                  unitPrice: p.sellingPrice,
+                  totalPrice: p.sellingPrice * p.quantity,
+                ))
+            .toList(),
         subtotal: subtotal,
         discount: discount,
         total: total,
@@ -188,13 +194,15 @@ class SaleRepository {
             .get();
         items.add(SaleModel(
           id: row.id,
-          items: saleItems.map((item) => SaleItemModel(
-                productId: item.productId,
-                productName: item.productName,
-                quantity: item.quantity,
-                unitPrice: item.unitPrice,
-                totalPrice: item.totalPrice,
-              )).toList(),
+          items: saleItems
+              .map((item) => SaleItemModel(
+                    productId: item.productId,
+                    productName: item.productName,
+                    quantity: item.quantity,
+                    unitPrice: item.unitPrice,
+                    totalPrice: item.totalPrice,
+                  ))
+              .toList(),
           subtotal: row.subtotal,
           discount: row.discount,
           total: row.total,
@@ -374,7 +382,8 @@ class SaleRepository {
   // ── Reactive stream helpers for analytics UI ──────────────────────────────
 
   /// Reactive stream of daily revenue/profit for the last [days] days.
-  Stream<List<DailyRevenueProfit>> watchDailyRevenueProfit({required int days}) {
+  Stream<List<DailyRevenueProfit>> watchDailyRevenueProfit(
+      {required int days}) {
     return _db.select(_db.sales).watch().asyncMap((_) async {
       final now = DateTime.now();
       final result = <DailyRevenueProfit>[];
@@ -390,16 +399,19 @@ class SaleRepository {
   }
 
   /// Reactive stream of best-selling products for the last [days] days.
-  Stream<List<BestSellerEntry>> watchBestSellers({required int days, int limit = 5}) {
+  Stream<List<BestSellerEntry>> watchBestSellers(
+      {required int days, int limit = 5}) {
     return _db.select(_db.sales).watch().asyncMap((_) async {
       final now = DateTime.now();
       final from = DateTime(now.year, now.month, now.day - days);
       final raw = await getBestSellersForPeriod(from, now, limit: limit);
-      return raw.map((e) => BestSellerEntry(
-        productName: e['name'] as String,
-        revenue: e['revenue'] as double,
-        units: e['units'] as int,
-      )).toList();
+      return raw
+          .map((e) => BestSellerEntry(
+                productName: e['name'] as String,
+                revenue: e['revenue'] as double,
+                units: e['units'] as int,
+              ))
+          .toList();
     });
   }
 
@@ -409,10 +421,12 @@ class SaleRepository {
       final now = DateTime.now();
       final from = DateTime(now.year, now.month, now.day - days);
       final raw = await getCategoryBreakdownForPeriod(from, now);
-      return raw.map((e) => CategoryShare(
-        category: e['label'] as String,
-        percentage: e['pct'] as double,
-      )).toList();
+      return raw
+          .map((e) => CategoryShare(
+                category: e['label'] as String,
+                percentage: e['pct'] as double,
+              ))
+          .toList();
     });
   }
 
@@ -451,8 +465,7 @@ class SaleRepository {
                 'pct': (e.value / grandTotal) * 100,
               })
           .toList()
-        ..sort(
-            (a, b) => (b['pct'] as double).compareTo(a['pct'] as double));
+        ..sort((a, b) => (b['pct'] as double).compareTo(a['pct'] as double));
       return result;
     } catch (e) {
       throw DatabaseException('Unable to load category breakdown: $e');

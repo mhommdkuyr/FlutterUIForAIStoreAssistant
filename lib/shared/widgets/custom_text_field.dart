@@ -97,7 +97,9 @@ class _CustomTextFieldState extends State<CustomTextField> {
             prefixIcon: widget.prefixIcon,
             suffixIcon: widget.obscureText
                 ? IconButton(
-                    icon: Icon(_obscured ? Icons.visibility_outlined : Icons.visibility_off_outlined),
+                    icon: Icon(_obscured
+                        ? Icons.visibility_outlined
+                        : Icons.visibility_off_outlined),
                     onPressed: () => setState(() => _obscured = !_obscured),
                   )
                 : widget.suffixIcon,

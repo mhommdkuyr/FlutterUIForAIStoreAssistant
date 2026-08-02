@@ -25,6 +25,5 @@ class InventoryMovements extends Table {
   IntColumn get quantity => integer()();
 
   /// Timestamp when the movement was recorded.
-  DateTimeColumn get createdAt =>
-      dateTime().withDefault(currentDateAndTime)();
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
 }

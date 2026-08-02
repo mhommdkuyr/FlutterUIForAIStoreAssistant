@@ -1,7 +1,6 @@
 import 'package:drift/drift.dart';
 
 import '../app_database.dart';
-import '../tables/branches_table.dart';
 import '../tables/employees_table.dart';
 
 part 'employees_dao.g.dart';
@@ -43,8 +42,7 @@ class EmployeesDao extends DatabaseAccessor<AppDatabase>
       into(employees).insert(companion);
 
   /// Replaces an existing employee row entirely.
-  Future<bool> updateOne(Employee entity) =>
-      update(employees).replace(entity);
+  Future<bool> updateOne(Employee entity) => update(employees).replace(entity);
 
   /// Partially updates an employee identified by [id].
   Future<int> updateById(int id, EmployeesCompanion companion) =>

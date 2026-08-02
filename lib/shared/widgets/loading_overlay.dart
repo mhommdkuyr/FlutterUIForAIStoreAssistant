@@ -35,7 +35,8 @@ class LoadingOverlay extends StatelessWidget {
                       const CircularProgressIndicator(color: AppColors.primary),
                       if (message != null) ...[
                         const SizedBox(height: 16),
-                        Text(message!, style: Theme.of(context).textTheme.bodyMedium),
+                        Text(message!,
+                            style: Theme.of(context).textTheme.bodyMedium),
                       ],
                     ],
                   ),
@@ -90,7 +91,8 @@ class EmptyState extends StatelessWidget {
           children: [
             Icon(icon, size: 64, color: Theme.of(context).colorScheme.outline),
             const SizedBox(height: 16),
-            Text(title, style: textTheme.titleMedium, textAlign: TextAlign.center),
+            Text(title,
+                style: textTheme.titleMedium, textAlign: TextAlign.center),
             if (subtitle != null) ...[
               const SizedBox(height: 8),
               Text(

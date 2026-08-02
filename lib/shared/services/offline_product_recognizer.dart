@@ -10,7 +10,8 @@ class OfflineProductRecognizer {
   static const double defaultConfidenceThreshold = 0.82;
   static const Duration debounceDuration = Duration(seconds: 2);
 
-  static ProductModel? findBestMatch(List<ProductModel> products, String query) {
+  static ProductModel? findBestMatch(
+      List<ProductModel> products, String query) {
     if (products.isEmpty) return null;
 
     final normalized = query.trim().toLowerCase();
@@ -34,13 +35,15 @@ class OfflineProductRecognizer {
     return bestMatch;
   }
 
-  static Future<ProductModel?> matchImageFile(List<ProductModel> products, String imagePath) async {
+  static Future<ProductModel?> matchImageFile(
+      List<ProductModel> products, String imagePath) async {
     final targetSignature = await _loadSignatureFromFile(imagePath);
     if (targetSignature == null) return null;
     return _findBestSignatureMatch(products, targetSignature);
   }
 
-  static Future<ProductModel?> matchCameraImage(List<ProductModel> products, CameraImage image) async {
+  static Future<ProductModel?> matchCameraImage(
+      List<ProductModel> products, CameraImage image) async {
     final targetSignature = _buildSignatureFromCameraImage(image);
     if (targetSignature == null) return null;
     return _findBestSignatureMatch(products, targetSignature);

@@ -24,7 +24,10 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _submit() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
-    setState(() { _loading = true; _error = null; });
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
 
     final result = await AuthService.instance.login(
       email: _emailCtrl.text.trim(),
@@ -105,17 +108,21 @@ class _LoginScreenState extends State<LoginScreen> {
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
                       color: AppColors.error.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(AppConstants.radiusMedium),
-                      border: Border.all(color: AppColors.error.withOpacity(0.3)),
+                      borderRadius:
+                          BorderRadius.circular(AppConstants.radiusMedium),
+                      border:
+                          Border.all(color: AppColors.error.withOpacity(0.3)),
                     ),
                     child: Row(
                       children: [
-                        const Icon(Icons.error_outline, color: AppColors.error, size: 18),
+                        const Icon(Icons.error_outline,
+                            color: AppColors.error, size: 18),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
                             _error!,
-                            style: textTheme.bodySmall?.copyWith(color: AppColors.error),
+                            style: textTheme.bodySmall
+                                ?.copyWith(color: AppColors.error),
                           ),
                         ),
                       ],

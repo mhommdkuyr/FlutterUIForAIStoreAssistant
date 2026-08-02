@@ -27,28 +27,62 @@ class AiCommandRouter {
     final m = message.trim().toLowerCase();
 
     // Live barcode scanner (cashier scan)
-    if (_has(m, ['افتح المسح', 'ابدأ المسح', 'مسح الباركود', 'open scanner',
-        'start scan', 'barcode scan', 'live scan'])) {
+    if (_has(m, [
+      'افتح المسح',
+      'ابدأ المسح',
+      'مسح الباركود',
+      'open scanner',
+      'start scan',
+      'barcode scan',
+      'live scan'
+    ])) {
       return '/scanner/live';
     }
     // Add product
-    if (_has(m, ['أضف منتج', 'إضافة منتج', 'منتج جديد', 'add product',
-        'new product', 'إضافة سلعة'])) {
+    if (_has(m, [
+      'أضف منتج',
+      'إضافة منتج',
+      'منتج جديد',
+      'add product',
+      'new product',
+      'إضافة سلعة'
+    ])) {
       return '/scanner';
     }
     // Debts
-    if (_has(m, ['أنشئ دين', 'إضافة دين', 'ديون', 'add debt', 'new debt',
-        'debts', 'debt'])) {
+    if (_has(m, [
+      'أنشئ دين',
+      'إضافة دين',
+      'ديون',
+      'add debt',
+      'new debt',
+      'debts',
+      'debt'
+    ])) {
       return '/debts';
     }
     // Sales / invoice
-    if (_has(m, ['اذهب إلى المبيعات', 'فاتورة', 'مبيعات', 'أنشئ فاتورة',
-        'sales', 'invoice', 'checkout', 'new sale'])) {
+    if (_has(m, [
+      'اذهب إلى المبيعات',
+      'فاتورة',
+      'مبيعات',
+      'أنشئ فاتورة',
+      'sales',
+      'invoice',
+      'checkout',
+      'new sale'
+    ])) {
       return '/sales';
     }
     // Analytics
-    if (_has(m, ['افتح التحليل', 'تحليل', 'تقارير', 'analytics', 'reports',
-        'statistics'])) {
+    if (_has(m, [
+      'افتح التحليل',
+      'تحليل',
+      'تقارير',
+      'analytics',
+      'reports',
+      'statistics'
+    ])) {
       return '/analytics';
     }
     // Inventory
@@ -73,16 +107,16 @@ class AiCommandRouter {
     // Check for navigation commands first (works fully offline).
     final navRoute = _matchNavRoute(message);
     if (navRoute != null) {
-      final confirmation = isArabic
-          ? 'جارٍ الانتقال...'
-          : 'Opening that for you...';
+      final confirmation =
+          isArabic ? 'جارٍ الانتقال...' : 'Opening that for you...';
       return AiRouterResult(confirmation, navRoute: navRoute);
     }
 
     final context = await _contextService.buildContext();
     for (final provider in _providers) {
       if (provider.isAvailable) {
-        final text = await provider.respond(message, context, isArabic: isArabic);
+        final text =
+            await provider.respond(message, context, isArabic: isArabic);
         return AiRouterResult(text);
       }
     }

@@ -67,7 +67,9 @@ class _AiStoreAssistantAppState extends State<AiStoreAssistantApp> {
       case 'dark':
         return ThemeMode.dark;
       default:
-        return AppDateUtils.shouldUseDarkModeByTime() ? ThemeMode.dark : ThemeMode.light;
+        return AppDateUtils.shouldUseDarkModeByTime()
+            ? ThemeMode.dark
+            : ThemeMode.light;
     }
   }
 

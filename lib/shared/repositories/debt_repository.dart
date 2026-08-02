@@ -101,8 +101,7 @@ class DebtRepository {
         customerName: customerName != null
             ? Value(customerName.trim())
             : const Value.absent(),
-        originalAmount:
-            amount != null ? Value(amount) : const Value.absent(),
+        originalAmount: amount != null ? Value(amount) : const Value.absent(),
         note: Value(note?.trim()),
       );
 
@@ -122,8 +121,7 @@ class DebtRepository {
   Future<void> deleteDebt(String id) async {
     try {
       final deleted =
-          await (_db.delete(_db.debts)..where((tbl) => tbl.id.equals(id)))
-              .go();
+          await (_db.delete(_db.debts)..where((tbl) => tbl.id.equals(id))).go();
       if (deleted == 0) {
         throw ValidationException('Debt not found.');
       }

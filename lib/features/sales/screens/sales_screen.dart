@@ -141,12 +141,13 @@ class _SalesScreenState extends State<SalesScreen>
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('${_cart.fold(0, (s, i) => s + i.quantity)} ${tr.itemsSold}'),
+              Text(
+                  '${_cart.fold(0, (s, i) => s + i.quantity)} ${tr.itemsSold}'),
               const SizedBox(height: 8),
               Text(
                 '${tr.total}: ${tr.formatCurrency(_total)}',
-                style: const TextStyle(
-                    fontWeight: FontWeight.w700, fontSize: 18),
+                style:
+                    const TextStyle(fontWeight: FontWeight.w700, fontSize: 18),
               ),
             ],
           ),
@@ -276,8 +277,7 @@ class _NewSaleTab extends StatelessWidget {
     final textTheme = Theme.of(context).textTheme;
     final filtered = products
         .where((p) =>
-            query.isEmpty ||
-            p.name.toLowerCase().contains(query.toLowerCase()))
+            query.isEmpty || p.name.toLowerCase().contains(query.toLowerCase()))
         .toList();
 
     return LoadingOverlay(
@@ -328,8 +328,7 @@ class _NewSaleTab extends StatelessWidget {
                             size: 56,
                             color: Theme.of(context).colorScheme.outline),
                         const SizedBox(height: 12),
-                        Text(tr.addProductsToStart,
-                            style: textTheme.bodyLarge),
+                        Text(tr.addProductsToStart, style: textTheme.bodyLarge),
                       ],
                     ),
                   )
@@ -362,7 +361,8 @@ class _NewSaleTab extends StatelessWidget {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(tr.subtotal, style: textTheme.bodyMedium),
-                      Text(tr.formatCurrency(subtotal), style: textTheme.bodyMedium),
+                      Text(tr.formatCurrency(subtotal),
+                          style: textTheme.bodyMedium),
                     ],
                   ),
                   const SizedBox(height: 4),
@@ -443,8 +443,7 @@ class _SalesHistoryTab extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Icon(Icons.receipt_long_outlined,
-                    size: 56,
-                    color: Theme.of(context).colorScheme.outline),
+                    size: 56, color: Theme.of(context).colorScheme.outline),
                 const SizedBox(height: 12),
                 Text(
                   tr.noSalesYet,
@@ -464,8 +463,7 @@ class _SalesHistoryTab extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
           itemCount: sales.length,
           separatorBuilder: (_, __) => const SizedBox(height: 8),
-          itemBuilder: (ctx, i) =>
-              _SaleTile(sale: sales[i]),
+          itemBuilder: (ctx, i) => _SaleTile(sale: sales[i]),
         );
       },
     );
@@ -493,8 +491,7 @@ class _SaleTile extends StatelessWidget {
             height: AppConstants.thumbnailSize,
             decoration: BoxDecoration(
               color: AppColors.primary.withOpacity(0.08),
-              borderRadius:
-                  BorderRadius.circular(AppConstants.radiusSmall),
+              borderRadius: BorderRadius.circular(AppConstants.radiusSmall),
             ),
             child: const Icon(Icons.receipt_rounded,
                 color: AppColors.primary, size: 22),
@@ -514,8 +511,8 @@ class _SaleTile extends StatelessWidget {
                   const SizedBox(height: 2),
                   Text(
                     '${tr.discountLabel}: ${tr.formatCurrency(sale.discount)}',
-                    style: textTheme.bodySmall
-                        ?.copyWith(color: AppColors.error),
+                    style:
+                        textTheme.bodySmall?.copyWith(color: AppColors.error),
                   ),
                 ],
               ],
@@ -527,8 +524,7 @@ class _SaleTile extends StatelessWidget {
               Text(
                 tr.formatCurrency(sale.total),
                 style: textTheme.titleSmall?.copyWith(
-                    color: AppColors.success,
-                    fontWeight: FontWeight.w700),
+                    color: AppColors.success, fontWeight: FontWeight.w700),
               ),
               const SizedBox(height: 4),
               _PaymentBadge(method: sale.paymentMethod),
@@ -551,8 +547,7 @@ class _PaymentBadge extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(
         color: AppColors.primary.withOpacity(0.08),
-        borderRadius:
-            BorderRadius.circular(AppConstants.radiusFull),
+        borderRadius: BorderRadius.circular(AppConstants.radiusFull),
       ),
       child: Text(
         tr.cash,
@@ -654,8 +649,7 @@ class _CartTile extends StatelessWidget {
               _CountBtn(icon: Icons.remove_rounded, onTap: onDecrement),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 12),
-                child:
-                    Text('${item.quantity}', style: textTheme.titleSmall),
+                child: Text('${item.quantity}', style: textTheme.titleSmall),
               ),
               _CountBtn(icon: Icons.add_rounded, onTap: onIncrement),
             ],
@@ -711,8 +705,8 @@ class _CartItem {
       required this.quantity});
 
   double get totalPrice => unitPrice * quantity;
-  _CartItem increment() =>
-      _CartItem(id: id, name: name, unitPrice: unitPrice, quantity: quantity + 1);
-  _CartItem decrement() =>
-      _CartItem(id: id, name: name, unitPrice: unitPrice, quantity: quantity - 1);
+  _CartItem increment() => _CartItem(
+      id: id, name: name, unitPrice: unitPrice, quantity: quantity + 1);
+  _CartItem decrement() => _CartItem(
+      id: id, name: name, unitPrice: unitPrice, quantity: quantity - 1);
 }

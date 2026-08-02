@@ -29,7 +29,9 @@ class ProductRepository {
       if (query == null || query.trim().isEmpty) return products;
       final normalized = query.toLowerCase();
       return products.where((product) {
-        final haystack = '${product.name} ${product.category} ${product.barcode ?? ''}'.toLowerCase();
+        final haystack =
+            '${product.name} ${product.category} ${product.barcode ?? ''}'
+                .toLowerCase();
         return haystack.contains(normalized);
       }).toList();
     } catch (e) {
@@ -63,7 +65,8 @@ class ProductRepository {
               ..where((tbl) => tbl.barcode.equals(barcode.trim())))
             .getSingleOrNull();
         if (duplicate != null) {
-          throw ValidationException('A product with this barcode already exists.');
+          throw ValidationException(
+              'A product with this barcode already exists.');
         }
       }
 
@@ -117,17 +120,21 @@ class ProductRepository {
     );
 
     try {
-      final existing = await (_db.select(_db.products)..where((tbl) => tbl.id.equals(id))).getSingleOrNull();
+      final existing = await (_db.select(_db.products)
+            ..where((tbl) => tbl.id.equals(id)))
+          .getSingleOrNull();
       if (existing == null) {
         throw ValidationException('Product not found.');
       }
 
       if (barcode != null && barcode.trim().isNotEmpty) {
         final duplicate = await (_db.select(_db.products)
-              ..where((tbl) => tbl.barcode.equals(barcode.trim()) & tbl.id.isNotValue(id)))
+              ..where((tbl) =>
+                  tbl.barcode.equals(barcode.trim()) & tbl.id.isNotValue(id)))
             .getSingleOrNull();
         if (duplicate != null) {
-          throw ValidationException('A product with this barcode already exists.');
+          throw ValidationException(
+              'A product with this barcode already exists.');
         }
       }
 
@@ -144,9 +151,12 @@ class ProductRepository {
         updatedAt: Value(now),
       );
 
-      await (_db.update(_db.products)..where((tbl) => tbl.id.equals(id))).write(companion);
+      await (_db.update(_db.products)..where((tbl) => tbl.id.equals(id)))
+          .write(companion);
 
-      final row = await (_db.select(_db.products)..where((tbl) => tbl.id.equals(id))).getSingle();
+      final row = await (_db.select(_db.products)
+            ..where((tbl) => tbl.id.equals(id)))
+          .getSingle();
       return _mapRow(row);
     } catch (e) {
       if (e is ValidationException || e is DatabaseException) {
@@ -158,7 +168,9 @@ class ProductRepository {
 
   Future<void> deleteProduct(String id) async {
     try {
-      final deleted = await (_db.delete(_db.products)..where((tbl) => tbl.id.equals(id))).go();
+      final deleted = await (_db.delete(_db.products)
+            ..where((tbl) => tbl.id.equals(id)))
+          .go();
       if (deleted == 0) {
         throw ValidationException('Product not found.');
       }
@@ -182,7 +194,9 @@ class ProductRepository {
   Future<int> getLowStockCount() async {
     try {
       final rows = await (_db.select(_db.products)
-            ..where((tbl) => tbl.quantity.isSmallerThanValue(11) & tbl.quantity.isBiggerThanValue(0)))
+            ..where((tbl) =>
+                tbl.quantity.isSmallerThanValue(11) &
+                tbl.quantity.isBiggerThanValue(0)))
           .get();
       return rows.length;
     } catch (e) {
@@ -201,7 +215,9 @@ class ProductRepository {
 
   Future<ProductModel?> getProductById(String id) async {
     try {
-      final row = await (_db.select(_db.products)..where((tbl) => tbl.id.equals(id))).getSingleOrNull();
+      final row = await (_db.select(_db.products)
+            ..where((tbl) => tbl.id.equals(id)))
+          .getSingleOrNull();
       if (row == null) return null;
       return _mapRow(row);
     } catch (e) {
@@ -250,7 +266,9 @@ class ProductRepository {
     if (quantity < 0) {
       throw ValidationException('Quantity cannot be negative.');
     }
-    if (barcode != null && barcode.trim().isNotEmpty && barcode.trim().length < 2) {
+    if (barcode != null &&
+        barcode.trim().isNotEmpty &&
+        barcode.trim().length < 2) {
       throw ValidationException('Barcode must be at least 2 characters.');
     }
   }

@@ -41,8 +41,7 @@ class CustomersDao extends DatabaseAccessor<AppDatabase>
       into(customers).insert(companion);
 
   /// Replaces an existing customer row entirely.
-  Future<bool> updateOne(Customer entity) =>
-      update(customers).replace(entity);
+  Future<bool> updateOne(Customer entity) => update(customers).replace(entity);
 
   /// Partially updates a customer identified by [id].
   Future<int> updateById(int id, CustomersCompanion companion) =>

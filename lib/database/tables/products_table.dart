@@ -36,10 +36,8 @@ class Products extends Table {
   DateTimeColumn get expirationDate => dateTime().nullable()();
 
   /// Timestamp when the product record was first created.
-  DateTimeColumn get createdAt =>
-      dateTime().withDefault(currentDateAndTime)();
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
 
   /// Timestamp of the last modification to this record.
-  DateTimeColumn get updatedAt =>
-      dateTime().withDefault(currentDateAndTime)();
+  DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
 }

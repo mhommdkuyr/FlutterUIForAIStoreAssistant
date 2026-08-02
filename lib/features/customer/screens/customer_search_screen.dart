@@ -101,8 +101,9 @@ class _CustomerSearchScreenState extends State<CustomerSearchScreen> {
                 CustomTextField(
                     label: context.tr.fullName,
                     controller: nameCtrl,
-                    validator: (v) =>
-                        (v?.trim().isEmpty ?? true) ? context.tr.required : null),
+                    validator: (v) => (v?.trim().isEmpty ?? true)
+                        ? context.tr.required
+                        : null),
                 const SizedBox(height: 12),
                 CustomTextField(
                     label: context.tr.phoneOptional,
@@ -184,8 +185,9 @@ class _CustomerSearchScreenState extends State<CustomerSearchScreen> {
                 CustomTextField(
                     label: context.tr.fullName,
                     controller: nameCtrl,
-                    validator: (v) =>
-                        (v?.trim().isEmpty ?? true) ? context.tr.required : null),
+                    validator: (v) => (v?.trim().isEmpty ?? true)
+                        ? context.tr.required
+                        : null),
                 const SizedBox(height: 12),
                 CustomTextField(
                     label: context.tr.phoneOptional,
@@ -322,8 +324,8 @@ class _CustomerSearchScreenState extends State<CustomerSearchScreen> {
         onPressed: _showAddCustomer,
         backgroundColor: AppColors.primary,
         icon: const Icon(Icons.person_add_rounded, color: Colors.white),
-        label:
-            Text(context.tr.addCustomer, style: const TextStyle(color: Colors.white)),
+        label: Text(context.tr.addCustomer,
+            style: const TextStyle(color: Colors.white)),
       ),
     );
   }

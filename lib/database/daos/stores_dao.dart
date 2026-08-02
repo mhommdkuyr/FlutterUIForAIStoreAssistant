@@ -11,8 +11,7 @@ part 'stores_dao.g.dart';
 /// operations on store records. Features should use [StoreRepository]
 /// rather than this DAO directly.
 @DriftAccessor(tables: [Stores])
-class StoresDao extends DatabaseAccessor<AppDatabase>
-    with _$StoresDaoMixin {
+class StoresDao extends DatabaseAccessor<AppDatabase> with _$StoresDaoMixin {
   StoresDao(super.db);
 
   // ── Queries ───────────────────────────────────────────────────────────────
@@ -34,8 +33,7 @@ class StoresDao extends DatabaseAccessor<AppDatabase>
       into(stores).insert(companion);
 
   /// Replaces an existing store row entirely.
-  Future<bool> updateOne(Store entity) =>
-      update(stores).replace(entity);
+  Future<bool> updateOne(Store entity) => update(stores).replace(entity);
 
   /// Partially updates a store identified by [id].
   Future<int> updateById(int id, StoresCompanion companion) =>

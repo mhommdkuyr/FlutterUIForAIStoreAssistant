@@ -44,7 +44,8 @@ class WorkerDashboardScreen extends StatelessWidget {
                     backgroundColor: AppColors.primary.withOpacity(0.12),
                     child: Text(
                       user?.initials ?? 'W',
-                      style: textTheme.titleMedium?.copyWith(color: AppColors.primary),
+                      style: textTheme.titleMedium
+                          ?.copyWith(color: AppColors.primary),
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -52,7 +53,8 @@ class WorkerDashboardScreen extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(user?.fullName ?? tr.workerFallback, style: textTheme.titleMedium),
+                        Text(user?.fullName ?? tr.workerFallback,
+                            style: textTheme.titleMedium),
                         Text(
                           '${tr.workerFallback} • ${user?.storeName ?? tr.workerStoreFallback}',
                           style: textTheme.bodySmall,
@@ -61,14 +63,17 @@ class WorkerDashboardScreen extends StatelessWidget {
                     ),
                   ),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
                       color: AppColors.success.withOpacity(0.12),
-                      borderRadius: BorderRadius.circular(AppConstants.radiusFull),
+                      borderRadius:
+                          BorderRadius.circular(AppConstants.radiusFull),
                     ),
                     child: Text(
                       tr.active,
-                      style: textTheme.labelSmall?.copyWith(color: AppColors.success),
+                      style: textTheme.labelSmall
+                          ?.copyWith(color: AppColors.success),
                     ),
                   ),
                 ],
@@ -114,7 +119,10 @@ class WorkerDashboardScreen extends StatelessWidget {
                   child: AppCard(
                     child: Column(
                       children: [
-                        Text('47', style: textTheme.headlineMedium?.copyWith(color: AppColors.primary, fontWeight: FontWeight.w700)),
+                        Text('47',
+                            style: textTheme.headlineMedium?.copyWith(
+                                color: AppColors.primary,
+                                fontWeight: FontWeight.w700)),
                         const SizedBox(height: 4),
                         Text(tr.salesProcessed, style: textTheme.bodySmall),
                       ],
@@ -126,7 +134,10 @@ class WorkerDashboardScreen extends StatelessWidget {
                   child: AppCard(
                     child: Column(
                       children: [
-                        Text('12', style: textTheme.headlineMedium?.copyWith(color: AppColors.warning, fontWeight: FontWeight.w700)),
+                        Text('12',
+                            style: textTheme.headlineMedium?.copyWith(
+                                color: AppColors.warning,
+                                fontWeight: FontWeight.w700)),
                         const SizedBox(height: 4),
                         Text(tr.itemsScanned, style: textTheme.bodySmall),
                       ],
@@ -148,12 +159,14 @@ class WorkerDashboardScreen extends StatelessWidget {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(Icons.info_outline_rounded, color: AppColors.info, size: 18),
+                  const Icon(Icons.info_outline_rounded,
+                      color: AppColors.info, size: 18),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       tr.workerNotice,
-                      style: textTheme.bodySmall?.copyWith(color: AppColors.info),
+                      style:
+                          textTheme.bodySmall?.copyWith(color: AppColors.info),
                     ),
                   ),
                 ],
@@ -206,7 +219,8 @@ class _WorkerActionCard extends StatelessWidget {
               ],
             ),
           ),
-          Icon(Icons.arrow_forward_ios_rounded, size: 14, color: Theme.of(context).colorScheme.outline),
+          Icon(Icons.arrow_forward_ios_rounded,
+              size: 14, color: Theme.of(context).colorScheme.outline),
         ],
       ),
     );

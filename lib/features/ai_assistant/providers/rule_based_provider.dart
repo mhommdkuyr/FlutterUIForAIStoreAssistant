@@ -16,7 +16,8 @@ class RuleBasedProvider implements AiProvider {
   bool get isAvailable => true;
 
   @override
-  Future<String> respond(String userMessage, AiContext ctx, {bool isArabic = false}) async {
+  Future<String> respond(String userMessage, AiContext ctx,
+      {bool isArabic = false}) async {
     return _match(userMessage.trim(), ctx, isArabic);
   }
 
@@ -47,10 +48,15 @@ class RuleBasedProvider implements AiProvider {
     }
 
     // ── Profit ──
-    if (q.contains('profit') || raw.contains('ربح') || raw.contains('ارباح') || raw.contains('أرباح')) {
+    if (q.contains('profit') ||
+        raw.contains('ربح') ||
+        raw.contains('ارباح') ||
+        raw.contains('أرباح')) {
       final tx = ctx.todayTransactionCount;
       final txLabel = tx > 0
-          ? (useAr ? ' من $tx معاملة' : ' from $tx transaction${tx == 1 ? '' : 's'}')
+          ? (useAr
+              ? ' من $tx معاملة'
+              : ' from $tx transaction${tx == 1 ? '' : 's'}')
           : '';
       return useAr
           ? 'ربح اليوم: ${_fmt(ctx.todayProfit)} ريال$txLabel.'
@@ -58,11 +64,17 @@ class RuleBasedProvider implements AiProvider {
     }
 
     // ── Revenue / sales summary ──
-    if (q.contains('revenue') || q.contains('sales') || q.contains('summary') ||
-        q.contains('how much') || raw.contains('مبيعات') || raw.contains('إيرادات')) {
+    if (q.contains('revenue') ||
+        q.contains('sales') ||
+        q.contains('summary') ||
+        q.contains('how much') ||
+        raw.contains('مبيعات') ||
+        raw.contains('إيرادات')) {
       final tx = ctx.todayTransactionCount;
       final txLabel = tx > 0
-          ? (useAr ? ' عبر $tx معاملة' : ' across $tx transaction${tx == 1 ? '' : 's'}')
+          ? (useAr
+              ? ' عبر $tx معاملة'
+              : ' across $tx transaction${tx == 1 ? '' : 's'}')
           : '';
       return useAr
           ? 'إيرادات اليوم: ${_fmt(ctx.todayRevenue)} ريال$txLabel.\nالربح: ${_fmt(ctx.todayProfit)} ريال.'
@@ -70,8 +82,13 @@ class RuleBasedProvider implements AiProvider {
     }
 
     // ── Low stock / restock ──
-    if (q.contains('stock') || q.contains('order') || q.contains('restock') ||
-        q.contains('low') || raw.contains('مخزون') || raw.contains('طلب') || raw.contains('ناقص')) {
+    if (q.contains('stock') ||
+        q.contains('order') ||
+        q.contains('restock') ||
+        q.contains('low') ||
+        raw.contains('مخزون') ||
+        raw.contains('طلب') ||
+        raw.contains('ناقص')) {
       if (ctx.lowStockProducts.isEmpty) {
         return useAr
             ? '✅ جميع المنتجات بمخزون كافٍ. لا حاجة للطلب الآن.'
@@ -82,7 +99,9 @@ class RuleBasedProvider implements AiProvider {
           .map((p) => '• ${p.name} (${p.quantity} ${useAr ? 'متبقي' : 'left'})')
           .join('\n');
       final more = ctx.lowStockCount > 5
-          ? (useAr ? '\n…و ${ctx.lowStockCount - 5} منتج آخر.' : '\n…and ${ctx.lowStockCount - 5} more.')
+          ? (useAr
+              ? '\n…و ${ctx.lowStockCount - 5} منتج آخر.'
+              : '\n…and ${ctx.lowStockCount - 5} more.')
           : '';
       return useAr
           ? '⚠️ ${ctx.lowStockCount} منتج تحتاج إعادة طلب:\n$list$more\n\nافتح المخزون للتفاصيل.'
@@ -90,8 +109,11 @@ class RuleBasedProvider implements AiProvider {
     }
 
     // ── Debt ──
-    if (q.contains('debt') || q.contains('owe') || q.contains('credit') ||
-        raw.contains('دين') || raw.contains('ديون')) {
+    if (q.contains('debt') ||
+        q.contains('owe') ||
+        q.contains('credit') ||
+        raw.contains('دين') ||
+        raw.contains('ديون')) {
       if (ctx.unpaidDebtCount == 0) {
         return useAr
             ? '✅ لا توجد ديون مستحقة. جميع الحسابات خالية.'
@@ -103,25 +125,37 @@ class RuleBasedProvider implements AiProvider {
     }
 
     // ── Customers ──
-    if (q.contains('customer') || raw.contains('عميل') || raw.contains('عملاء')) {
+    if (q.contains('customer') ||
+        raw.contains('عميل') ||
+        raw.contains('عملاء')) {
       return useAr
           ? 'لديك ${ctx.customerCount} عميل مسجل في قاعدة البيانات.'
           : 'You have ${ctx.customerCount} registered customer${ctx.customerCount == 1 ? '' : 's'} in the database.';
     }
 
     // ── Inventory / products ──
-    if (q.contains('inventory') || q.contains('product') || raw.contains('منتج') || raw.contains('مخزن')) {
+    if (q.contains('inventory') ||
+        q.contains('product') ||
+        raw.contains('منتج') ||
+        raw.contains('مخزن')) {
       final stockNote = ctx.lowStockCount > 0
-          ? (useAr ? '⚠️ ${ctx.lowStockCount} منها تحتاج إعادة طلب.' : '⚠️ ${ctx.lowStockCount} of them need restocking.')
-          : (useAr ? '✅ جميع المنتجات بمخزون كافٍ.' : '✅ All products are well-stocked.');
+          ? (useAr
+              ? '⚠️ ${ctx.lowStockCount} منها تحتاج إعادة طلب.'
+              : '⚠️ ${ctx.lowStockCount} of them need restocking.')
+          : (useAr
+              ? '✅ جميع المنتجات بمخزون كافٍ.'
+              : '✅ All products are well-stocked.');
       return useAr
           ? 'مخزونك يحتوي على ${ctx.inventoryCount} منتج.\n$stockNote'
           : 'Your inventory has ${ctx.inventoryCount} product${ctx.inventoryCount == 1 ? '' : 's'}.\n$stockNote';
     }
 
     // ── Reports ──
-    if (q.contains('report') || q.contains('analytics') || q.contains('summary') ||
-        raw.contains('تقرير') || raw.contains('تقارير')) {
+    if (q.contains('report') ||
+        q.contains('analytics') ||
+        q.contains('summary') ||
+        raw.contains('تقرير') ||
+        raw.contains('تقارير')) {
       return useAr
           ? '📊 تقرير اليوم:\n\nالإيرادات: ${_fmt(ctx.todayRevenue)} ريال\nالربح: ${_fmt(ctx.todayProfit)} ريال\nعدد المنتجات: ${ctx.inventoryCount}\nمخزون منخفض: ${ctx.lowStockCount}\nديون مستحقة: ${_fmt(ctx.totalOutstandingDebt)} ريال'
           : '📊 Today\'s Report:\n\nRevenue: YER ${_fmt(ctx.todayRevenue)}\nProfit: YER ${_fmt(ctx.todayProfit)}\nProducts: ${ctx.inventoryCount}\nLow stock: ${ctx.lowStockCount}\nOutstanding debt: YER ${_fmt(ctx.totalOutstandingDebt)}';
@@ -135,26 +169,47 @@ class RuleBasedProvider implements AiProvider {
 
   // ── Command matchers ──
   bool _matchesAddProduct(String raw, String q, bool isAr) {
-    if (isAr) return raw.contains('أضف منتج') || raw.contains('اضف منتج') || raw.contains('إضافة منتج');
-    return q.contains('add product') || q.contains('add item') || q.contains('create product');
+    if (isAr)
+      return raw.contains('أضف منتج') ||
+          raw.contains('اضف منتج') ||
+          raw.contains('إضافة منتج');
+    return q.contains('add product') ||
+        q.contains('add item') ||
+        q.contains('create product');
   }
 
   bool _matchesAddDebt(String raw, String q, bool isAr) {
-    if (isAr) return raw.contains('أضف دين') || raw.contains('اضف دين') || raw.contains('إضافة دين');
+    if (isAr)
+      return raw.contains('أضف دين') ||
+          raw.contains('اضف دين') ||
+          raw.contains('إضافة دين');
     return q.contains('add debt') || q.contains('create debt');
   }
 
   bool _matchesSearch(String raw, String q, bool isAr) {
-    if (isAr) return raw.contains('بحث') || raw.contains('ابحث') || raw.contains('دور');
+    if (isAr)
+      return raw.contains('بحث') || raw.contains('ابحث') || raw.contains('دور');
     return q.contains('search') || q.contains('find ');
   }
 
   // ── Command handlers (return guidance for now) ──
   String _handleAddProduct(String raw, bool isAr) {
-    final nameMatch = RegExp(isAr ? r'منتج\s+(\S+)' : r'product\s+(.+?)(?:\s+price|\s+qty|\s+quantity|\s*\$)', caseSensitive: false).firstMatch(raw);
-    final priceMatch = RegExp(isAr ? r'سعر(?:ه)?\s+(\d+)' : r'price\s+(?:of\s+)?(\d+)', caseSensitive: false).firstMatch(raw);
-    final qtyMatch = RegExp(isAr ? r'كمية\s+(\d+)' : r'(?:qty|quantity)\s+(\d+)', caseSensitive: false).firstMatch(raw);
-    final name = nameMatch?.group(1)?.trim() ?? (isAr ? 'منتج جديد' : 'New Product');
+    final nameMatch = RegExp(
+            isAr
+                ? r'منتج\s+(\S+)'
+                : r'product\s+(.+?)(?:\s+price|\s+qty|\s+quantity|\s*\$)',
+            caseSensitive: false)
+        .firstMatch(raw);
+    final priceMatch = RegExp(
+            isAr ? r'سعر(?:ه)?\s+(\d+)' : r'price\s+(?:of\s+)?(\d+)',
+            caseSensitive: false)
+        .firstMatch(raw);
+    final qtyMatch = RegExp(
+            isAr ? r'كمية\s+(\d+)' : r'(?:qty|quantity)\s+(\d+)',
+            caseSensitive: false)
+        .firstMatch(raw);
+    final name =
+        nameMatch?.group(1)?.trim() ?? (isAr ? 'منتج جديد' : 'New Product');
     final price = priceMatch != null ? priceMatch.group(1)! : '0';
     final qty = qtyMatch != null ? qtyMatch.group(1)! : '1';
     return isAr
@@ -163,7 +218,10 @@ class RuleBasedProvider implements AiProvider {
   }
 
   String _handleAddDebt(String raw, bool isAr) {
-    final nameMatch = RegExp(isAr ? r'للعميل\s+(\S+)' : r'for\s+customer\s+(\S+)', caseSensitive: false).firstMatch(raw);
+    final nameMatch = RegExp(
+            isAr ? r'للعميل\s+(\S+)' : r'for\s+customer\s+(\S+)',
+            caseSensitive: false)
+        .firstMatch(raw);
     final amountMatch = RegExp(r'(\d{3,})').firstMatch(raw);
     final name = nameMatch?.group(1)?.trim() ?? (isAr ? 'عميل' : 'Customer');
     final amount = amountMatch != null ? amountMatch.group(1)! : '0';
@@ -173,7 +231,10 @@ class RuleBasedProvider implements AiProvider {
   }
 
   String _handleSearch(String raw, bool isAr) {
-    final queryMatch = RegExp(isAr ? r'(?:بحث|دور)\s+(.+)' : r'(?:search|find)\s+(.+)', caseSensitive: false).firstMatch(raw);
+    final queryMatch = RegExp(
+            isAr ? r'(?:بحث|دور)\s+(.+)' : r'(?:search|find)\s+(.+)',
+            caseSensitive: false)
+        .firstMatch(raw);
     final query = queryMatch?.group(1)?.trim() ?? '';
     if (query.isEmpty) {
       return isAr ? 'اكتب اسم المنتج للبحث.' : 'Type a product name to search.';
@@ -184,6 +245,8 @@ class RuleBasedProvider implements AiProvider {
   }
 
   String _fmt(double v) {
-    return v.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d)(?=(\d{3})+$)'), (m) => '${m[1]},');
+    return v
+        .toStringAsFixed(0)
+        .replaceAllMapped(RegExp(r'(\d)(?=(\d{3})+$)'), (m) => '${m[1]},');
   }
 }

@@ -31,8 +31,8 @@ class ModelSetupScreen extends StatefulWidget {
 class _ModelSetupScreenState extends State<ModelSetupScreen> {
   // ── State per model ────────────────────────────────────────────────────────
 
-  bool _chatReady    = false;
-  bool _visionReady  = false;
+  bool _chatReady = false;
+  bool _visionReady = false;
 
   // null   = idle
   // 0–1.0  = downloading
@@ -50,7 +50,7 @@ class _ModelSetupScreenState extends State<ModelSetupScreen> {
 
   void _refresh() {
     setState(() {
-      _chatReady   = ModelManager.instance.isChatModelReady;
+      _chatReady = ModelManager.instance.isChatModelReady;
       _visionReady = ModelManager.instance.isVisionModelReady;
     });
   }
@@ -63,7 +63,10 @@ class _ModelSetupScreenState extends State<ModelSetupScreen> {
       setState(() => _chatError = 'Could not resolve app documents directory.');
       return;
     }
-    setState(() { _chatProgress = 0; _chatError = null; });
+    setState(() {
+      _chatProgress = 0;
+      _chatError = null;
+    });
 
     try {
       await ModelDownloadService.instance.download(
@@ -77,25 +80,38 @@ class _ModelSetupScreenState extends State<ModelSetupScreen> {
         },
       );
       if (!mounted) return;
-      setState(() { _chatProgress = null; _chatReady = true; });
+      setState(() {
+        _chatProgress = null;
+        _chatReady = true;
+      });
       _showSnack('Chat model downloaded successfully!', success: true);
     } on ModelDownloadException catch (e) {
       if (!mounted) return;
-      setState(() { _chatProgress = null; _chatError = e.message; });
+      setState(() {
+        _chatProgress = null;
+        _chatError = e.message;
+      });
     } catch (e) {
       if (!mounted) return;
-      setState(() { _chatProgress = null; _chatError = e.toString(); });
+      setState(() {
+        _chatProgress = null;
+        _chatError = e.toString();
+      });
     }
   }
 
   Future<void> _downloadVision() async {
-    final modelPath  = ModelManager.instance.onnxModelPath;
+    final modelPath = ModelManager.instance.onnxModelPath;
     final labelsPath = ModelManager.instance.onnxLabelsPath;
     if (modelPath == null || labelsPath == null) {
-      setState(() => _visionError = 'Could not resolve app documents directory.');
+      setState(
+          () => _visionError = 'Could not resolve app documents directory.');
       return;
     }
-    setState(() { _visionProgress = 0; _visionError = null; });
+    setState(() {
+      _visionProgress = 0;
+      _visionError = null;
+    });
 
     try {
       // Download model file first.
@@ -122,22 +138,29 @@ class _ModelSetupScreenState extends State<ModelSetupScreen> {
           if (!mounted) return;
           // Labels are ~10 % of remaining; scale 0.9–1.0.
           setState(() {
-            _visionProgress = total > 0
-                ? 0.9 + (received / total) * 0.1
-                : 0.95;
+            _visionProgress = total > 0 ? 0.9 + (received / total) * 0.1 : 0.95;
           });
         },
       );
 
       if (!mounted) return;
-      setState(() { _visionProgress = null; _visionReady = true; });
+      setState(() {
+        _visionProgress = null;
+        _visionReady = true;
+      });
       _showSnack('Vision model downloaded successfully!', success: true);
     } on ModelDownloadException catch (e) {
       if (!mounted) return;
-      setState(() { _visionProgress = null; _visionError = e.message; });
+      setState(() {
+        _visionProgress = null;
+        _visionError = e.message;
+      });
     } catch (e) {
       if (!mounted) return;
-      setState(() { _visionProgress = null; _visionError = e.toString(); });
+      setState(() {
+        _visionProgress = null;
+        _visionError = e.toString();
+      });
     }
   }
 
@@ -147,7 +170,10 @@ class _ModelSetupScreenState extends State<ModelSetupScreen> {
     try {
       await ModelDownloadService.instance.deleteModel(path);
       if (!mounted) return;
-      setState(() { _chatReady = false; _chatError = null; });
+      setState(() {
+        _chatReady = false;
+        _chatError = null;
+      });
       _showSnack('Chat model removed.');
     } catch (e) {
       _showSnack('Delete failed: $e', success: false);
@@ -155,13 +181,18 @@ class _ModelSetupScreenState extends State<ModelSetupScreen> {
   }
 
   Future<void> _deleteVision() async {
-    final modelPath  = ModelManager.instance.onnxModelPath;
+    final modelPath = ModelManager.instance.onnxModelPath;
     final labelsPath = ModelManager.instance.onnxLabelsPath;
     try {
-      if (modelPath  != null) await ModelDownloadService.instance.deleteModel(modelPath);
-      if (labelsPath != null) await ModelDownloadService.instance.deleteModel(labelsPath);
+      if (modelPath != null)
+        await ModelDownloadService.instance.deleteModel(modelPath);
+      if (labelsPath != null)
+        await ModelDownloadService.instance.deleteModel(labelsPath);
       if (!mounted) return;
-      setState(() { _visionReady = false; _visionError = null; });
+      setState(() {
+        _visionReady = false;
+        _visionError = null;
+      });
       _showSnack('Vision model removed.');
     } catch (e) {
       _showSnack('Delete failed: $e', success: false);
@@ -218,7 +249,8 @@ class _ModelSetupScreenState extends State<ModelSetupScreen> {
               progress: _chatProgress,
               error: _chatError,
               onDownload: _chatProgress != null ? null : _downloadChat,
-              onDelete: (_chatReady && _chatProgress == null) ? _deleteChat : null,
+              onDelete:
+                  (_chatReady && _chatProgress == null) ? _deleteChat : null,
             ),
             const SizedBox(height: 16),
 
@@ -237,7 +269,9 @@ class _ModelSetupScreenState extends State<ModelSetupScreen> {
               progress: _visionProgress,
               error: _visionError,
               onDownload: _visionProgress != null ? null : _downloadVision,
-              onDelete: (_visionReady && _visionProgress == null) ? _deleteVision : null,
+              onDelete: (_visionReady && _visionProgress == null)
+                  ? _deleteVision
+                  : null,
             ),
             const SizedBox(height: 24),
 
@@ -295,8 +329,7 @@ class _InfoBanner extends StatelessWidget {
               'Models are downloaded once and stored on-device. '
               'After setup the AI works fully offline — no internet '
               'connection is needed.',
-              style: textTheme.bodySmall
-                  ?.copyWith(color: AppColors.primary),
+              style: textTheme.bodySmall?.copyWith(color: AppColors.primary),
             ),
           ),
         ],
@@ -321,14 +354,14 @@ class _ModelCard extends StatelessWidget {
   });
 
   final IconData icon;
-  final String   title;
-  final String   subtitle;
-  final String   source;
-  final String   description;
-  final String   sizeLabel;
-  final bool     isReady;
-  final double?  progress;   // null=idle, 0–1=downloading
-  final String?  error;
+  final String title;
+  final String subtitle;
+  final String source;
+  final String description;
+  final String sizeLabel;
+  final bool isReady;
+  final double? progress; // null=idle, 0–1=downloading
+  final String? error;
   final VoidCallback? onDownload;
   final VoidCallback? onDelete;
 
@@ -336,10 +369,10 @@ class _ModelCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
     final isDownloading = progress != null;
-    final statusColor  = isReady
+    final statusColor = isReady
         ? AppColors.success
         : (error != null ? AppColors.error : AppColors.warning);
-    final statusLabel  = isReady
+    final statusLabel = isReady
         ? 'Downloaded'
         : (isDownloading ? 'Downloading…' : 'Not downloaded');
 
@@ -403,8 +436,7 @@ class _ModelCard extends StatelessWidget {
             const SizedBox(height: 12),
             LinearProgressIndicator(
               value: progress! > 0 ? progress : null,
-              backgroundColor:
-                  AppColors.primary.withValues(alpha: 0.12),
+              backgroundColor: AppColors.primary.withValues(alpha: 0.12),
               valueColor:
                   const AlwaysStoppedAnimation<Color>(AppColors.primary),
               borderRadius: BorderRadius.circular(4),
@@ -414,8 +446,7 @@ class _ModelCard extends StatelessWidget {
               progress! > 0
                   ? '${(progress! * 100).toStringAsFixed(0)}%'
                   : 'Connecting…',
-              style:
-                  textTheme.labelSmall?.copyWith(color: AppColors.primary),
+              style: textTheme.labelSmall?.copyWith(color: AppColors.primary),
             ),
           ],
 
@@ -427,8 +458,8 @@ class _ModelCard extends StatelessWidget {
               decoration: BoxDecoration(
                 color: AppColors.error.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(AppConstants.radiusSmall),
-                border: Border.all(
-                    color: AppColors.error.withValues(alpha: 0.25)),
+                border:
+                    Border.all(color: AppColors.error.withValues(alpha: 0.25)),
               ),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,

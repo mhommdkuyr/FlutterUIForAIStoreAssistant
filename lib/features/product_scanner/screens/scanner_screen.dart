@@ -6,7 +6,6 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/i18n/app_translations.dart';
 import '../../../core/theme/app_colors.dart';
-import '../../../shared/models/product_model.dart';
 import '../../../shared/repositories/product_repository.dart';
 import '../../../shared/repositories/repository_exceptions.dart';
 import '../../../shared/services/offline_product_recognizer.dart';
@@ -90,7 +89,8 @@ class _ScannerScreenState extends State<ScannerScreen> {
                 right: 16,
                 child: IconButton(
                   onPressed: () => Navigator.pop(ctx),
-                  icon: const Icon(Icons.close_rounded, color: Colors.white, size: 28),
+                  icon: const Icon(Icons.close_rounded,
+                      color: Colors.white, size: 28),
                 ),
               ),
               Center(
@@ -139,13 +139,15 @@ class _ScannerScreenState extends State<ScannerScreen> {
   Future<void> _openImageCamera() async {
     try {
       final picker = ImagePicker();
-      final file = await picker.pickImage(source: ImageSource.camera, imageQuality: 90);
+      final file =
+          await picker.pickImage(source: ImageSource.camera, imageQuality: 90);
       if (!mounted || file == null) return;
 
       final savedPath = await _imageService.savePickedImage(file);
 
-    final products = await _repository.getAllProducts();
-    final match = await OfflineProductRecognizer.matchImageFile(products, savedPath);
+      final products = await _repository.getAllProducts();
+      final match =
+          await OfflineProductRecognizer.matchImageFile(products, savedPath);
       if (!mounted) return;
 
       setState(() {
@@ -164,7 +166,9 @@ class _ScannerScreenState extends State<ScannerScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.tr.productNotRecognized), backgroundColor: AppColors.error),
+        SnackBar(
+            content: Text(context.tr.productNotRecognized),
+            backgroundColor: AppColors.error),
       );
     }
   }
@@ -187,7 +191,8 @@ class _ScannerScreenState extends State<ScannerScreen> {
         purchasePrice: double.parse(_purchasePriceCtrl.text),
         sellingPrice: double.parse(_priceCtrl.text),
         quantity: int.parse(_qtyCtrl.text),
-        barcode: _barcodeCtrl.text.trim().isEmpty ? null : _barcodeCtrl.text.trim(),
+        barcode:
+            _barcodeCtrl.text.trim().isEmpty ? null : _barcodeCtrl.text.trim(),
         imageUrl: _savedImagePath,
       );
       if (!mounted) return;
@@ -224,22 +229,33 @@ class _ScannerScreenState extends State<ScannerScreen> {
                 final isActive = _mode == m;
                 return Expanded(
                   child: Padding(
-                    padding: EdgeInsets.only(right: m != _ScanMode.values.last ? 8 : 0),
+                    padding: EdgeInsets.only(
+                        right: m != _ScanMode.values.last ? 8 : 0),
                     child: GestureDetector(
-                      onTap: () => setState(() { _mode = m; _scanned = false; }),
+                      onTap: () => setState(() {
+                        _mode = m;
+                        _scanned = false;
+                      }),
                       child: Container(
                         padding: const EdgeInsets.symmetric(vertical: 10),
                         decoration: BoxDecoration(
-                          color: isActive ? AppColors.primary : Theme.of(context).cardTheme.color,
-                          borderRadius: BorderRadius.circular(AppConstants.radiusMedium),
+                          color: isActive
+                              ? AppColors.primary
+                              : Theme.of(context).cardTheme.color,
+                          borderRadius:
+                              BorderRadius.circular(AppConstants.radiusMedium),
                           border: Border.all(
-                            color: isActive ? AppColors.primary : Theme.of(context).colorScheme.outline,
+                            color: isActive
+                                ? AppColors.primary
+                                : Theme.of(context).colorScheme.outline,
                           ),
                         ),
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(m.icon, size: 20, color: isActive ? Colors.white : null),
+                            Icon(m.icon,
+                                size: 20,
+                                color: isActive ? Colors.white : null),
                             const SizedBox(height: 2),
                             Text(
                               m.label(context),
@@ -259,7 +275,8 @@ class _ScannerScreenState extends State<ScannerScreen> {
 
           Expanded(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: AppConstants.paddingMD),
+              padding: const EdgeInsets.symmetric(
+                  horizontal: AppConstants.paddingMD),
               child: Column(
                 children: [
                   // Scanner viewport
@@ -275,18 +292,22 @@ class _ScannerScreenState extends State<ScannerScreen> {
                         padding: const EdgeInsets.all(10),
                         decoration: BoxDecoration(
                           color: AppColors.success.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(AppConstants.radiusMedium),
-                          border: Border.all(color: AppColors.success.withOpacity(0.3)),
+                          borderRadius:
+                              BorderRadius.circular(AppConstants.radiusMedium),
+                          border: Border.all(
+                              color: AppColors.success.withOpacity(0.3)),
                         ),
                         child: Row(
                           children: [
-                            const Icon(Icons.check_circle_rounded, color: AppColors.success, size: 18),
+                            const Icon(Icons.check_circle_rounded,
+                                color: AppColors.success, size: 18),
                             const SizedBox(width: 8),
                             Text(
                               _mode == _ScanMode.barcode
                                   ? tr.barcodeScanned
                                   : tr.productDetected,
-                              style: textTheme.bodySmall?.copyWith(color: AppColors.success),
+                              style: textTheme.bodySmall
+                                  ?.copyWith(color: AppColors.success),
                             ),
                           ],
                         ),
@@ -294,7 +315,8 @@ class _ScannerScreenState extends State<ScannerScreen> {
                       const SizedBox(height: 16),
                       if (_pickedImage != null) ...[
                         ClipRRect(
-                          borderRadius: BorderRadius.circular(AppConstants.radiusMedium),
+                          borderRadius:
+                              BorderRadius.circular(AppConstants.radiusMedium),
                           child: SizedBox(
                             height: 180,
                             width: double.infinity,
@@ -316,7 +338,8 @@ class _ScannerScreenState extends State<ScannerScreen> {
                             hint: tr.productNameHint,
                             controller: _nameCtrl,
                             textInputAction: TextInputAction.next,
-                            validator: (v) => (v?.isEmpty ?? true) ? tr.required : null,
+                            validator: (v) =>
+                                (v?.isEmpty ?? true) ? tr.required : null,
                           ),
                           const SizedBox(height: 12),
                           CustomTextField(
@@ -324,7 +347,8 @@ class _ScannerScreenState extends State<ScannerScreen> {
                             hint: tr.categoryHint,
                             controller: _categoryCtrl,
                             textInputAction: TextInputAction.next,
-                            validator: (v) => (v?.isEmpty ?? true) ? tr.required : null,
+                            validator: (v) =>
+                                (v?.isEmpty ?? true) ? tr.required : null,
                           ),
                           const SizedBox(height: 12),
                           Row(
@@ -336,7 +360,8 @@ class _ScannerScreenState extends State<ScannerScreen> {
                                   controller: _purchasePriceCtrl,
                                   keyboardType: TextInputType.number,
                                   textInputAction: TextInputAction.next,
-                                  validator: (v) => (v?.isEmpty ?? true) ? tr.required : null,
+                                  validator: (v) =>
+                                      (v?.isEmpty ?? true) ? tr.required : null,
                                 ),
                               ),
                               const SizedBox(width: 12),
@@ -347,7 +372,8 @@ class _ScannerScreenState extends State<ScannerScreen> {
                                   controller: _priceCtrl,
                                   keyboardType: TextInputType.number,
                                   textInputAction: TextInputAction.next,
-                                  validator: (v) => (v?.isEmpty ?? true) ? tr.required : null,
+                                  validator: (v) =>
+                                      (v?.isEmpty ?? true) ? tr.required : null,
                                 ),
                               ),
                             ],
@@ -362,7 +388,8 @@ class _ScannerScreenState extends State<ScannerScreen> {
                                   controller: _qtyCtrl,
                                   keyboardType: TextInputType.number,
                                   textInputAction: TextInputAction.next,
-                                  validator: (v) => (v?.isEmpty ?? true) ? tr.required : null,
+                                  validator: (v) =>
+                                      (v?.isEmpty ?? true) ? tr.required : null,
                                 ),
                               ),
                               const SizedBox(width: 12),
@@ -381,7 +408,8 @@ class _ScannerScreenState extends State<ScannerScreen> {
                             label: tr.saveProduct,
                             onPressed: _saveProduct,
                             isLoading: _isSaving,
-                            leading: const Icon(Icons.check_rounded, color: Colors.white),
+                            leading: const Icon(Icons.check_rounded,
+                                color: Colors.white),
                           ),
                           const SizedBox(height: 24),
                         ],
@@ -447,7 +475,8 @@ class _ScannerViewport extends StatelessWidget {
                   backgroundColor: AppColors.primary,
                   foregroundColor: Colors.white,
                   minimumSize: Size.zero,
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 ),
               ),
             ],
@@ -465,17 +494,23 @@ enum _ScanMode {
 
   String label(BuildContext context) {
     switch (this) {
-      case barcode: return context.tr.scanModeBarcode;
-      case image: return context.tr.scanModeImage;
-      case manual: return context.tr.scanModeManual;
+      case barcode:
+        return context.tr.scanModeBarcode;
+      case image:
+        return context.tr.scanModeImage;
+      case manual:
+        return context.tr.scanModeManual;
     }
   }
 
   IconData get icon {
     switch (this) {
-      case barcode: return Icons.qr_code_scanner_rounded;
-      case image: return Icons.image_search_rounded;
-      case manual: return Icons.edit_note_rounded;
+      case barcode:
+        return Icons.qr_code_scanner_rounded;
+      case image:
+        return Icons.image_search_rounded;
+      case manual:
+        return Icons.edit_note_rounded;
     }
   }
 }
