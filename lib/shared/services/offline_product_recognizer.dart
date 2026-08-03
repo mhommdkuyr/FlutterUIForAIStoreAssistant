@@ -6,178 +6,183 @@ import 'package:image/image.dart' as img;
 
 import '../models/product_model.dart';
 
+/// Offline product recognition for the PRODUCT-ENTRY scanner screen.
+///
+/// Provides two matching strategies:
+///
+/// 1. Text / barcode matching ([findBestMatch]) — used when the user types or
+///    scans a barcode string. Scores products by exact barcode, partial
+///    barcode, exact name, partial name, category.
+///
+/// 2. Image matching ([matchImageFile], [matchCameraImage]) — compares a
+///    16×16 average hash of the query image against stored product images.
+///    Confidence threshold: ≥ 76 % similarity (Hamming distance ≤ 60 / 256).
+///
+/// For the LIVE SCAN workspace, use [ProductFingerprintService] +
+/// [ScanLockManager] instead — they cache hashes at session start and run
+/// the hot-path comparison in the frame callback.
 class OfflineProductRecognizer {
-  static const double defaultConfidenceThreshold = 0.82;
+  // Reject image matches below this similarity (Hamming distance threshold).
+  static const int _maxHammingDistance = 60; // out of 256 bits
+
+  // Minimum text/barcode score to accept a match.
+  static const double _minTextScore = 0.82;
+
+  /// Debounce used by legacy callers (kept for API compat).
   static const Duration debounceDuration = Duration(seconds: 2);
 
-  static ProductModel? findBestMatch(
-      List<ProductModel> products, String query) {
-    if (products.isEmpty) return null;
+  // ── Text / barcode matching ─────────────────────────────────────────────────
 
+  /// Find the best product matching [query] (barcode or name text).
+  ///
+  /// Returns null when no product passes the confidence threshold.
+  static ProductModel? findBestMatch(
+    List<ProductModel> products,
+    String query,
+  ) {
+    if (products.isEmpty) return null;
     final normalized = query.trim().toLowerCase();
     if (normalized.isEmpty) return null;
 
-    ProductModel? bestMatch;
+    ProductModel? best;
     double bestScore = 0;
-
-    for (final product in products) {
-      final score = _scoreProduct(product, normalized);
-      if (score > bestScore) {
-        bestScore = score;
-        bestMatch = product;
+    for (final p in products) {
+      final s = _scoreProduct(p, normalized);
+      if (s > bestScore) {
+        bestScore = s;
+        best = p;
       }
     }
-
-    if (bestMatch == null || bestScore < defaultConfidenceThreshold) {
-      return null;
-    }
-
-    return bestMatch;
+    return (best != null && bestScore >= _minTextScore) ? best : null;
   }
 
+  // ── Image matching ──────────────────────────────────────────────────────────
+
+  /// Match a photo at [imagePath] (local file) against stored product images.
   static Future<ProductModel?> matchImageFile(
-      List<ProductModel> products, String imagePath) async {
-    final targetSignature = await _loadSignatureFromFile(imagePath);
-    if (targetSignature == null) return null;
-    return _findBestSignatureMatch(products, targetSignature);
-  }
-
-  static Future<ProductModel?> matchCameraImage(
-      List<ProductModel> products, CameraImage image) async {
-    final targetSignature = _buildSignatureFromCameraImage(image);
-    if (targetSignature == null) return null;
-    return _findBestSignatureMatch(products, targetSignature);
-  }
-
-  static Future<ProductModel?> _findBestSignatureMatch(
     List<ProductModel> products,
-    List<int> targetSignature,
+    String imagePath,
   ) async {
-    if (products.isEmpty) return null;
+    final queryHash = await _hashFromFile(imagePath);
+    if (queryHash == null) return null;
+    return _findBestHashMatch(products, queryHash);
+  }
 
-    ProductModel? bestMatch;
-    double bestScore = 0;
+  /// Match a live [CameraImage] frame against stored product images.
+  static Future<ProductModel?> matchCameraImage(
+    List<ProductModel> products,
+    CameraImage image,
+  ) async {
+    final queryHash = _hashFromCameraImage(image);
+    if (queryHash == null) return null;
+    return _findBestHashMatch(products, queryHash);
+  }
 
-    for (final product in products) {
-      final imageUrl = product.imageUrl?.trim();
-      if (imageUrl == null || imageUrl.isEmpty) continue;
-      final imageFile = File(imageUrl);
-      if (!await imageFile.exists()) continue;
-      final signature = await _loadSignatureFromFile(imageUrl);
-      if (signature == null) continue;
+  // ── Internal ────────────────────────────────────────────────────────────────
 
-      final score = _compareSignatures(signature, targetSignature);
-      if (score > bestScore) {
-        bestScore = score;
-        bestMatch = product;
+  static Future<ProductModel?> _findBestHashMatch(
+    List<ProductModel> products,
+    Uint8List queryHash,
+  ) async {
+    ProductModel? best;
+    int bestDist = _maxHammingDistance + 1;
+
+    for (final p in products) {
+      final url = p.imageUrl?.trim();
+      if (url == null || url.isEmpty) continue;
+      final storedHash = await _hashFromFile(url);
+      if (storedHash == null) continue;
+      final d = _hammingDistance(queryHash, storedHash);
+      if (d < bestDist) {
+        bestDist = d;
+        best = p;
       }
     }
-
-    if (bestMatch == null || bestScore < defaultConfidenceThreshold) {
-      return null;
-    }
-
-    return bestMatch;
+    return best;
   }
 
-  static Future<List<int>?> _loadSignatureFromFile(String imagePath) async {
-    try {
-      final bytes = await File(imagePath).readAsBytes();
-      return _buildSignatureFromBytes(bytes);
-    } catch (_) {
-      return null;
-    }
-  }
+  // ── Hash computation ────────────────────────────────────────────────────────
 
-  static List<int>? _buildSignatureFromBytes(Uint8List bytes) {
+  static const int _n = 16; // 16×16 = 256-bit hash
+
+  static Future<Uint8List?> _hashFromFile(String path) async {
     try {
+      final file = File(path);
+      if (!file.existsSync()) return null;
+      final bytes = await file.readAsBytes();
       final decoded = img.decodeImage(bytes);
       if (decoded == null) return null;
       final gray = img.grayscale(decoded);
-      final resized = img.copyResize(gray, width: 8, height: 8);
-      final values = <int>[];
-      final threshold = _averagePixelValue(resized);
-      for (var y = 0; y < resized.height; y++) {
-        for (var x = 0; x < resized.width; x++) {
-          final pixel = resized.getPixel(x, y);
-          final luminance = (pixel.r + pixel.g + pixel.b) ~/ 3;
-          values.add(luminance > threshold ? 1 : 0);
+      final small = img.copyResize(gray, width: _n, height: _n);
+      final pix = List<int>.filled(_n * _n, 0);
+      for (var y = 0; y < _n; y++) {
+        for (var x = 0; x < _n; x++) {
+          pix[y * _n + x] = small.getPixel(x, y).r.toInt();
         }
       }
-      return values;
+      return _averageHash(pix);
     } catch (_) {
       return null;
     }
   }
 
-  static List<int>? _buildSignatureFromCameraImage(CameraImage image) {
+  static Uint8List? _hashFromCameraImage(CameraImage image) {
     try {
-      final plane = image.planes.first;
+      final plane = image.planes[0];
+      final w = image.width;
+      final h = image.height;
       final bytes = plane.bytes;
       final stride = plane.bytesPerRow;
-      final values = <int>[];
-      for (var y = 0; y < 8; y++) {
-        for (var x = 0; x < 8; x++) {
-          final sourceY = (y * image.height / 8).round();
-          final sourceX = (x * image.width / 8).round();
-          final index = (sourceY * stride) + sourceX;
-          final value = index < bytes.length ? bytes[index] : 0;
-          values.add(value);
+      final pix = List<int>.filled(_n * _n, 0);
+      for (var r = 0; r < _n; r++) {
+        for (var c = 0; c < _n; c++) {
+          final sx = ((c + 0.5) * w / _n).toInt().clamp(0, w - 1);
+          final sy = ((r + 0.5) * h / _n).toInt().clamp(0, h - 1);
+          final idx = sy * stride + sx;
+          pix[r * _n + c] = idx < bytes.length ? bytes[idx] : 0;
         }
       }
-      final average = values.reduce((a, b) => a + b) / values.length;
-      return values.map((value) => value > average ? 1 : 0).toList();
+      return _averageHash(pix);
     } catch (_) {
       return null;
     }
   }
 
-  static int _averagePixelValue(img.Image image) {
-    var sum = 0;
-    for (var y = 0; y < image.height; y++) {
-      for (var x = 0; x < image.width; x++) {
-        final pixel = image.getPixel(x, y);
-        sum += (pixel.r + pixel.g + pixel.b) ~/ 3;
+  static Uint8List _averageHash(List<int> pix) {
+    final mean = pix.fold(0, (s, v) => s + v) ~/ pix.length;
+    final hash = Uint8List(pix.length >> 3);
+    for (var i = 0; i < pix.length; i++) {
+      if (pix[i] >= mean) hash[i >> 3] |= 1 << (i & 7);
+    }
+    return hash;
+  }
+
+  static int _hammingDistance(Uint8List a, Uint8List b) {
+    if (a.length != b.length) return 256;
+    var dist = 0;
+    for (var i = 0; i < a.length; i++) {
+      var x = a[i] ^ b[i];
+      while (x != 0) {
+        dist += x & 1;
+        x >>= 1;
       }
     }
-    return sum ~/ (image.width * image.height);
+    return dist;
   }
 
-  static double _compareSignatures(List<int> left, List<int> right) {
-    if (left.length != right.length) return 0;
-    var matches = 0;
-    for (var index = 0; index < left.length; index++) {
-      if (left[index] == right[index]) matches++;
-    }
-    return matches / left.length;
-  }
+  // ── Text score helper ───────────────────────────────────────────────────────
 
-  static double _scoreProduct(ProductModel product, String normalizedQuery) {
-    final barcode = (product.barcode ?? '').trim().toLowerCase();
-    final name = product.name.trim().toLowerCase();
-    final category = product.category.trim().toLowerCase();
-    final altName = (product.nameAr ?? '').trim().toLowerCase();
+  static double _scoreProduct(ProductModel p, String q) {
+    final barcode = (p.barcode ?? '').trim().toLowerCase();
+    final name = p.name.trim().toLowerCase();
+    final altName = (p.nameAr ?? '').trim().toLowerCase();
+    final category = p.category.trim().toLowerCase();
 
-    if (barcode.isNotEmpty && barcode == normalizedQuery) {
-      return 1.0;
-    }
-
-    if (barcode.isNotEmpty && barcode.contains(normalizedQuery)) {
-      return 0.95;
-    }
-
-    if (name == normalizedQuery || altName == normalizedQuery) {
-      return 0.9;
-    }
-
-    if (name.contains(normalizedQuery) || altName.contains(normalizedQuery)) {
-      return 0.84;
-    }
-
-    if (category.contains(normalizedQuery)) {
-      return 0.72;
-    }
-
+    if (barcode.isNotEmpty && barcode == q) return 1.0;
+    if (barcode.isNotEmpty && barcode.contains(q)) return 0.95;
+    if (name == q || altName == q) return 0.90;
+    if (name.contains(q) || altName.contains(q)) return 0.84;
+    if (category.contains(q)) return 0.72;
     return 0.0;
   }
 }

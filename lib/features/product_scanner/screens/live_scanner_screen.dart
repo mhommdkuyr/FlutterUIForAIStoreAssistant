@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/constants/app_constants.dart';
@@ -10,11 +12,14 @@ import '../../../core/theme/app_colors.dart';
 import '../../../shared/models/product_model.dart';
 import '../../../shared/repositories/product_repository.dart';
 import '../../../shared/repositories/repository_exceptions.dart';
-import '../../../shared/services/offline_product_recognizer.dart';
+import '../../../shared/repositories/sale_repository.dart';
+import '../../../shared/services/product_fingerprint_service.dart';
+import '../../../shared/services/scan_lock_manager.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Public data class shared with SalesScreen via router extra.
+// Public data class  (used by SalesScreen via router extra)
 // ─────────────────────────────────────────────────────────────────────────────
+
 class ScanCartItem {
   final String id;
   final String name;
@@ -28,7 +33,7 @@ class ScanCartItem {
     this.quantity = 1,
   });
 
-  double get totalPrice => unitPrice * quantity;
+  double get total => unitPrice * quantity;
 
   Map<String, dynamic> toMap() => {
         'id': id,
@@ -39,13 +44,26 @@ class ScanCartItem {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Scan status
+// Enums
 // ─────────────────────────────────────────────────────────────────────────────
-enum _ScanStatus { idle, recognizing, found, notFound }
+
+enum _ScanStatus { idle, found, noMatch }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // LiveScannerScreen
 // ─────────────────────────────────────────────────────────────────────────────
+
+/// Live Scan Workspace:
+///   • SCAN MODE  — camera panel (bottom ~30%, draggable) + live cart (top)
+///   • INVOICE MODE — full-screen invoice after the user taps "Done"
+///
+/// Recognition pipeline:
+///   1. Pre-compute 16×16 aHash for every product image at session start.
+///   2. Process every 4th camera frame (≈ 7 fps at 30 fps capture).
+///   3. Match frame hash against cached product hashes (Hamming distance).
+///   4. Per-product lock: a matched product is locked until it leaves the
+///      camera view for [ScanLockManager.unlockAfterTicks] frames, then
+///      re-entering the view counts as a new scan.
 class LiveScannerScreen extends StatefulWidget {
   const LiveScannerScreen({super.key});
 
@@ -55,382 +73,667 @@ class LiveScannerScreen extends StatefulWidget {
 
 class _LiveScannerScreenState extends State<LiveScannerScreen>
     with TickerProviderStateMixin {
-  final ProductRepository _repository = ProductRepository();
+  // ── Services ──────────────────────────────────────────────────────────────
+  final _repo = ProductRepository();
+  final _saleRepo = SaleRepository();
+  final _fingerprints = ProductFingerprintService();
+  // Unlock after 10 absent ticks ≈ 1.3 s (4-frame skip × 10 / 30 fps)
+  final _locks = ScanLockManager(unlockAfterTicks: 10);
+
+  // ── Data ──────────────────────────────────────────────────────────────────
   List<ProductModel> _products = [];
   final List<ScanCartItem> _cart = [];
 
+  // ── Camera ────────────────────────────────────────────────────────────────
+  CameraController? _cam;
+  bool _camReady = false;
+  int _frameCount = 0;
+  bool _frameProcessing = false;
+  // Process every 4th frame  → ≈ 7.5 fps at 30 fps capture
+  static const int _frameSkip = 4;
+
+  // ── UI state ──────────────────────────────────────────────────────────────
+  bool _loading = true;
+  bool _scanActive = true; // true = scan mode, false = invoice mode
   _ScanStatus _status = _ScanStatus.idle;
-  ProductModel? _lastScanned;
-  DateTime? _lastScanTime;
+  ProductModel? _lastFound;
+  Timer? _statusTimer;
+  bool _isSaving = false;
 
-  Timer? _statusResetTimer;
-  CameraController? _cameraController;
-  bool _cameraStarted = false;
-  bool _isProcessingFrame = false;
-  DateTime? _lastFrameProcessedAt;
+  // Camera panel height as fraction of screen height (user-draggable)
+  double _camFraction = 0.32;
+  static const double _camMin = 0.18;
+  static const double _camMax = 0.62;
 
-  late final AnimationController _frameAnimCtrl;
-  late final AnimationController _overlayAnimCtrl;
-  late final Animation<double> _frameOpacity;
+  // ── Animations ────────────────────────────────────────────────────────────
+  late final AnimationController _overlayCtrl;
   late final Animation<double> _overlayAnim;
+  late final AnimationController _pulseCtrl;
+  late final Animation<double> _pulseAnim;
 
-  bool _isLoading = true;
-
-  // ── Lifecycle ───────────────────────────────────────────────────────────────
+  // ─── Lifecycle ────────────────────────────────────────────────────────────
 
   @override
   void initState() {
     super.initState();
-
-    _frameAnimCtrl = AnimationController(
+    _overlayCtrl = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1400),
-    )..repeat(reverse: true);
-
-    _overlayAnimCtrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 280),
+      duration: const Duration(milliseconds: 300),
     );
-
-    _frameOpacity = Tween<double>(begin: 0.55, end: 1.0).animate(
-      CurvedAnimation(parent: _frameAnimCtrl, curve: Curves.easeInOut),
-    );
-
     _overlayAnim = CurvedAnimation(
-      parent: _overlayAnimCtrl,
+      parent: _overlayCtrl,
       curve: Curves.easeOut,
     );
-
+    _pulseCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat(reverse: true);
+    _pulseAnim = Tween<double>(begin: 0.55, end: 1.0).animate(
+      CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut),
+    );
     _loadProducts();
   }
 
   @override
   void dispose() {
-    _statusResetTimer?.cancel();
-    _cameraController?.dispose();
-    _frameAnimCtrl.dispose();
-    _overlayAnimCtrl.dispose();
+    _statusTimer?.cancel();
+    _cam?.dispose();
+    _overlayCtrl.dispose();
+    _pulseCtrl.dispose();
     super.dispose();
   }
 
-  // ── Data ────────────────────────────────────────────────────────────────────
+  // ─── Data loading ─────────────────────────────────────────────────────────
 
   Future<void> _loadProducts() async {
     try {
-      final products = await _repository.getAllProducts();
+      final products = await _repo.getAllProducts();
+      // Pre-compute fingerprints for all products that have images
+      await _fingerprints.preload(products);
       if (!mounted) return;
       setState(() {
         _products = products;
-        _isLoading = false;
+        _loading = false;
       });
     } on RepositoryException catch (_) {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) setState(() => _loading = false);
     }
   }
 
-  // ── Camera & scanning ────────────────────────────────────────────────────────
+  // ─── Camera ───────────────────────────────────────────────────────────────
 
   Future<void> _startCamera() async {
-    if (_cameraController != null && _cameraController!.value.isInitialized) {
-      if (mounted) setState(() => _cameraStarted = true);
-      return;
-    }
-
     try {
       final cameras = await availableCameras();
-      final camera = cameras.isNotEmpty ? cameras.first : null;
-      if (camera == null) {
-        if (mounted) setState(() => _isLoading = false);
-        return;
+      if (cameras.isEmpty) return;
+      _cam = CameraController(
+        cameras.first,
+        ResolutionPreset.medium,
+        enableAudio: false,
+      );
+      await _cam!.initialize();
+      await _cam!.startImageStream(_onFrame);
+      if (!mounted) return;
+      setState(() => _camReady = true);
+    } catch (_) {
+      // Camera unavailable in this environment — graceful fallback
+    }
+  }
+
+  Future<void> _stopCamera() async {
+    _frameProcessing = false;
+    if (_cam == null || !_cam!.value.isInitialized) return;
+    try {
+      await _cam!.stopImageStream();
+    } catch (_) {}
+  }
+
+  // ─── Frame processing ─────────────────────────────────────────────────────
+
+  void _onFrame(CameraImage image) {
+    if (_frameProcessing || !_scanActive || !mounted) return;
+    if (++_frameCount % _frameSkip != 0) return;
+    _frameProcessing = true;
+    _matchFrame(image);
+  }
+
+  void _matchFrame(CameraImage image) {
+    try {
+      // 1. Compute 16×16 aHash for this frame (fast — Y-plane only)
+      final Uint8List? frameHash =
+          ProductFingerprintService.hashFromCameraImage(image);
+
+      final detectedIds = <String>{};
+      ProductModel? match;
+
+      if (frameHash != null) {
+        match = _fingerprints.findBestMatch(frameHash, _products);
+        if (match != null) detectedIds.add(match.id);
       }
 
-      _cameraController =
-          CameraController(camera, ResolutionPreset.medium, enableAudio: false);
-      await _cameraController!.initialize();
-      await _cameraController!.startImageStream(_processCameraFrame);
-      if (!mounted) return;
-      setState(() => _cameraStarted = true);
-    } catch (_) {
-      if (mounted) setState(() => _isLoading = false);
-    }
-  }
+      // 2. Advance lock manager: increment absent ticks for locked products
+      //    that weren't detected; auto-unlock after threshold.
+      _locks.tick(detectedIds);
 
-  void _processCameraFrame(CameraImage image) {
-    if (_isProcessingFrame || _status != _ScanStatus.idle || !mounted) return;
-    final now = DateTime.now();
-    if (_lastFrameProcessedAt != null &&
-        now.difference(_lastFrameProcessedAt!) <
-            const Duration(milliseconds: 500)) {
-      return;
-    }
-    _lastFrameProcessedAt = now;
-    _isProcessingFrame = true;
-    unawaited(_handleCameraFrame(image));
-  }
-
-  Future<void> _handleCameraFrame(CameraImage image) async {
-    try {
-      final product =
-          await OfflineProductRecognizer.matchCameraImage(_products, image);
-      if (product == null) {
-        if (mounted) {
-          setState(() => _status = _ScanStatus.notFound);
-          _statusResetTimer?.cancel();
-          _statusResetTimer = Timer(const Duration(milliseconds: 1200), () {
-            if (mounted) setState(() => _status = _ScanStatus.idle);
+      // 3. If a match was found, check per-product lock state.
+      if (match != null) {
+        final shouldAdd = _locks.onDetected(match.id);
+        if (shouldAdd && mounted) {
+          final captured = match;
+          // Schedule setState on the main event loop (safe from frame callback)
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted && _scanActive) _onProductFound(captured);
           });
         }
-        return;
       }
-
-      if (_lastScanned?.id == product.id &&
-          _lastScanTime != null &&
-          DateTime.now().difference(_lastScanTime!) <
-              OfflineProductRecognizer.debounceDuration) {
-        if (mounted) setState(() => _status = _ScanStatus.idle);
-        return;
-      }
-
-      if (!mounted) return;
-      _lastScanned = product;
-      _lastScanTime = DateTime.now();
-      _addToCart(product);
-
-      setState(() => _status = _ScanStatus.found);
-      _overlayAnimCtrl.forward(from: 0);
-
-      _statusResetTimer?.cancel();
-      _statusResetTimer = Timer(const Duration(milliseconds: 1500), () {
-        if (mounted) {
-          _overlayAnimCtrl.reverse();
-          setState(() => _status = _ScanStatus.idle);
-        }
-      });
-    } catch (_) {
-      if (mounted) setState(() => _status = _ScanStatus.idle);
     } finally {
-      if (mounted) setState(() => _isProcessingFrame = false);
+      _frameProcessing = false;
     }
   }
 
-  // ── Cart helpers ─────────────────────────────────────────────────────────────
+  // ─── Product found ────────────────────────────────────────────────────────
 
-  void _addToCart(ProductModel product) {
-    final idx = _cart.indexWhere((c) => c.id == product.id);
-    if (idx >= 0) {
-      setState(() => _cart[idx].quantity++);
-    } else {
-      setState(() => _cart.add(ScanCartItem(
-            id: product.id,
-            name: product.name,
-            unitPrice: product.sellingPrice,
-          )));
-    }
-  }
-
-  int get _totalItems => _cart.fold(0, (s, c) => s + c.quantity);
-
-  // ── Navigation ───────────────────────────────────────────────────────────────
-
-  void _goToInvoice() {
-    _statusResetTimer?.cancel();
-    // Navigate to InvoiceScreen with scanned items.
-    context.go('/invoice', extra: {
-      'cartItems': _cart.map((c) => c.toMap()).toList(),
+  void _onProductFound(ProductModel product) {
+    _addToCart(product);
+    setState(() {
+      _status = _ScanStatus.found;
+      _lastFound = product;
+    });
+    // Tactile + auditory feedback (no external package needed)
+    HapticFeedback.mediumImpact();
+    SystemSound.play(SystemSoundType.click);
+    // Animate the found-toast overlay
+    _overlayCtrl.forward(from: 0);
+    _statusTimer?.cancel();
+    _statusTimer = Timer(const Duration(milliseconds: 1800), () {
+      if (!mounted) return;
+      _overlayCtrl.reverse();
+      setState(() => _status = _ScanStatus.idle);
     });
   }
 
-  // ── Build ────────────────────────────────────────────────────────────────────
+  void _addToCart(ProductModel p) {
+    final idx = _cart.indexWhere((c) => c.id == p.id);
+    if (idx >= 0) {
+      setState(() => _cart[idx].quantity++);
+    } else {
+      setState(
+        () => _cart.add(
+          ScanCartItem(
+            id: p.id,
+            name: p.name,
+            unitPrice: p.sellingPrice,
+          ),
+        ),
+      );
+    }
+  }
+
+  // ─── Mode transitions ─────────────────────────────────────────────────────
+
+  /// Stop scan mode and show the full-screen invoice.
+  Future<void> _onDone() async {
+    _statusTimer?.cancel();
+    setState(() {
+      _scanActive = false;
+      _status = _ScanStatus.idle;
+    });
+    await _stopCamera();
+  }
+
+  /// Return to scan mode from invoice mode and restart the camera.
+  void _onScanMore() {
+    setState(() {
+      _scanActive = true;
+      _camReady = false;
+    });
+    _cam?.dispose();
+    _cam = null;
+    _startCamera();
+  }
+
+  // ─── Invoice completion ───────────────────────────────────────────────────
+
+  Future<void> _completeSale({String paymentMethod = 'cash'}) async {
+    if (_cart.isEmpty || _isSaving) return;
+    setState(() => _isSaving = true);
+    try {
+      await _saleRepo.createSale(
+        items: _cart
+            .map(
+              (c) => ProductModel(
+                id: c.id,
+                name: c.name,
+                category: 'Sale',
+                purchasePrice: 0,
+                sellingPrice: c.unitPrice,
+                quantity: c.quantity,
+                createdAt: DateTime.now(),
+                updatedAt: DateTime.now(),
+              ),
+            )
+            .toList(),
+        discount: 0,
+        workerId: 'local-worker',
+        paymentMethod: paymentMethod,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.check_circle_rounded, color: Colors.white),
+              const SizedBox(width: 10),
+              Text(context.tr.saleConfirmedMsg),
+            ],
+          ),
+          backgroundColor: AppColors.success,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+      context.go('/ai-assistant');
+    } on RepositoryException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.message),
+          backgroundColor: AppColors.error,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
+  void _showElectronicPayment() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => _ElectronicPaymentSheet(
+        total: _cartTotal,
+        tr: ctx.tr,
+        onConfirm: () {
+          Navigator.pop(ctx);
+          _completeSale(paymentMethod: 'electronic');
+        },
+      ),
+    );
+  }
+
+  // ─── Computed properties ──────────────────────────────────────────────────
+
+  double get _cartTotal => _cart.fold(0.0, (s, c) => s + c.total);
+  int get _cartCount => _cart.fold(0, (s, c) => s + c.quantity);
+
+  // ─── Build ────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
+    if (_loading) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+    return _scanActive ? _buildScanMode() : _buildInvoiceMode();
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // SCAN MODE  — split view
+  // ══════════════════════════════════════════════════════════════════════════
+
+  Widget _buildScanMode() {
+    final screenH = MediaQuery.sizeOf(context).height;
+    final camH = (screenH * _camFraction).clamp(
+      screenH * _camMin,
+      screenH * _camMax,
+    );
     final tr = context.tr;
 
     return Scaffold(
-      backgroundColor: Colors.black,
-      body: Stack(
-        children: [
-          // ── Real camera feed or placeholder ───────────────────────────────
-          if (_cameraStarted &&
-              _cameraController != null &&
-              _cameraController!.value.isInitialized)
-            Positioned.fill(
-              child: CameraPreview(_cameraController!),
-            )
-          else
-            const _CameraBackground(),
-
-          // ── Scan frame (center) ───────────────────────────────────────────
-          Center(
-            child: AnimatedBuilder(
-              animation: _frameOpacity,
-              builder: (context, _) {
-                final color = switch (_status) {
-                  _ScanStatus.found => AppColors.success,
-                  _ScanStatus.notFound => AppColors.error,
-                  _ => AppColors.primary,
-                };
-                return _ScanFrame(
-                  size: 220,
-                  color: color.withOpacity(_frameOpacity.value),
-                  isRecognizing: _status == _ScanStatus.recognizing,
-                );
-              },
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      body: SafeArea(
+        bottom: false,
+        child: Column(
+          children: [
+            // ── Top header ────────────────────────────────────────────────
+            _ScanModeHeader(
+              cartCount: _cartCount,
+              onBack: () => context.pop(),
+              onDone: _cart.isEmpty ? null : _onDone,
+              tr: tr,
             ),
-          ),
 
-          // ── Top bar (title + status chip) ─────────────────────────────────
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            child: SafeArea(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Padding(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    child: Row(
-                      children: [
-                        IconButton(
-                          onPressed: () => context.pop(),
-                          icon: const Icon(
-                            Icons.arrow_back_ios_new_rounded,
-                            color: Colors.white,
-                          ),
-                        ),
-                        Expanded(
-                          child: Text(
-                            tr.liveScanTitle,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 18,
-                              fontWeight: FontWeight.w600,
-                              shadows: [
-                                Shadow(blurRadius: 6, color: Colors.black54),
-                              ],
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                        ),
-                        // Scanned-items badge
-                        _CartBadge(count: _totalItems),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  _StatusChip(status: _status, tr: tr),
-                ],
+            // ── Cart list (expands to fill remaining space) ───────────────
+            Expanded(child: _buildCartPanel(tr)),
+
+            // ── Total strip (only when cart has items) ─────────────────────
+            if (_cart.isNotEmpty)
+              _TotalStrip(total: _cartTotal, count: _cartCount, tr: tr),
+
+            // ── Camera panel (draggable) ──────────────────────────────────
+            GestureDetector(
+              onVerticalDragUpdate: (d) {
+                setState(() {
+                  _camFraction = (_camFraction - d.delta.dy / screenH)
+                      .clamp(_camMin, _camMax);
+                });
+              },
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 60),
+                height: camH,
+                child: _buildCameraPanel(tr),
               ),
             ),
-          ),
 
-          // ── Product-found overlay (slides up, auto-hides) ─────────────────
-          if (_lastScanned != null)
-            Positioned(
-              left: 24,
-              right: 24,
-              bottom: 130,
-              child: FadeTransition(
-                opacity: _overlayAnim,
-                child: SlideTransition(
-                  position: Tween<Offset>(
-                    begin: const Offset(0, 0.25),
-                    end: Offset.zero,
-                  ).animate(_overlayAnim),
-                  child: _ProductFoundCard(
-                    product: _lastScanned!,
-                    quantity: _cart
-                        .where((c) => c.id == _lastScanned!.id)
-                        .fold(0, (_, c) => c.quantity),
+            SizedBox(height: MediaQuery.paddingOf(context).bottom),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ── Cart panel ─────────────────────────────────────────────────────────────
+
+  Widget _buildCartPanel(AppTranslations tr) {
+    if (_cart.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            AnimatedBuilder(
+              animation: _pulseAnim,
+              builder: (_, __) => Opacity(
+                opacity: _pulseAnim.value,
+                child: Icon(
+                  Icons.document_scanner_rounded,
+                  size: 52,
+                  color: AppColors.primary.withValues(alpha: 0.45),
+                ),
+              ),
+            ),
+            const SizedBox(height: 14),
+            Text(
+              tr.aimCameraAtProduct,
+              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                    color: Theme.of(context).colorScheme.outline,
+                  ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      );
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.fromLTRB(12, 6, 12, 4),
+      itemCount: _cart.length,
+      itemBuilder: (_, i) {
+        final item = _cart[i];
+        return _CompactCartTile(
+          item: item,
+          onInc: () => setState(() => item.quantity++),
+          onDec: () {
+            if (item.quantity > 1) {
+              setState(() => item.quantity--);
+            } else {
+              setState(() => _cart.removeAt(i));
+            }
+          },
+          tr: tr,
+        );
+      },
+    );
+  }
+
+  // ── Camera panel ────────────────────────────────────────────────────────────
+
+  Widget _buildCameraPanel(AppTranslations tr) {
+    return Container(
+      decoration: const BoxDecoration(
+        color: Colors.black,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        boxShadow: [
+          BoxShadow(
+            color: Color(0x55000000),
+            blurRadius: 16,
+            offset: Offset(0, -4),
+          ),
+        ],
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Stack(
+        children: [
+          // ── Camera preview or placeholder ─────────────────────────────
+          Positioned.fill(
+            child: _camReady && _cam != null && _cam!.value.isInitialized
+                ? CameraPreview(_cam!)
+                : _CameraPlaceholder(
+                    onStart: _startCamera,
                     tr: tr,
                   ),
-                ),
-              ),
-            ),
+          ),
 
-          // ── Bottom bar ────────────────────────────────────────────────────
+          // ── Drag handle pill ──────────────────────────────────────────
           Positioned(
-            bottom: 0,
+            top: 8,
             left: 0,
             right: 0,
-            child: SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (_cart.isNotEmpty) ...[
-                      _CartSummaryBar(cart: _cart, tr: tr),
-                      const SizedBox(height: 10),
-                    ],
-                    SizedBox(
-                      width: double.infinity,
-                      child: !_cameraStarted
-                          ? ElevatedButton.icon(
-                              onPressed: _isLoading ? null : _startCamera,
-                              icon: const Icon(Icons.videocam_rounded),
-                              label: Text(tr.openCamera),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: AppColors.primary,
-                                foregroundColor: Colors.white,
-                                padding:
-                                    const EdgeInsets.symmetric(vertical: 14),
-                                textStyle: const TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(
-                                      AppConstants.radiusMedium),
-                                ),
-                                elevation: 0,
-                              ),
-                            )
-                          : ElevatedButton.icon(
-                              onPressed: _cart.isEmpty ? null : _goToInvoice,
-                              icon: const Icon(Icons.receipt_long_rounded),
-                              label: Text(
-                                _cart.isEmpty
-                                    ? tr.aimCameraAtProduct
-                                    : '${tr.doneScanning}  ·  $_totalItems ${tr.items}',
-                              ),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: _cart.isEmpty
-                                    ? Colors.white24
-                                    : AppColors.success,
-                                foregroundColor: Colors.white,
-                                disabledBackgroundColor: Colors.white24,
-                                disabledForegroundColor: Colors.white54,
-                                padding:
-                                    const EdgeInsets.symmetric(vertical: 14),
-                                textStyle: const TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(
-                                      AppConstants.radiusMedium),
-                                ),
-                                elevation: 0,
-                              ),
-                            ),
-                    ),
-                  ],
+            child: Center(
+              child: Container(
+                width: 38,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.45),
+                  borderRadius: BorderRadius.circular(2),
                 ),
               ),
             ),
           ),
 
-          // ── Loading spinner ────────────────────────────────────────────────
-          if (_isLoading)
-            Container(
-              color: Colors.black54,
-              child: const Center(
-                child: CircularProgressIndicator(color: AppColors.primary),
+          // ── Scan-frame overlay (center) ───────────────────────────────
+          if (_camReady)
+            Center(
+              child: AnimatedBuilder(
+                animation: _pulseAnim,
+                builder: (_, __) {
+                  final color = switch (_status) {
+                    _ScanStatus.found => AppColors.success,
+                    _ScanStatus.noMatch => AppColors.error,
+                    _ScanStatus.idle => AppColors.primary,
+                  };
+                  final opacity =
+                      _status == _ScanStatus.idle ? _pulseAnim.value : 1.0;
+                  return _ScanFrame(
+                    size: 120,
+                    color: color.withValues(alpha: opacity),
+                    scanning: _status == _ScanStatus.idle,
+                  );
+                },
               ),
             ),
+
+          // ── Status chip (bottom of camera panel) ─────────────────────
+          if (_camReady)
+            Positioned(
+              bottom: 10,
+              left: 0,
+              right: 0,
+              child: Center(
+                child: _StatusChip(status: _status, tr: tr),
+              ),
+            ),
+
+          // ── Product-found toast (top of camera panel) ─────────────────
+          if (_lastFound != null)
+            Positioned(
+              top: 18,
+              left: 12,
+              right: 12,
+              child: FadeTransition(
+                opacity: _overlayAnim,
+                child: _FoundToast(product: _lastFound!),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // INVOICE MODE  — full-screen, camera stopped
+  // ══════════════════════════════════════════════════════════════════════════
+
+  Widget _buildInvoiceMode() {
+    final tr = context.tr;
+    final theme = Theme.of(context);
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(tr.instantInvoice),
+        leading: IconButton(
+          icon: const Icon(Icons.close_rounded),
+          onPressed: () => context.pop(),
+        ),
+        actions: [
+          TextButton.icon(
+            onPressed: _onScanMore,
+            icon: const Icon(Icons.document_scanner_rounded, size: 18),
+            label: Text(tr.scanMore),
+          ),
+        ],
+      ),
+      body: _cart.isEmpty
+          ? Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.receipt_long_outlined,
+                    size: 56,
+                    color: theme.colorScheme.outline,
+                  ),
+                  const SizedBox(height: 12),
+                  Text(tr.invoiceEmpty, style: theme.textTheme.bodyLarge),
+                ],
+              ),
+            )
+          : Column(
+              children: [
+                // Items list
+                Expanded(
+                  child: ListView.separated(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                    itemCount: _cart.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 8),
+                    itemBuilder: (_, i) {
+                      final item = _cart[i];
+                      return _InvoiceItemTile(
+                        item: item,
+                        onInc: () => setState(() => item.quantity++),
+                        onDec: () {
+                          if (item.quantity > 1) {
+                            setState(() => item.quantity--);
+                          }
+                        },
+                        onDelete: () => setState(() => _cart.removeAt(i)),
+                        tr: tr,
+                      );
+                    },
+                  ),
+                ),
+
+                // Bottom action panel
+                _InvoiceBottomPanel(
+                  total: _cartTotal,
+                  count: _cartCount,
+                  isSaving: _isSaving,
+                  onCompleteSale: () => _completeSale(),
+                  onElectronic: _showElectronicPayment,
+                  tr: tr,
+                ),
+              ],
+            ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// _ScanModeHeader
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _ScanModeHeader extends StatelessWidget {
+  const _ScanModeHeader({
+    required this.cartCount,
+    required this.onBack,
+    required this.onDone,
+    required this.tr,
+  });
+  final int cartCount;
+  final VoidCallback onBack;
+  final VoidCallback? onDone;
+  final AppTranslations tr;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        border: Border(
+          bottom: BorderSide(
+            color:
+                Theme.of(context).colorScheme.outline.withValues(alpha: 0.15),
+          ),
+        ),
+      ),
+      child: Row(
+        children: [
+          // Back button
+          IconButton(
+            icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
+            onPressed: onBack,
+          ),
+
+          // Title
+          Expanded(
+            child: Text(
+              tr.liveScanTitle,
+              style: Theme.of(context).textTheme.titleMedium,
+              textAlign: TextAlign.center,
+            ),
+          ),
+
+          // Cart count badge
+          if (cartCount > 0)
+            Container(
+              margin: const EdgeInsets.only(right: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(AppConstants.radiusFull),
+              ),
+              child: Text(
+                '$cartCount ${tr.items}',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.primary,
+                ),
+              ),
+            ),
+
+          // Done button
+          TextButton.icon(
+            onPressed: onDone,
+            icon: const Icon(Icons.check_rounded, size: 18),
+            label: Text(tr.done),
+            style: TextButton.styleFrom(
+              foregroundColor: onDone != null
+                  ? AppColors.success
+                  : Theme.of(context).colorScheme.outline,
+            ),
+          ),
         ],
       ),
     );
@@ -438,10 +741,365 @@ class _LiveScannerScreenState extends State<LiveScannerScreen>
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// _CameraBackground  –  dark dot-grid to suggest a camera viewfinder
+// _TotalStrip  —  compact total row between cart and camera panels
 // ─────────────────────────────────────────────────────────────────────────────
-class _CameraBackground extends StatelessWidget {
-  const _CameraBackground();
+
+class _TotalStrip extends StatelessWidget {
+  const _TotalStrip({
+    required this.total,
+    required this.count,
+    required this.tr,
+  });
+  final double total;
+  final int count;
+  final AppTranslations tr;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      color: Theme.of(context).colorScheme.surfaceContainerHighest,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            '$count ${tr.items}',
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+          Text(
+            tr.formatCurrency(total),
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.primary,
+                ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// _CompactCartTile  —  row in the scan-mode cart (tight layout)
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _CompactCartTile extends StatelessWidget {
+  const _CompactCartTile({
+    required this.item,
+    required this.onInc,
+    required this.onDec,
+    required this.tr,
+  });
+  final ScanCartItem item;
+  final VoidCallback onInc;
+  final VoidCallback onDec;
+  final AppTranslations tr;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Card(
+      margin: const EdgeInsets.symmetric(vertical: 3),
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppConstants.radiusSmall),
+        side: BorderSide(
+          color: theme.colorScheme.outline.withValues(alpha: 0.15),
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        child: Row(
+          children: [
+            // Product name
+            Expanded(
+              child: Text(
+                item.name,
+                style: theme.textTheme.bodyMedium
+                    ?.copyWith(fontWeight: FontWeight.w500),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            const SizedBox(width: 8),
+
+            // Quantity controls
+            _QtyControl(qty: item.quantity, onInc: onInc, onDec: onDec),
+            const SizedBox(width: 12),
+
+            // Line total
+            Text(
+              tr.formatCurrency(item.total),
+              style: theme.textTheme.bodyMedium?.copyWith(
+                fontWeight: FontWeight.w700,
+                color: AppColors.primary,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// _InvoiceItemTile  —  row in the invoice mode (more spacious)
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _InvoiceItemTile extends StatelessWidget {
+  const _InvoiceItemTile({
+    required this.item,
+    required this.onInc,
+    required this.onDec,
+    required this.onDelete,
+    required this.tr,
+  });
+  final ScanCartItem item;
+  final VoidCallback onInc;
+  final VoidCallback onDec;
+  final VoidCallback onDelete;
+  final AppTranslations tr;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppConstants.radiusMedium),
+        side: BorderSide(
+          color: theme.colorScheme.outline.withValues(alpha: 0.15),
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          children: [
+            // Name + unit price
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    item.name,
+                    style: theme.textTheme.bodyLarge
+                        ?.copyWith(fontWeight: FontWeight.w600),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '${tr.formatCurrency(item.unitPrice)} / ${tr.each}',
+                    style: theme.textTheme.bodySmall
+                        ?.copyWith(color: theme.colorScheme.outline),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+
+            // Quantity controls
+            _QtyControl(qty: item.quantity, onInc: onInc, onDec: onDec),
+            const SizedBox(width: 8),
+
+            // Line total
+            SizedBox(
+              width: 72,
+              child: Text(
+                tr.formatCurrency(item.total),
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.primary,
+                ),
+                textAlign: TextAlign.end,
+              ),
+            ),
+            const SizedBox(width: 4),
+
+            // Delete
+            IconButton(
+              icon: const Icon(Icons.close_rounded, size: 18),
+              onPressed: onDelete,
+              style: IconButton.styleFrom(
+                foregroundColor: theme.colorScheme.outline,
+                padding: EdgeInsets.zero,
+                minimumSize: const Size(32, 32),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// _QtyControl  —  reusable ± quantity widget
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _QtyControl extends StatelessWidget {
+  const _QtyControl({
+    required this.qty,
+    required this.onInc,
+    required this.onDec,
+  });
+  final int qty;
+  final VoidCallback onInc;
+  final VoidCallback onDec;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _QtyBtn(icon: Icons.remove, onTap: onDec),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          child: Text(
+            '$qty',
+            style: Theme.of(context)
+                .textTheme
+                .bodyMedium
+                ?.copyWith(fontWeight: FontWeight.w700),
+          ),
+        ),
+        _QtyBtn(icon: Icons.add, onTap: onInc),
+      ],
+    );
+  }
+}
+
+class _QtyBtn extends StatelessWidget {
+  const _QtyBtn({required this.icon, required this.onTap});
+  final IconData icon;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 28,
+        height: 28,
+        decoration: BoxDecoration(
+          border: Border.all(
+            color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
+          ),
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Icon(icon, size: 16, color: AppColors.primary),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// _InvoiceBottomPanel  —  totals + action buttons in invoice mode
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _InvoiceBottomPanel extends StatelessWidget {
+  const _InvoiceBottomPanel({
+    required this.total,
+    required this.count,
+    required this.isSaving,
+    required this.onCompleteSale,
+    required this.onElectronic,
+    required this.tr,
+  });
+  final double total;
+  final int count;
+  final bool isSaving;
+  final VoidCallback onCompleteSale;
+  final VoidCallback onElectronic;
+  final AppTranslations tr;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        border: Border(
+          top: BorderSide(
+            color: theme.colorScheme.outline.withValues(alpha: 0.15),
+          ),
+        ),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Total row
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text('$count ${tr.items}', style: theme.textTheme.bodyMedium),
+                Text(
+                  tr.formatCurrency(total),
+                  style: theme.textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.primary,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+
+            // Action buttons
+            Row(
+              children: [
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: isSaving ? null : onCompleteSale,
+                    icon: isSaving
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Icon(Icons.check_rounded),
+                    label: Text(tr.completeSale),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppColors.success,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                OutlinedButton.icon(
+                  onPressed: isSaving ? null : onElectronic,
+                  icon: const Icon(Icons.qr_code_rounded, size: 18),
+                  label: Text(tr.electronicPayment),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 14,
+                      horizontal: 12,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// _CameraPlaceholder  —  shown before the camera is opened
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _CameraPlaceholder extends StatelessWidget {
+  const _CameraPlaceholder({required this.onStart, required this.tr});
+  final VoidCallback onStart;
+  final AppTranslations tr;
 
   @override
   Widget build(BuildContext context) {
@@ -453,9 +1111,32 @@ class _CameraBackground extends StatelessWidget {
           colors: [Color(0xFF1A1A2E), Color(0xFF000000)],
         ),
       ),
-      child: CustomPaint(
-        painter: _DotGridPainter(),
-        size: Size.infinite,
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: CustomPaint(painter: _DotGridPainter()),
+          ),
+          Center(
+            child: ElevatedButton.icon(
+              onPressed: onStart,
+              icon: const Icon(Icons.videocam_rounded),
+              label: Text(tr.openCamera),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 12,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius:
+                      BorderRadius.circular(AppConstants.radiusMedium),
+                ),
+                elevation: 0,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -465,7 +1146,7 @@ class _DotGridPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = Colors.white.withOpacity(0.06)
+      ..color = Colors.white.withValues(alpha: 0.06)
       ..style = PaintingStyle.fill;
     const step = 22.0;
     for (double x = 0; x < size.width; x += step) {
@@ -480,17 +1161,18 @@ class _DotGridPainter extends CustomPainter {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// _ScanFrame  –  corner-bracket viewfinder frame
+// _ScanFrame  —  corner-bracket viewfinder overlay
 // ─────────────────────────────────────────────────────────────────────────────
+
 class _ScanFrame extends StatelessWidget {
   const _ScanFrame({
     required this.size,
     required this.color,
-    required this.isRecognizing,
+    required this.scanning,
   });
   final double size;
   final Color color;
-  final bool isRecognizing;
+  final bool scanning;
 
   @override
   Widget build(BuildContext context) {
@@ -503,16 +1185,16 @@ class _ScanFrame extends StatelessWidget {
           Container(
             decoration: BoxDecoration(
               border: Border.all(color: color, width: 1.5),
-              borderRadius: BorderRadius.circular(12),
-              color: color.withOpacity(0.05),
+              borderRadius: BorderRadius.circular(10),
+              color: color.withValues(alpha: 0.05),
             ),
           ),
           // Corner brackets
           ..._corners(color),
-          // Scanning line animation
-          if (isRecognizing)
+          // Scanning sweep line
+          if (scanning)
             ClipRRect(
-              borderRadius: BorderRadius.circular(11),
+              borderRadius: BorderRadius.circular(9),
               child: _ScanLine(color: color),
             ),
         ],
@@ -520,36 +1202,37 @@ class _ScanFrame extends StatelessWidget {
     );
   }
 
-  static List<Widget> _corners(Color color) {
-    const len = 28.0;
-    const thick = 3.5;
+  static List<Widget> _corners(Color c) {
+    const len = 22.0;
+    const thick = 3.0;
+
     Widget corner({
-      required Alignment alignment,
+      required Alignment align,
       required BorderRadius radius,
-      required EdgeInsets padding,
+      required EdgeInsets pad,
     }) =>
         Positioned.fill(
           child: Align(
-            alignment: alignment,
+            alignment: align,
             child: Padding(
-              padding: padding,
+              padding: pad,
               child: SizedBox(
                 width: len,
                 height: len,
                 child: DecoratedBox(
                   decoration: BoxDecoration(
                     border: Border(
-                      top: alignment.y < 0
-                          ? BorderSide(color: color, width: thick)
+                      top: align.y < 0
+                          ? BorderSide(color: c, width: thick)
                           : BorderSide.none,
-                      bottom: alignment.y > 0
-                          ? BorderSide(color: color, width: thick)
+                      bottom: align.y > 0
+                          ? BorderSide(color: c, width: thick)
                           : BorderSide.none,
-                      left: alignment.x < 0
-                          ? BorderSide(color: color, width: thick)
+                      left: align.x < 0
+                          ? BorderSide(color: c, width: thick)
                           : BorderSide.none,
-                      right: alignment.x > 0
-                          ? BorderSide(color: color, width: thick)
+                      right: align.x > 0
+                          ? BorderSide(color: c, width: thick)
                           : BorderSide.none,
                     ),
                     borderRadius: radius,
@@ -560,35 +1243,36 @@ class _ScanFrame extends StatelessWidget {
           ),
         );
 
-    const p8 = EdgeInsets.all(8);
+    const p = EdgeInsets.all(6);
     return [
       corner(
-        alignment: Alignment.topLeft,
-        radius: const BorderRadius.only(topLeft: Radius.circular(10)),
-        padding: p8,
+        align: Alignment.topLeft,
+        radius: const BorderRadius.only(topLeft: Radius.circular(8)),
+        pad: p,
       ),
       corner(
-        alignment: Alignment.topRight,
-        radius: const BorderRadius.only(topRight: Radius.circular(10)),
-        padding: p8,
+        align: Alignment.topRight,
+        radius: const BorderRadius.only(topRight: Radius.circular(8)),
+        pad: p,
       ),
       corner(
-        alignment: Alignment.bottomLeft,
-        radius: const BorderRadius.only(bottomLeft: Radius.circular(10)),
-        padding: p8,
+        align: Alignment.bottomLeft,
+        radius: const BorderRadius.only(bottomLeft: Radius.circular(8)),
+        pad: p,
       ),
       corner(
-        alignment: Alignment.bottomRight,
-        radius: const BorderRadius.only(bottomRight: Radius.circular(10)),
-        padding: p8,
+        align: Alignment.bottomRight,
+        radius: const BorderRadius.only(bottomRight: Radius.circular(8)),
+        pad: p,
       ),
     ];
   }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// _ScanLine  –  animated horizontal sweep line inside the frame
+// _ScanLine  —  animated horizontal sweep inside the viewfinder
 // ─────────────────────────────────────────────────────────────────────────────
+
 class _ScanLine extends StatefulWidget {
   const _ScanLine({required this.color});
   final Color color;
@@ -622,15 +1306,15 @@ class _ScanLineState extends State<_ScanLine>
   Widget build(BuildContext context) {
     return AnimatedBuilder(
       animation: _anim,
-      builder: (context, _) => Align(
-        alignment: Alignment(0, (_anim.value * 2) - 1),
+      builder: (_, __) => Align(
+        alignment: Alignment(0, _anim.value * 2 - 1),
         child: Container(
           height: 2,
           decoration: BoxDecoration(
             gradient: LinearGradient(
               colors: [
                 Colors.transparent,
-                widget.color.withOpacity(0.9),
+                widget.color.withValues(alpha: 0.9),
                 Colors.transparent,
               ],
             ),
@@ -642,8 +1326,9 @@ class _ScanLineState extends State<_ScanLine>
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// _StatusChip  –  status pill below the title bar
+// _StatusChip  —  pill indicator at bottom of camera panel
 // ─────────────────────────────────────────────────────────────────────────────
+
 class _StatusChip extends StatelessWidget {
   const _StatusChip({required this.status, required this.tr});
   final _ScanStatus status;
@@ -654,20 +1339,15 @@ class _StatusChip extends StatelessWidget {
     final (text, color, icon) = switch (status) {
       _ScanStatus.idle => (
           tr.aimCameraAtProduct,
-          Colors.white.withOpacity(0.85),
+          Colors.white.withValues(alpha: 0.85),
           Icons.center_focus_strong_rounded,
-        ),
-      _ScanStatus.recognizing => (
-          tr.recognizing,
-          AppColors.warning,
-          Icons.radar_rounded,
         ),
       _ScanStatus.found => (
           tr.productFoundLabel,
           AppColors.success,
           Icons.check_circle_rounded,
         ),
-      _ScanStatus.notFound => (
+      _ScanStatus.noMatch => (
           tr.productNotRecognized,
           AppColors.error,
           Icons.highlight_off_rounded,
@@ -675,40 +1355,25 @@ class _StatusChip extends StatelessWidget {
     };
 
     return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 250),
+      duration: const Duration(milliseconds: 200),
       child: Container(
         key: ValueKey(status),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
         decoration: BoxDecoration(
-          color: Colors.black.withOpacity(0.55),
+          color: Colors.black.withValues(alpha: 0.55),
           borderRadius: BorderRadius.circular(AppConstants.radiusFull),
-          border: Border.all(color: color.withOpacity(0.4)),
+          border: Border.all(color: color.withValues(alpha: 0.4)),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            if (status == _ScanStatus.recognizing)
-              Padding(
-                padding: const EdgeInsets.only(right: 6),
-                child: SizedBox(
-                  width: 14,
-                  height: 14,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    valueColor: AlwaysStoppedAnimation(color),
-                  ),
-                ),
-              )
-            else
-              Padding(
-                padding: const EdgeInsets.only(right: 6),
-                child: Icon(icon, color: color, size: 16),
-              ),
+            Icon(icon, color: color, size: 14),
+            const SizedBox(width: 6),
             Text(
               text,
               style: TextStyle(
                 color: color,
-                fontSize: 13,
+                fontSize: 12,
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -720,128 +1385,58 @@ class _StatusChip extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// _CartBadge  –  top-right item counter
+// _FoundToast  —  product-found notification inside camera panel
 // ─────────────────────────────────────────────────────────────────────────────
-class _CartBadge extends StatelessWidget {
-  const _CartBadge({required this.count});
-  final int count;
 
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 200),
-      child: count == 0
-          ? const SizedBox(width: 48)
-          : Container(
-              key: ValueKey(count),
-              margin: const EdgeInsets.only(right: 8),
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              decoration: BoxDecoration(
-                color: AppColors.success,
-                borderRadius: BorderRadius.circular(AppConstants.radiusFull),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.shopping_cart_rounded,
-                      color: Colors.white, size: 14),
-                  const SizedBox(width: 4),
-                  Text(
-                    '$count',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// _ProductFoundCard  –  green popup showing name + price + qty
-// ─────────────────────────────────────────────────────────────────────────────
-class _ProductFoundCard extends StatelessWidget {
-  const _ProductFoundCard({
-    required this.product,
-    required this.quantity,
-    required this.tr,
-  });
+class _FoundToast extends StatelessWidget {
+  const _FoundToast({required this.product});
   final ProductModel product;
-  final int quantity;
-  final AppTranslations tr;
 
   @override
   Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
-        color: AppColors.success.withOpacity(0.95),
-        borderRadius: BorderRadius.circular(AppConstants.radiusLarge),
-        boxShadow: const [
+        color: AppColors.success.withValues(alpha: 0.92),
+        borderRadius: BorderRadius.circular(AppConstants.radiusMedium),
+        boxShadow: [
           BoxShadow(
-            color: Colors.black38,
-            blurRadius: 16,
-            offset: Offset(0, 6),
+            color: Colors.black.withValues(alpha: 0.25),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
           ),
         ],
       ),
       child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.2),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child:
-                const Icon(Icons.check_rounded, color: Colors.white, size: 24),
-          ),
-          const SizedBox(width: 14),
+          const Icon(Icons.check_circle_rounded, color: Colors.white, size: 18),
+          const SizedBox(width: 8),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
                   product.name,
-                  style: textTheme.titleSmall?.copyWith(
+                  style: const TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.w700,
+                    fontSize: 13,
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
-                const SizedBox(height: 2),
                 Text(
-                  tr.formatCurrency(product.sellingPrice),
-                  style: textTheme.bodySmall?.copyWith(
-                    color: Colors.white.withOpacity(0.88),
+                  product.category,
+                  style: const TextStyle(
+                    color: Colors.white70,
+                    fontSize: 11,
                   ),
                 ),
               ],
             ),
           ),
-          if (quantity > 1)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.2),
-                borderRadius: BorderRadius.circular(AppConstants.radiusFull),
-              ),
-              child: Text(
-                '${tr.timesScanned}$quantity',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
         ],
       ),
     );
@@ -849,45 +1444,94 @@ class _ProductFoundCard extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// _CartSummaryBar  –  compact strip showing scanned items above Done button
+// _ElectronicPaymentSheet  —  QR payment bottom sheet
 // ─────────────────────────────────────────────────────────────────────────────
-class _CartSummaryBar extends StatelessWidget {
-  const _CartSummaryBar({required this.cart, required this.tr});
-  final List<ScanCartItem> cart;
+
+class _ElectronicPaymentSheet extends StatelessWidget {
+  const _ElectronicPaymentSheet({
+    required this.total,
+    required this.tr,
+    required this.onConfirm,
+  });
+  final double total;
   final AppTranslations tr;
+  final VoidCallback onConfirm;
 
   @override
   Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+      padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.12),
-        borderRadius: BorderRadius.circular(AppConstants.radiusMedium),
-        border: Border.all(color: Colors.white.withOpacity(0.18)),
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(24),
       ),
-      child: Row(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.inventory_2_outlined,
-              color: Colors.white70, size: 16),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              cart
-                  .map((c) =>
-                      c.quantity > 1 ? '${c.name} ×${c.quantity}' : c.name)
-                  .join('  ·  '),
-              style: textTheme.bodySmall?.copyWith(color: Colors.white70),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
+          // Handle pill
+          Container(
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color:
+                  Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
+              borderRadius: BorderRadius.circular(2),
             ),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(height: 20),
+
+          // QR placeholder
+          Container(
+            width: 160,
+            height: 160,
+            decoration: BoxDecoration(
+              border: Border.all(
+                color: Theme.of(context)
+                    .colorScheme
+                    .outline
+                    .withValues(alpha: 0.3),
+                width: 2,
+              ),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.qr_code_rounded,
+                  size: 80,
+                  color: Theme.of(context).colorScheme.outline,
+                ),
+                Text(
+                  tr.formatCurrency(total),
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+
           Text(
-            tr.formatCurrency(cart.fold(0.0, (s, c) => s + c.totalPrice)),
-            style: textTheme.labelMedium?.copyWith(
-              color: Colors.white,
-              fontWeight: FontWeight.w700,
+            tr.paymentQRHint,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Theme.of(context).colorScheme.outline,
+                ),
+          ),
+          const SizedBox(height: 20),
+
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: onConfirm,
+              icon: const Icon(Icons.check_rounded),
+              label: Text(tr.confirmPayment),
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.success,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+              ),
             ),
           ),
         ],
