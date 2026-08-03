@@ -3194,6 +3194,892 @@ class PromotionsCompanion extends UpdateCompanion<Promotion> {
   }
 }
 
+class $ProductImagesTable extends ProductImages
+    with TableInfo<$ProductImagesTable, ProductImage> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $ProductImagesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+      'id', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _productIdMeta =
+      const VerificationMeta('productId');
+  @override
+  late final GeneratedColumn<String> productId = GeneratedColumn<String>(
+      'product_id', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _localPathMeta =
+      const VerificationMeta('localPath');
+  @override
+  late final GeneratedColumn<String> localPath = GeneratedColumn<String>(
+      'local_path', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _createdAtMeta =
+      const VerificationMeta('createdAt');
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+      'created_at', aliasedName, false,
+      type: DriftSqlType.dateTime,
+      requiredDuringInsert: false,
+      defaultValue: currentDateAndTime);
+  @override
+  List<GeneratedColumn> get $columns => [id, productId, localPath, createdAt];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'product_images';
+  @override
+  VerificationContext validateIntegrity(Insertable<ProductImage> instance,
+      {bool isInserting = false}) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('product_id')) {
+      context.handle(_productIdMeta,
+          productId.isAcceptableOrUnknown(data['product_id']!, _productIdMeta));
+    } else if (isInserting) {
+      context.missing(_productIdMeta);
+    }
+    if (data.containsKey('local_path')) {
+      context.handle(_localPathMeta,
+          localPath.isAcceptableOrUnknown(data['local_path']!, _localPathMeta));
+    } else if (isInserting) {
+      context.missing(_localPathMeta);
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(_createdAtMeta,
+          createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta));
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  ProductImage map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return ProductImage(
+      id: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}id'])!,
+      productId: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}product_id'])!,
+      localPath: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}local_path'])!,
+      createdAt: attachedDatabase.typeMapping
+          .read(DriftSqlType.dateTime, data['${effectivePrefix}created_at'])!,
+    );
+  }
+
+  @override
+  $ProductImagesTable createAlias(String alias) {
+    return $ProductImagesTable(attachedDatabase, alias);
+  }
+}
+
+class ProductImage extends DataClass implements Insertable<ProductImage> {
+  final String id;
+  final String productId;
+  final String localPath;
+  final DateTime createdAt;
+  const ProductImage(
+      {required this.id,
+      required this.productId,
+      required this.localPath,
+      required this.createdAt});
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['product_id'] = Variable<String>(productId);
+    map['local_path'] = Variable<String>(localPath);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    return map;
+  }
+
+  ProductImagesCompanion toCompanion(bool nullToAbsent) {
+    return ProductImagesCompanion(
+      id: Value(id),
+      productId: Value(productId),
+      localPath: Value(localPath),
+      createdAt: Value(createdAt),
+    );
+  }
+
+  factory ProductImage.fromJson(Map<String, dynamic> json,
+      {ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return ProductImage(
+      id: serializer.fromJson<String>(json['id']),
+      productId: serializer.fromJson<String>(json['productId']),
+      localPath: serializer.fromJson<String>(json['localPath']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'productId': serializer.toJson<String>(productId),
+      'localPath': serializer.toJson<String>(localPath),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+    };
+  }
+
+  ProductImage copyWith(
+          {String? id,
+          String? productId,
+          String? localPath,
+          DateTime? createdAt}) =>
+      ProductImage(
+        id: id ?? this.id,
+        productId: productId ?? this.productId,
+        localPath: localPath ?? this.localPath,
+        createdAt: createdAt ?? this.createdAt,
+      );
+  ProductImage copyWithCompanion(ProductImagesCompanion data) {
+    return ProductImage(
+      id: data.id.present ? data.id.value : this.id,
+      productId: data.productId.present ? data.productId.value : this.productId,
+      localPath: data.localPath.present ? data.localPath.value : this.localPath,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ProductImage(')
+          ..write('id: $id, ')
+          ..write('productId: $productId, ')
+          ..write('localPath: $localPath, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(id, productId, localPath, createdAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is ProductImage &&
+          other.id == this.id &&
+          other.productId == this.productId &&
+          other.localPath == this.localPath &&
+          other.createdAt == this.createdAt);
+}
+
+class ProductImagesCompanion extends UpdateCompanion<ProductImage> {
+  final Value<String> id;
+  final Value<String> productId;
+  final Value<String> localPath;
+  final Value<DateTime> createdAt;
+  final Value<int> rowid;
+  const ProductImagesCompanion({
+    this.id = const Value.absent(),
+    this.productId = const Value.absent(),
+    this.localPath = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  ProductImagesCompanion.insert({
+    required String id,
+    required String productId,
+    required String localPath,
+    this.createdAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  })  : id = Value(id),
+        productId = Value(productId),
+        localPath = Value(localPath);
+  static Insertable<ProductImage> custom({
+    Expression<String>? id,
+    Expression<String>? productId,
+    Expression<String>? localPath,
+    Expression<DateTime>? createdAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (productId != null) 'product_id': productId,
+      if (localPath != null) 'local_path': localPath,
+      if (createdAt != null) 'created_at': createdAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  ProductImagesCompanion copyWith(
+      {Value<String>? id,
+      Value<String>? productId,
+      Value<String>? localPath,
+      Value<DateTime>? createdAt,
+      Value<int>? rowid}) {
+    return ProductImagesCompanion(
+      id: id ?? this.id,
+      productId: productId ?? this.productId,
+      localPath: localPath ?? this.localPath,
+      createdAt: createdAt ?? this.createdAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (productId.present) {
+      map['product_id'] = Variable<String>(productId.value);
+    }
+    if (localPath.present) {
+      map['local_path'] = Variable<String>(localPath.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ProductImagesCompanion(')
+          ..write('id: $id, ')
+          ..write('productId: $productId, ')
+          ..write('localPath: $localPath, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $ProductEmbeddingsTable extends ProductEmbeddings
+    with TableInfo<$ProductEmbeddingsTable, ProductEmbedding> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $ProductEmbeddingsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+      'id', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _productIdMeta =
+      const VerificationMeta('productId');
+  @override
+  late final GeneratedColumn<String> productId = GeneratedColumn<String>(
+      'product_id', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _imagePathMeta =
+      const VerificationMeta('imagePath');
+  @override
+  late final GeneratedColumn<String> imagePath = GeneratedColumn<String>(
+      'image_path', aliasedName, true,
+      type: DriftSqlType.string, requiredDuringInsert: false);
+  static const VerificationMeta _hashBytesMeta =
+      const VerificationMeta('hashBytes');
+  @override
+  late final GeneratedColumn<Uint8List> hashBytes = GeneratedColumn<Uint8List>(
+      'hash_bytes', aliasedName, false,
+      type: DriftSqlType.blob, requiredDuringInsert: true);
+  static const VerificationMeta _createdAtMeta =
+      const VerificationMeta('createdAt');
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+      'created_at', aliasedName, false,
+      type: DriftSqlType.dateTime,
+      requiredDuringInsert: false,
+      defaultValue: currentDateAndTime);
+  @override
+  List<GeneratedColumn> get $columns =>
+      [id, productId, imagePath, hashBytes, createdAt];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'product_embeddings';
+  @override
+  VerificationContext validateIntegrity(Insertable<ProductEmbedding> instance,
+      {bool isInserting = false}) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('product_id')) {
+      context.handle(_productIdMeta,
+          productId.isAcceptableOrUnknown(data['product_id']!, _productIdMeta));
+    } else if (isInserting) {
+      context.missing(_productIdMeta);
+    }
+    if (data.containsKey('image_path')) {
+      context.handle(_imagePathMeta,
+          imagePath.isAcceptableOrUnknown(data['image_path']!, _imagePathMeta));
+    }
+    if (data.containsKey('hash_bytes')) {
+      context.handle(_hashBytesMeta,
+          hashBytes.isAcceptableOrUnknown(data['hash_bytes']!, _hashBytesMeta));
+    } else if (isInserting) {
+      context.missing(_hashBytesMeta);
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(_createdAtMeta,
+          createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta));
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  ProductEmbedding map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return ProductEmbedding(
+      id: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}id'])!,
+      productId: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}product_id'])!,
+      imagePath: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}image_path']),
+      hashBytes: attachedDatabase.typeMapping
+          .read(DriftSqlType.blob, data['${effectivePrefix}hash_bytes'])!,
+      createdAt: attachedDatabase.typeMapping
+          .read(DriftSqlType.dateTime, data['${effectivePrefix}created_at'])!,
+    );
+  }
+
+  @override
+  $ProductEmbeddingsTable createAlias(String alias) {
+    return $ProductEmbeddingsTable(attachedDatabase, alias);
+  }
+}
+
+class ProductEmbedding extends DataClass
+    implements Insertable<ProductEmbedding> {
+  final String id;
+  final String productId;
+  final String? imagePath;
+  final Uint8List hashBytes;
+  final DateTime createdAt;
+  const ProductEmbedding(
+      {required this.id,
+      required this.productId,
+      this.imagePath,
+      required this.hashBytes,
+      required this.createdAt});
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['product_id'] = Variable<String>(productId);
+    if (!nullToAbsent || imagePath != null) {
+      map['image_path'] = Variable<String>(imagePath);
+    }
+    map['hash_bytes'] = Variable<Uint8List>(hashBytes);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    return map;
+  }
+
+  ProductEmbeddingsCompanion toCompanion(bool nullToAbsent) {
+    return ProductEmbeddingsCompanion(
+      id: Value(id),
+      productId: Value(productId),
+      imagePath: imagePath == null && nullToAbsent
+          ? const Value.absent()
+          : Value(imagePath),
+      hashBytes: Value(hashBytes),
+      createdAt: Value(createdAt),
+    );
+  }
+
+  factory ProductEmbedding.fromJson(Map<String, dynamic> json,
+      {ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return ProductEmbedding(
+      id: serializer.fromJson<String>(json['id']),
+      productId: serializer.fromJson<String>(json['productId']),
+      imagePath: serializer.fromJson<String?>(json['imagePath']),
+      hashBytes: serializer.fromJson<Uint8List>(json['hashBytes']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'productId': serializer.toJson<String>(productId),
+      'imagePath': serializer.toJson<String?>(imagePath),
+      'hashBytes': serializer.toJson<Uint8List>(hashBytes),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+    };
+  }
+
+  ProductEmbedding copyWith(
+          {String? id,
+          String? productId,
+          Value<String?> imagePath = const Value.absent(),
+          Uint8List? hashBytes,
+          DateTime? createdAt}) =>
+      ProductEmbedding(
+        id: id ?? this.id,
+        productId: productId ?? this.productId,
+        imagePath: imagePath.present ? imagePath.value : this.imagePath,
+        hashBytes: hashBytes ?? this.hashBytes,
+        createdAt: createdAt ?? this.createdAt,
+      );
+  ProductEmbedding copyWithCompanion(ProductEmbeddingsCompanion data) {
+    return ProductEmbedding(
+      id: data.id.present ? data.id.value : this.id,
+      productId: data.productId.present ? data.productId.value : this.productId,
+      imagePath: data.imagePath.present ? data.imagePath.value : this.imagePath,
+      hashBytes: data.hashBytes.present ? data.hashBytes.value : this.hashBytes,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ProductEmbedding(')
+          ..write('id: $id, ')
+          ..write('productId: $productId, ')
+          ..write('imagePath: $imagePath, ')
+          ..write('hashBytes: $hashBytes, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+      id, productId, imagePath, $driftBlobEquality.hash(hashBytes), createdAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is ProductEmbedding &&
+          other.id == this.id &&
+          other.productId == this.productId &&
+          other.imagePath == this.imagePath &&
+          $driftBlobEquality.equals(other.hashBytes, this.hashBytes) &&
+          other.createdAt == this.createdAt);
+}
+
+class ProductEmbeddingsCompanion extends UpdateCompanion<ProductEmbedding> {
+  final Value<String> id;
+  final Value<String> productId;
+  final Value<String?> imagePath;
+  final Value<Uint8List> hashBytes;
+  final Value<DateTime> createdAt;
+  final Value<int> rowid;
+  const ProductEmbeddingsCompanion({
+    this.id = const Value.absent(),
+    this.productId = const Value.absent(),
+    this.imagePath = const Value.absent(),
+    this.hashBytes = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  ProductEmbeddingsCompanion.insert({
+    required String id,
+    required String productId,
+    this.imagePath = const Value.absent(),
+    required Uint8List hashBytes,
+    this.createdAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  })  : id = Value(id),
+        productId = Value(productId),
+        hashBytes = Value(hashBytes);
+  static Insertable<ProductEmbedding> custom({
+    Expression<String>? id,
+    Expression<String>? productId,
+    Expression<String>? imagePath,
+    Expression<Uint8List>? hashBytes,
+    Expression<DateTime>? createdAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (productId != null) 'product_id': productId,
+      if (imagePath != null) 'image_path': imagePath,
+      if (hashBytes != null) 'hash_bytes': hashBytes,
+      if (createdAt != null) 'created_at': createdAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  ProductEmbeddingsCompanion copyWith(
+      {Value<String>? id,
+      Value<String>? productId,
+      Value<String?>? imagePath,
+      Value<Uint8List>? hashBytes,
+      Value<DateTime>? createdAt,
+      Value<int>? rowid}) {
+    return ProductEmbeddingsCompanion(
+      id: id ?? this.id,
+      productId: productId ?? this.productId,
+      imagePath: imagePath ?? this.imagePath,
+      hashBytes: hashBytes ?? this.hashBytes,
+      createdAt: createdAt ?? this.createdAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (productId.present) {
+      map['product_id'] = Variable<String>(productId.value);
+    }
+    if (imagePath.present) {
+      map['image_path'] = Variable<String>(imagePath.value);
+    }
+    if (hashBytes.present) {
+      map['hash_bytes'] = Variable<Uint8List>(hashBytes.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ProductEmbeddingsCompanion(')
+          ..write('id: $id, ')
+          ..write('productId: $productId, ')
+          ..write('imagePath: $imagePath, ')
+          ..write('hashBytes: $hashBytes, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $ProductDraftsTable extends ProductDrafts
+    with TableInfo<$ProductDraftsTable, ProductDraft> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $ProductDraftsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+      'id', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _sourceMeta = const VerificationMeta('source');
+  @override
+  late final GeneratedColumn<String> source = GeneratedColumn<String>(
+      'source', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _rawDataMeta =
+      const VerificationMeta('rawData');
+  @override
+  late final GeneratedColumn<String> rawData = GeneratedColumn<String>(
+      'raw_data', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _statusMeta = const VerificationMeta('status');
+  @override
+  late final GeneratedColumn<String> status = GeneratedColumn<String>(
+      'status', aliasedName, false,
+      type: DriftSqlType.string,
+      requiredDuringInsert: false,
+      defaultValue: const Constant('pending'));
+  static const VerificationMeta _createdAtMeta =
+      const VerificationMeta('createdAt');
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+      'created_at', aliasedName, false,
+      type: DriftSqlType.dateTime,
+      requiredDuringInsert: false,
+      defaultValue: currentDateAndTime);
+  @override
+  List<GeneratedColumn> get $columns =>
+      [id, source, rawData, status, createdAt];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'product_drafts';
+  @override
+  VerificationContext validateIntegrity(Insertable<ProductDraft> instance,
+      {bool isInserting = false}) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    if (data.containsKey('source')) {
+      context.handle(_sourceMeta,
+          source.isAcceptableOrUnknown(data['source']!, _sourceMeta));
+    } else if (isInserting) {
+      context.missing(_sourceMeta);
+    }
+    if (data.containsKey('raw_data')) {
+      context.handle(_rawDataMeta,
+          rawData.isAcceptableOrUnknown(data['raw_data']!, _rawDataMeta));
+    } else if (isInserting) {
+      context.missing(_rawDataMeta);
+    }
+    if (data.containsKey('status')) {
+      context.handle(_statusMeta,
+          status.isAcceptableOrUnknown(data['status']!, _statusMeta));
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(_createdAtMeta,
+          createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta));
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  ProductDraft map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return ProductDraft(
+      id: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}id'])!,
+      source: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}source'])!,
+      rawData: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}raw_data'])!,
+      status: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}status'])!,
+      createdAt: attachedDatabase.typeMapping
+          .read(DriftSqlType.dateTime, data['${effectivePrefix}created_at'])!,
+    );
+  }
+
+  @override
+  $ProductDraftsTable createAlias(String alias) {
+    return $ProductDraftsTable(attachedDatabase, alias);
+  }
+}
+
+class ProductDraft extends DataClass implements Insertable<ProductDraft> {
+  final String id;
+  final String source;
+  final String rawData;
+  final String status;
+  final DateTime createdAt;
+  const ProductDraft(
+      {required this.id,
+      required this.source,
+      required this.rawData,
+      required this.status,
+      required this.createdAt});
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    map['source'] = Variable<String>(source);
+    map['raw_data'] = Variable<String>(rawData);
+    map['status'] = Variable<String>(status);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    return map;
+  }
+
+  ProductDraftsCompanion toCompanion(bool nullToAbsent) {
+    return ProductDraftsCompanion(
+      id: Value(id),
+      source: Value(source),
+      rawData: Value(rawData),
+      status: Value(status),
+      createdAt: Value(createdAt),
+    );
+  }
+
+  factory ProductDraft.fromJson(Map<String, dynamic> json,
+      {ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return ProductDraft(
+      id: serializer.fromJson<String>(json['id']),
+      source: serializer.fromJson<String>(json['source']),
+      rawData: serializer.fromJson<String>(json['rawData']),
+      status: serializer.fromJson<String>(json['status']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'source': serializer.toJson<String>(source),
+      'rawData': serializer.toJson<String>(rawData),
+      'status': serializer.toJson<String>(status),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+    };
+  }
+
+  ProductDraft copyWith(
+          {String? id,
+          String? source,
+          String? rawData,
+          String? status,
+          DateTime? createdAt}) =>
+      ProductDraft(
+        id: id ?? this.id,
+        source: source ?? this.source,
+        rawData: rawData ?? this.rawData,
+        status: status ?? this.status,
+        createdAt: createdAt ?? this.createdAt,
+      );
+  ProductDraft copyWithCompanion(ProductDraftsCompanion data) {
+    return ProductDraft(
+      id: data.id.present ? data.id.value : this.id,
+      source: data.source.present ? data.source.value : this.source,
+      rawData: data.rawData.present ? data.rawData.value : this.rawData,
+      status: data.status.present ? data.status.value : this.status,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ProductDraft(')
+          ..write('id: $id, ')
+          ..write('source: $source, ')
+          ..write('rawData: $rawData, ')
+          ..write('status: $status, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(id, source, rawData, status, createdAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is ProductDraft &&
+          other.id == this.id &&
+          other.source == this.source &&
+          other.rawData == this.rawData &&
+          other.status == this.status &&
+          other.createdAt == this.createdAt);
+}
+
+class ProductDraftsCompanion extends UpdateCompanion<ProductDraft> {
+  final Value<String> id;
+  final Value<String> source;
+  final Value<String> rawData;
+  final Value<String> status;
+  final Value<DateTime> createdAt;
+  final Value<int> rowid;
+  const ProductDraftsCompanion({
+    this.id = const Value.absent(),
+    this.source = const Value.absent(),
+    this.rawData = const Value.absent(),
+    this.status = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  ProductDraftsCompanion.insert({
+    required String id,
+    required String source,
+    required String rawData,
+    this.status = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.rowid = const Value.absent(),
+  })  : id = Value(id),
+        source = Value(source),
+        rawData = Value(rawData);
+  static Insertable<ProductDraft> custom({
+    Expression<String>? id,
+    Expression<String>? source,
+    Expression<String>? rawData,
+    Expression<String>? status,
+    Expression<DateTime>? createdAt,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (source != null) 'source': source,
+      if (rawData != null) 'raw_data': rawData,
+      if (status != null) 'status': status,
+      if (createdAt != null) 'created_at': createdAt,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  ProductDraftsCompanion copyWith(
+      {Value<String>? id,
+      Value<String>? source,
+      Value<String>? rawData,
+      Value<String>? status,
+      Value<DateTime>? createdAt,
+      Value<int>? rowid}) {
+    return ProductDraftsCompanion(
+      id: id ?? this.id,
+      source: source ?? this.source,
+      rawData: rawData ?? this.rawData,
+      status: status ?? this.status,
+      createdAt: createdAt ?? this.createdAt,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (source.present) {
+      map['source'] = Variable<String>(source.value);
+    }
+    if (rawData.present) {
+      map['raw_data'] = Variable<String>(rawData.value);
+    }
+    if (status.present) {
+      map['status'] = Variable<String>(status.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ProductDraftsCompanion(')
+          ..write('id: $id, ')
+          ..write('source: $source, ')
+          ..write('rawData: $rawData, ')
+          ..write('status: $status, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -3204,12 +4090,26 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $BranchesTable branches = $BranchesTable(this);
   late final $CustomersTable customers = $CustomersTable(this);
   late final $PromotionsTable promotions = $PromotionsTable(this);
+  late final $ProductImagesTable productImages = $ProductImagesTable(this);
+  late final $ProductEmbeddingsTable productEmbeddings =
+      $ProductEmbeddingsTable(this);
+  late final $ProductDraftsTable productDrafts = $ProductDraftsTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
   @override
-  List<DatabaseSchemaEntity> get allSchemaEntities =>
-      [products, sales, saleItems, debts, branches, customers, promotions];
+  List<DatabaseSchemaEntity> get allSchemaEntities => [
+        products,
+        sales,
+        saleItems,
+        debts,
+        branches,
+        customers,
+        promotions,
+        productImages,
+        productEmbeddings,
+        productDrafts
+      ];
 }
 
 typedef $$ProductsTableCreateCompanionBuilder = ProductsCompanion Function({
@@ -4748,6 +5648,512 @@ typedef $$PromotionsTableProcessedTableManager = ProcessedTableManager<
     (Promotion, BaseReferences<_$AppDatabase, $PromotionsTable, Promotion>),
     Promotion,
     PrefetchHooks Function()>;
+typedef $$ProductImagesTableCreateCompanionBuilder = ProductImagesCompanion
+    Function({
+  required String id,
+  required String productId,
+  required String localPath,
+  Value<DateTime> createdAt,
+  Value<int> rowid,
+});
+typedef $$ProductImagesTableUpdateCompanionBuilder = ProductImagesCompanion
+    Function({
+  Value<String> id,
+  Value<String> productId,
+  Value<String> localPath,
+  Value<DateTime> createdAt,
+  Value<int> rowid,
+});
+
+class $$ProductImagesTableFilterComposer
+    extends Composer<_$AppDatabase, $ProductImagesTable> {
+  $$ProductImagesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+      column: $table.id, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get productId => $composableBuilder(
+      column: $table.productId, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get localPath => $composableBuilder(
+      column: $table.localPath, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+      column: $table.createdAt, builder: (column) => ColumnFilters(column));
+}
+
+class $$ProductImagesTableOrderingComposer
+    extends Composer<_$AppDatabase, $ProductImagesTable> {
+  $$ProductImagesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+      column: $table.id, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get productId => $composableBuilder(
+      column: $table.productId, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get localPath => $composableBuilder(
+      column: $table.localPath, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+      column: $table.createdAt, builder: (column) => ColumnOrderings(column));
+}
+
+class $$ProductImagesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $ProductImagesTable> {
+  $$ProductImagesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get productId =>
+      $composableBuilder(column: $table.productId, builder: (column) => column);
+
+  GeneratedColumn<String> get localPath =>
+      $composableBuilder(column: $table.localPath, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+}
+
+class $$ProductImagesTableTableManager extends RootTableManager<
+    _$AppDatabase,
+    $ProductImagesTable,
+    ProductImage,
+    $$ProductImagesTableFilterComposer,
+    $$ProductImagesTableOrderingComposer,
+    $$ProductImagesTableAnnotationComposer,
+    $$ProductImagesTableCreateCompanionBuilder,
+    $$ProductImagesTableUpdateCompanionBuilder,
+    (
+      ProductImage,
+      BaseReferences<_$AppDatabase, $ProductImagesTable, ProductImage>
+    ),
+    ProductImage,
+    PrefetchHooks Function()> {
+  $$ProductImagesTableTableManager(_$AppDatabase db, $ProductImagesTable table)
+      : super(TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$ProductImagesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$ProductImagesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$ProductImagesTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback: ({
+            Value<String> id = const Value.absent(),
+            Value<String> productId = const Value.absent(),
+            Value<String> localPath = const Value.absent(),
+            Value<DateTime> createdAt = const Value.absent(),
+            Value<int> rowid = const Value.absent(),
+          }) =>
+              ProductImagesCompanion(
+            id: id,
+            productId: productId,
+            localPath: localPath,
+            createdAt: createdAt,
+            rowid: rowid,
+          ),
+          createCompanionCallback: ({
+            required String id,
+            required String productId,
+            required String localPath,
+            Value<DateTime> createdAt = const Value.absent(),
+            Value<int> rowid = const Value.absent(),
+          }) =>
+              ProductImagesCompanion.insert(
+            id: id,
+            productId: productId,
+            localPath: localPath,
+            createdAt: createdAt,
+            rowid: rowid,
+          ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ));
+}
+
+typedef $$ProductImagesTableProcessedTableManager = ProcessedTableManager<
+    _$AppDatabase,
+    $ProductImagesTable,
+    ProductImage,
+    $$ProductImagesTableFilterComposer,
+    $$ProductImagesTableOrderingComposer,
+    $$ProductImagesTableAnnotationComposer,
+    $$ProductImagesTableCreateCompanionBuilder,
+    $$ProductImagesTableUpdateCompanionBuilder,
+    (
+      ProductImage,
+      BaseReferences<_$AppDatabase, $ProductImagesTable, ProductImage>
+    ),
+    ProductImage,
+    PrefetchHooks Function()>;
+typedef $$ProductEmbeddingsTableCreateCompanionBuilder
+    = ProductEmbeddingsCompanion Function({
+  required String id,
+  required String productId,
+  Value<String?> imagePath,
+  required Uint8List hashBytes,
+  Value<DateTime> createdAt,
+  Value<int> rowid,
+});
+typedef $$ProductEmbeddingsTableUpdateCompanionBuilder
+    = ProductEmbeddingsCompanion Function({
+  Value<String> id,
+  Value<String> productId,
+  Value<String?> imagePath,
+  Value<Uint8List> hashBytes,
+  Value<DateTime> createdAt,
+  Value<int> rowid,
+});
+
+class $$ProductEmbeddingsTableFilterComposer
+    extends Composer<_$AppDatabase, $ProductEmbeddingsTable> {
+  $$ProductEmbeddingsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+      column: $table.id, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get productId => $composableBuilder(
+      column: $table.productId, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get imagePath => $composableBuilder(
+      column: $table.imagePath, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<Uint8List> get hashBytes => $composableBuilder(
+      column: $table.hashBytes, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+      column: $table.createdAt, builder: (column) => ColumnFilters(column));
+}
+
+class $$ProductEmbeddingsTableOrderingComposer
+    extends Composer<_$AppDatabase, $ProductEmbeddingsTable> {
+  $$ProductEmbeddingsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+      column: $table.id, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get productId => $composableBuilder(
+      column: $table.productId, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get imagePath => $composableBuilder(
+      column: $table.imagePath, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<Uint8List> get hashBytes => $composableBuilder(
+      column: $table.hashBytes, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+      column: $table.createdAt, builder: (column) => ColumnOrderings(column));
+}
+
+class $$ProductEmbeddingsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $ProductEmbeddingsTable> {
+  $$ProductEmbeddingsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get productId =>
+      $composableBuilder(column: $table.productId, builder: (column) => column);
+
+  GeneratedColumn<String> get imagePath =>
+      $composableBuilder(column: $table.imagePath, builder: (column) => column);
+
+  GeneratedColumn<Uint8List> get hashBytes =>
+      $composableBuilder(column: $table.hashBytes, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+}
+
+class $$ProductEmbeddingsTableTableManager extends RootTableManager<
+    _$AppDatabase,
+    $ProductEmbeddingsTable,
+    ProductEmbedding,
+    $$ProductEmbeddingsTableFilterComposer,
+    $$ProductEmbeddingsTableOrderingComposer,
+    $$ProductEmbeddingsTableAnnotationComposer,
+    $$ProductEmbeddingsTableCreateCompanionBuilder,
+    $$ProductEmbeddingsTableUpdateCompanionBuilder,
+    (
+      ProductEmbedding,
+      BaseReferences<_$AppDatabase, $ProductEmbeddingsTable, ProductEmbedding>
+    ),
+    ProductEmbedding,
+    PrefetchHooks Function()> {
+  $$ProductEmbeddingsTableTableManager(
+      _$AppDatabase db, $ProductEmbeddingsTable table)
+      : super(TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$ProductEmbeddingsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$ProductEmbeddingsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$ProductEmbeddingsTableAnnotationComposer(
+                  $db: db, $table: table),
+          updateCompanionCallback: ({
+            Value<String> id = const Value.absent(),
+            Value<String> productId = const Value.absent(),
+            Value<String?> imagePath = const Value.absent(),
+            Value<Uint8List> hashBytes = const Value.absent(),
+            Value<DateTime> createdAt = const Value.absent(),
+            Value<int> rowid = const Value.absent(),
+          }) =>
+              ProductEmbeddingsCompanion(
+            id: id,
+            productId: productId,
+            imagePath: imagePath,
+            hashBytes: hashBytes,
+            createdAt: createdAt,
+            rowid: rowid,
+          ),
+          createCompanionCallback: ({
+            required String id,
+            required String productId,
+            Value<String?> imagePath = const Value.absent(),
+            required Uint8List hashBytes,
+            Value<DateTime> createdAt = const Value.absent(),
+            Value<int> rowid = const Value.absent(),
+          }) =>
+              ProductEmbeddingsCompanion.insert(
+            id: id,
+            productId: productId,
+            imagePath: imagePath,
+            hashBytes: hashBytes,
+            createdAt: createdAt,
+            rowid: rowid,
+          ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ));
+}
+
+typedef $$ProductEmbeddingsTableProcessedTableManager = ProcessedTableManager<
+    _$AppDatabase,
+    $ProductEmbeddingsTable,
+    ProductEmbedding,
+    $$ProductEmbeddingsTableFilterComposer,
+    $$ProductEmbeddingsTableOrderingComposer,
+    $$ProductEmbeddingsTableAnnotationComposer,
+    $$ProductEmbeddingsTableCreateCompanionBuilder,
+    $$ProductEmbeddingsTableUpdateCompanionBuilder,
+    (
+      ProductEmbedding,
+      BaseReferences<_$AppDatabase, $ProductEmbeddingsTable, ProductEmbedding>
+    ),
+    ProductEmbedding,
+    PrefetchHooks Function()>;
+typedef $$ProductDraftsTableCreateCompanionBuilder = ProductDraftsCompanion
+    Function({
+  required String id,
+  required String source,
+  required String rawData,
+  Value<String> status,
+  Value<DateTime> createdAt,
+  Value<int> rowid,
+});
+typedef $$ProductDraftsTableUpdateCompanionBuilder = ProductDraftsCompanion
+    Function({
+  Value<String> id,
+  Value<String> source,
+  Value<String> rawData,
+  Value<String> status,
+  Value<DateTime> createdAt,
+  Value<int> rowid,
+});
+
+class $$ProductDraftsTableFilterComposer
+    extends Composer<_$AppDatabase, $ProductDraftsTable> {
+  $$ProductDraftsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+      column: $table.id, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get source => $composableBuilder(
+      column: $table.source, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get rawData => $composableBuilder(
+      column: $table.rawData, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get status => $composableBuilder(
+      column: $table.status, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+      column: $table.createdAt, builder: (column) => ColumnFilters(column));
+}
+
+class $$ProductDraftsTableOrderingComposer
+    extends Composer<_$AppDatabase, $ProductDraftsTable> {
+  $$ProductDraftsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+      column: $table.id, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get source => $composableBuilder(
+      column: $table.source, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get rawData => $composableBuilder(
+      column: $table.rawData, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get status => $composableBuilder(
+      column: $table.status, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+      column: $table.createdAt, builder: (column) => ColumnOrderings(column));
+}
+
+class $$ProductDraftsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $ProductDraftsTable> {
+  $$ProductDraftsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get source =>
+      $composableBuilder(column: $table.source, builder: (column) => column);
+
+  GeneratedColumn<String> get rawData =>
+      $composableBuilder(column: $table.rawData, builder: (column) => column);
+
+  GeneratedColumn<String> get status =>
+      $composableBuilder(column: $table.status, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+}
+
+class $$ProductDraftsTableTableManager extends RootTableManager<
+    _$AppDatabase,
+    $ProductDraftsTable,
+    ProductDraft,
+    $$ProductDraftsTableFilterComposer,
+    $$ProductDraftsTableOrderingComposer,
+    $$ProductDraftsTableAnnotationComposer,
+    $$ProductDraftsTableCreateCompanionBuilder,
+    $$ProductDraftsTableUpdateCompanionBuilder,
+    (
+      ProductDraft,
+      BaseReferences<_$AppDatabase, $ProductDraftsTable, ProductDraft>
+    ),
+    ProductDraft,
+    PrefetchHooks Function()> {
+  $$ProductDraftsTableTableManager(_$AppDatabase db, $ProductDraftsTable table)
+      : super(TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$ProductDraftsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$ProductDraftsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$ProductDraftsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback: ({
+            Value<String> id = const Value.absent(),
+            Value<String> source = const Value.absent(),
+            Value<String> rawData = const Value.absent(),
+            Value<String> status = const Value.absent(),
+            Value<DateTime> createdAt = const Value.absent(),
+            Value<int> rowid = const Value.absent(),
+          }) =>
+              ProductDraftsCompanion(
+            id: id,
+            source: source,
+            rawData: rawData,
+            status: status,
+            createdAt: createdAt,
+            rowid: rowid,
+          ),
+          createCompanionCallback: ({
+            required String id,
+            required String source,
+            required String rawData,
+            Value<String> status = const Value.absent(),
+            Value<DateTime> createdAt = const Value.absent(),
+            Value<int> rowid = const Value.absent(),
+          }) =>
+              ProductDraftsCompanion.insert(
+            id: id,
+            source: source,
+            rawData: rawData,
+            status: status,
+            createdAt: createdAt,
+            rowid: rowid,
+          ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ));
+}
+
+typedef $$ProductDraftsTableProcessedTableManager = ProcessedTableManager<
+    _$AppDatabase,
+    $ProductDraftsTable,
+    ProductDraft,
+    $$ProductDraftsTableFilterComposer,
+    $$ProductDraftsTableOrderingComposer,
+    $$ProductDraftsTableAnnotationComposer,
+    $$ProductDraftsTableCreateCompanionBuilder,
+    $$ProductDraftsTableUpdateCompanionBuilder,
+    (
+      ProductDraft,
+      BaseReferences<_$AppDatabase, $ProductDraftsTable, ProductDraft>
+    ),
+    ProductDraft,
+    PrefetchHooks Function()>;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -4766,4 +6172,10 @@ class $AppDatabaseManager {
       $$CustomersTableTableManager(_db, _db.customers);
   $$PromotionsTableTableManager get promotions =>
       $$PromotionsTableTableManager(_db, _db.promotions);
+  $$ProductImagesTableTableManager get productImages =>
+      $$ProductImagesTableTableManager(_db, _db.productImages);
+  $$ProductEmbeddingsTableTableManager get productEmbeddings =>
+      $$ProductEmbeddingsTableTableManager(_db, _db.productEmbeddings);
+  $$ProductDraftsTableTableManager get productDrafts =>
+      $$ProductDraftsTableTableManager(_db, _db.productDrafts);
 }

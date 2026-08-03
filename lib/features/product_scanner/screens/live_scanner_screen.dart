@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
@@ -13,8 +12,7 @@ import '../../../shared/models/product_model.dart';
 import '../../../shared/repositories/product_repository.dart';
 import '../../../shared/repositories/repository_exceptions.dart';
 import '../../../shared/repositories/sale_repository.dart';
-import '../../../shared/services/product_fingerprint_service.dart';
-import '../../../shared/services/scan_lock_manager.dart';
+import '../../../shared/services/recognition_pipeline.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Public data class  (used by SalesScreen via router extra)
@@ -47,7 +45,7 @@ class ScanCartItem {
 // Enums
 // ─────────────────────────────────────────────────────────────────────────────
 
-enum _ScanStatus { idle, found, noMatch }
+enum _ScanStatus { idle, tracking, found, noMatch }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // LiveScannerScreen
@@ -76,9 +74,10 @@ class _LiveScannerScreenState extends State<LiveScannerScreen>
   // ── Services ──────────────────────────────────────────────────────────────
   final _repo = ProductRepository();
   final _saleRepo = SaleRepository();
-  final _fingerprints = ProductFingerprintService();
-  // Unlock after 10 absent ticks ≈ 1.3 s (4-frame skip × 10 / 30 fps)
-  final _locks = ScanLockManager(unlockAfterTicks: 10);
+
+  /// Phase 2 recognition pipeline — owns embedding, index, temporal
+  /// confirmation, and scan-lock management.
+  final _pipeline = RecognitionPipeline();
 
   // ── Data ──────────────────────────────────────────────────────────────────
   List<ProductModel> _products = [];
@@ -87,10 +86,6 @@ class _LiveScannerScreenState extends State<LiveScannerScreen>
   // ── Camera ────────────────────────────────────────────────────────────────
   CameraController? _cam;
   bool _camReady = false;
-  int _frameCount = 0;
-  bool _frameProcessing = false;
-  // Process every 4th frame  → ≈ 7.5 fps at 30 fps capture
-  static const int _frameSkip = 4;
 
   // ── UI state ──────────────────────────────────────────────────────────────
   bool _loading = true;
@@ -131,12 +126,39 @@ class _LiveScannerScreenState extends State<LiveScannerScreen>
     _pulseAnim = Tween<double>(begin: 0.55, end: 1.0).animate(
       CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut),
     );
+
+    // Wire up Phase 2 pipeline callbacks.
+    _pipeline.onConfirmed = (result) {
+      if (!mounted || !_scanActive) return;
+      final productId = result.productId;
+      if (productId == null) return;
+      try {
+        final product = _products.firstWhere((p) => p.id == productId);
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && _scanActive) _onProductFound(product);
+        });
+      } catch (_) {
+        // Product not in current list — index is stale; ignore this frame.
+      }
+    };
+
+    _pipeline.onUncertain = (result) {
+      if (!mounted || !_scanActive) return;
+      // Show a brief "locking on…" indicator without adding to cart.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _scanActive && _status != _ScanStatus.found) {
+          setState(() => _status = _ScanStatus.tracking);
+        }
+      });
+    };
+
     _loadProducts();
   }
 
   @override
   void dispose() {
     _statusTimer?.cancel();
+    _pipeline.pause();
     _cam?.dispose();
     _overlayCtrl.dispose();
     _pulseCtrl.dispose();
@@ -148,8 +170,8 @@ class _LiveScannerScreenState extends State<LiveScannerScreen>
   Future<void> _loadProducts() async {
     try {
       final products = await _repo.getAllProducts();
-      // Pre-compute fingerprints for all products that have images
-      await _fingerprints.preload(products);
+      // Build (or rebuild) the Phase 2 recognition index for all products.
+      await _pipeline.buildIndex(products);
       if (!mounted) return;
       setState(() {
         _products = products;
@@ -172,16 +194,17 @@ class _LiveScannerScreenState extends State<LiveScannerScreen>
         enableAudio: false,
       );
       await _cam!.initialize();
+      _pipeline.resume();
       await _cam!.startImageStream(_onFrame);
       if (!mounted) return;
       setState(() => _camReady = true);
     } catch (_) {
-      // Camera unavailable in this environment — graceful fallback
+      // Camera unavailable in this environment — graceful fallback.
     }
   }
 
   Future<void> _stopCamera() async {
-    _frameProcessing = false;
+    _pipeline.pause();
     if (_cam == null || !_cam!.value.isInitialized) return;
     try {
       await _cam!.stopImageStream();
@@ -190,45 +213,15 @@ class _LiveScannerScreenState extends State<LiveScannerScreen>
 
   // ─── Frame processing ─────────────────────────────────────────────────────
 
+  /// Delegates every camera frame to the Phase 2 [RecognitionPipeline].
+  ///
+  /// The pipeline handles frame skipping, reentrancy, hash computation,
+  /// local index search, temporal confirmation, and scan-lock management
+  /// internally. Results arrive via [_pipeline.onConfirmed] and
+  /// [_pipeline.onUncertain] callbacks wired in [initState].
   void _onFrame(CameraImage image) {
-    if (_frameProcessing || !_scanActive || !mounted) return;
-    if (++_frameCount % _frameSkip != 0) return;
-    _frameProcessing = true;
-    _matchFrame(image);
-  }
-
-  void _matchFrame(CameraImage image) {
-    try {
-      // 1. Compute 16×16 aHash for this frame (fast — Y-plane only)
-      final Uint8List? frameHash =
-          ProductFingerprintService.hashFromCameraImage(image);
-
-      final detectedIds = <String>{};
-      ProductModel? match;
-
-      if (frameHash != null) {
-        match = _fingerprints.findBestMatch(frameHash, _products);
-        if (match != null) detectedIds.add(match.id);
-      }
-
-      // 2. Advance lock manager: increment absent ticks for locked products
-      //    that weren't detected; auto-unlock after threshold.
-      _locks.tick(detectedIds);
-
-      // 3. If a match was found, check per-product lock state.
-      if (match != null) {
-        final shouldAdd = _locks.onDetected(match.id);
-        if (shouldAdd && mounted) {
-          final captured = match;
-          // Schedule setState on the main event loop (safe from frame callback)
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted && _scanActive) _onProductFound(captured);
-          });
-        }
-      }
-    } finally {
-      _frameProcessing = false;
-    }
+    if (!_scanActive || !mounted) return;
+    _pipeline.processFrame(image);
   }
 
   // ─── Product found ────────────────────────────────────────────────────────
@@ -239,10 +232,10 @@ class _LiveScannerScreenState extends State<LiveScannerScreen>
       _status = _ScanStatus.found;
       _lastFound = product;
     });
-    // Tactile + auditory feedback (no external package needed)
+    // Tactile + auditory feedback confirmed scan.
     HapticFeedback.mediumImpact();
     SystemSound.play(SystemSoundType.click);
-    // Animate the found-toast overlay
+    // Animate the found-toast overlay.
     _overlayCtrl.forward(from: 0);
     _statusTimer?.cancel();
     _statusTimer = Timer(const Duration(milliseconds: 1800), () {
@@ -282,13 +275,22 @@ class _LiveScannerScreenState extends State<LiveScannerScreen>
   }
 
   /// Return to scan mode from invoice mode and restart the camera.
-  void _onScanMore() {
+  ///
+  /// Reloads the product list and rebuilds the recognition index so any
+  /// products added during this session are immediately recognisable.
+  Future<void> _onScanMore() async {
     setState(() {
       _scanActive = true;
       _camReady = false;
+      _status = _ScanStatus.idle;
     });
     _cam?.dispose();
     _cam = null;
+    // Rebuild index in case products were added while in invoice mode.
+    final products = await _repo.getAllProducts();
+    await _pipeline.buildIndex(products);
+    if (!mounted) return;
+    setState(() => _products = products);
     _startCamera();
   }
 
@@ -540,6 +542,7 @@ class _LiveScannerScreenState extends State<LiveScannerScreen>
                   final color = switch (_status) {
                     _ScanStatus.found => AppColors.success,
                     _ScanStatus.noMatch => AppColors.error,
+                    _ScanStatus.tracking => AppColors.primary,
                     _ScanStatus.idle => AppColors.primary,
                   };
                   final opacity =
@@ -1341,6 +1344,11 @@ class _StatusChip extends StatelessWidget {
           tr.aimCameraAtProduct,
           Colors.white.withValues(alpha: 0.85),
           Icons.center_focus_strong_rounded,
+        ),
+      _ScanStatus.tracking => (
+          tr.lockingOn,
+          AppColors.primary.withValues(alpha: 0.90),
+          Icons.adjust_rounded,
         ),
       _ScanStatus.found => (
           tr.productFoundLabel,

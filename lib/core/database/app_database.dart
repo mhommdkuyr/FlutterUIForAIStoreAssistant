@@ -8,6 +8,49 @@ import 'package:path_provider/path_provider.dart';
 
 part 'app_database.g.dart';
 
+// ── Phase 2 tables ────────────────────────────────────────────────────────────
+
+/// Stores additional reference images for a product (Phase 2 multi-image).
+class ProductImages extends Table {
+  TextColumn get id => text()();
+  TextColumn get productId => text()();
+  TextColumn get localPath => text()();
+  DateTimeColumn get createdAt =>
+      dateTime().withDefault(currentDateAndTime)();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
+/// Caches precomputed visual hash embeddings for product images (Phase 2).
+class ProductEmbeddings extends Table {
+  TextColumn get id => text()();
+  TextColumn get productId => text()();
+  TextColumn get imagePath => text().nullable()();
+  BlobColumn get hashBytes => blob()();
+  DateTimeColumn get createdAt =>
+      dateTime().withDefault(currentDateAndTime)();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
+/// Holds partially-completed product entries awaiting review (Phase 2 drafts).
+class ProductDrafts extends Table {
+  TextColumn get id => text()();
+  TextColumn get source => text()(); // barcode / image / invoice / manual
+  TextColumn get rawData => text()(); // JSON snapshot of form state
+  TextColumn get status =>
+      text().withDefault(const Constant('pending'))(); // pending/reviewed/saved/rejected
+  DateTimeColumn get createdAt =>
+      dateTime().withDefault(currentDateAndTime)();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 class Products extends Table {
   TextColumn get id => text()();
   TextColumn get name => text()();
@@ -96,7 +139,10 @@ class Promotions extends Table {
   Debts,
   Branches,
   Customers,
-  Promotions
+  Promotions,
+  ProductImages,
+  ProductEmbeddings,
+  ProductDrafts,
 ])
 class AppDatabase extends _$AppDatabase {
   AppDatabase([QueryExecutor? executor]) : super(executor ?? _openConnection());
@@ -123,7 +169,7 @@ class AppDatabase extends _$AppDatabase {
   }
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -133,6 +179,12 @@ class AppDatabase extends _$AppDatabase {
         onUpgrade: (m, from, to) async {
           if (from < 2) {
             await m.createTable(promotions);
+          }
+          if (from < 3) {
+            // Phase 2: multi-image support, embeddings cache, draft queue.
+            await m.createTable(productImages);
+            await m.createTable(productEmbeddings);
+            await m.createTable(productDrafts);
           }
         },
       );

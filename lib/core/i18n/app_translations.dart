@@ -272,6 +272,7 @@ class AppTranslations {
   String get recognizing => _s('recognizing');
   String get productFoundLabel => _s('productFoundLabel');
   String get productNotRecognized => _s('productNotRecognized');
+  String get lockingOn => _s('lockingOn');
   String get aimAgain => _s('aimAgain');
   String get doneScanning => _s('doneScanning');
   String get scannedItemsCount => _s('scannedItemsCount');
@@ -662,6 +663,7 @@ const _en = <String, String>{
   'recognizing': 'Recognizing…',
   'productFoundLabel': 'Product Found',
   'productNotRecognized': 'Product not recognized',
+  'lockingOn': 'Locking on…',
   'aimAgain': 'Aim camera again',
   'doneScanning': 'Done',
   'scannedItemsCount': 'scanned',
@@ -1029,6 +1031,7 @@ const _ar = <String, String>{
   'recognizing': 'جارٍ التعرف…',
   'productFoundLabel': 'تم العثور على المنتج',
   'productNotRecognized': 'لم يتم التعرف على المنتج',
+  'lockingOn': 'جارٍ التثبيت…',
   'aimAgain': 'وجّه الكاميرا مرة أخرى',
   'doneScanning': 'تم',
   'scannedItemsCount': 'ممسوح',
