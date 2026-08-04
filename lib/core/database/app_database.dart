@@ -22,12 +22,21 @@ class ProductImages extends Table {
   Set<Column> get primaryKey => {id};
 }
 
-/// Caches precomputed visual hash embeddings for product images (Phase 2).
+/// Caches precomputed visual embeddings for product images (Phase 2).
+///
+/// Keyed on (productId + imagePath + modelVersion) so embeddings are
+/// automatically invalidated when the ML model is upgraded.
 class ProductEmbeddings extends Table {
   TextColumn get id => text()();
   TextColumn get productId => text()();
   TextColumn get imagePath => text().nullable()();
   BlobColumn get hashBytes => blob()();
+
+  /// Identifier of the model/algorithm that produced [hashBytes].
+  /// e.g. "mv3_small_224_float32_v1" or "ahash_16x16".
+  TextColumn get modelVersion =>
+      text().withDefault(const Constant(''))();
+
   DateTimeColumn get createdAt =>
       dateTime().withDefault(currentDateAndTime)();
 
@@ -169,7 +178,7 @@ class AppDatabase extends _$AppDatabase {
   }
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 4;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -185,6 +194,12 @@ class AppDatabase extends _$AppDatabase {
             await m.createTable(productImages);
             await m.createTable(productEmbeddings);
             await m.createTable(productDrafts);
+          }
+          if (from < 4) {
+            // Phase 2 revision: add modelVersion to embeddings cache table.
+            // Drop-and-recreate is safe since this is a pure cache.
+            await m.drop(productEmbeddings);
+            await m.createTable(productEmbeddings);
           }
         },
       );

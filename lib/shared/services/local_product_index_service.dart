@@ -1,19 +1,21 @@
 import 'dart:typed_data';
 
 import '../models/product_model.dart';
+import 'embedding_persistence_service.dart';
 import 'product_recognition_result.dart';
 import 'visual_embedding_service.dart';
 
 /// In-memory product recognition index.
 ///
-/// Preloads visual embeddings (hashes) for all enrolled products at session
-/// start, then answers [search] queries in microseconds — pure in-memory
-/// Hamming distance comparisons, no disk I/O per frame.
+/// Preloads visual embeddings for all enrolled products at session start and
+/// answers [search] queries in microseconds — pure in-memory similarity
+/// comparisons, no disk I/O per frame.
 ///
-/// **Multiple reference images per product** are supported: supply additional
-/// file paths via [extraImagePaths] in [buildIndex] or [refreshProduct].
-/// All embeddings for a product are stored together; the best-matching one
-/// wins in a search.
+/// **Multiple reference images per product** are supported.
+///
+/// **Embedding persistence** (optional): pass an [EmbeddingPersistenceService]
+/// to cache embeddings in SQLite. The first open computes and persists them;
+/// subsequent opens skip recomputation entirely.
 ///
 /// Lifecycle:
 /// 1. Call [buildIndex] once when the live-scan session starts.
@@ -21,32 +23,33 @@ import 'visual_embedding_service.dart';
 /// 3. Call [removeProduct] after a deletion.
 /// 4. Call [search] per camera frame.
 class LocalProductIndexService {
-  LocalProductIndexService({VisualEmbeddingService? embeddingService})
-      : _embedding = embeddingService ?? AHashEmbeddingService();
+  LocalProductIndexService({
+    VisualEmbeddingService? embeddingService,
+    EmbeddingPersistenceService? persistenceService,
+  })  : _embedding = embeddingService ?? AHashEmbeddingService(),
+        _persistence = persistenceService;
 
   final VisualEmbeddingService _embedding;
+  final EmbeddingPersistenceService? _persistence;
 
   /// productId → list of precomputed embeddings (one per reference image).
   final Map<String, List<Uint8List>> _index = {};
 
   bool _built = false;
 
-  /// Whether [buildIndex] has completed at least once.
   bool get isBuilt => _built;
-
-  /// Number of products currently in the index.
   int get indexedProductCount => _index.length;
 
   // ── Index management ───────────────────────────────────────────────────────
 
-  /// Build (or rebuild) the index from [products].
+  /// Build (or rebuild) the full recognition index.
   ///
   /// For each product, embeds:
-  ///   1. The primary [ProductModel.imageUrl] (if present).
-  ///   2. Any additional paths supplied in [extraImagePaths].
+  ///   1. The primary [ProductModel.imageUrl].
+  ///   2. Any additional paths in [extraImagePaths].
   ///
-  /// Typically called once at session start. Disk-bound; run on a non-UI
-  /// isolate or in an async gap before displaying the camera.
+  /// When [_persistence] is set, previously cached embeddings are loaded from
+  /// the DB first; only missing ones are recomputed and then saved.
   Future<void> buildIndex(
     List<ProductModel> products, {
     Map<String, List<String>> extraImagePaths = const {},
@@ -54,53 +57,108 @@ class LocalProductIndexService {
     _index.clear();
     _built = false;
 
+    // Load cached embeddings for the current model version (if available).
+    final cached = await _persistence?.loadAll(_embedding.modelVersion) ?? {};
+
     for (final product in products) {
-      await _embedAndStore(product.id,
-          _pathsFor(product, extraImagePaths[product.id] ?? const []));
+      final paths =
+          _pathsFor(product, extraImagePaths[product.id] ?? const []);
+      final hashes = <Uint8List>[];
+
+      for (final path in paths) {
+        // 1. Try the DB cache first.
+        final fromCache = cached[product.id]?[path];
+        if (fromCache != null) {
+          hashes.add(fromCache);
+          continue;
+        }
+
+        // 2. Compute from disk.
+        final computed = await _embedding.embedFile(path);
+        if (computed != null) {
+          hashes.add(computed);
+          // 3. Persist so future builds are instant.
+          await _persistence?.save(
+            productId: product.id,
+            imagePath: path,
+            embedding: computed,
+            modelVersion: _embedding.modelVersion,
+          );
+        }
+      }
+
+      if (hashes.isNotEmpty) {
+        _index[product.id] = hashes;
+      }
     }
+
     _built = true;
   }
 
-  /// Refresh a single product's entry (call after create / update / new image).
-  ///
-  /// Safe to call while the scanner is running — updates atomically.
+  /// Refresh a single product entry (call after create / update / new image).
   Future<void> refreshProduct(
     ProductModel product, {
     List<String> extraPaths = const [],
-  }) =>
-      _embedAndStore(product.id, _pathsFor(product, extraPaths));
+  }) async {
+    final paths = _pathsFor(product, extraPaths);
+    final hashes = <Uint8List>[];
+
+    for (final path in paths) {
+      final h = await _embedding.embedFile(path);
+      if (h != null) {
+        hashes.add(h);
+        await _persistence?.save(
+          productId: product.id,
+          imagePath: path,
+          embedding: h,
+          modelVersion: _embedding.modelVersion,
+        );
+      }
+    }
+
+    if (hashes.isNotEmpty) {
+      _index[product.id] = hashes;
+    } else {
+      _index.remove(product.id);
+    }
+  }
 
   /// Remove a product from the index (call after deletion).
-  void removeProduct(String productId) => _index.remove(productId);
+  void removeProduct(String productId) {
+    _index.remove(productId);
+    _persistence?.deleteProduct(productId);
+  }
 
   // ── Search ─────────────────────────────────────────────────────────────────
 
-  /// Return the top-K best-matching products for [queryHash].
+  /// Return the top-K best-matching products for [queryEmbedding].
+  ///
+  /// Similarity is computed via [VisualEmbeddingService.similarity], which
+  /// dispatches to cosine distance (TFLite) or normalised Hamming (aHash)
+  /// depending on the active backend.
   ///
   /// Only candidates with [confidence] ≥ [minConfidence] are included.
-  /// Results are sorted by confidence descending.
   List<RecognitionCandidate> search(
-    Uint8List queryHash, {
+    Uint8List queryEmbedding, {
     int topK = 3,
-    double minConfidence = 0.70,
+    double? minConfidence,
   }) {
+    final threshold = minConfidence ?? _embedding.recommendedMinConfidence;
     if (_index.isEmpty) return const [];
 
     final results = <RecognitionCandidate>[];
 
     for (final entry in _index.entries) {
-      int bestDist = 256;
-      for (final storedHash in entry.value) {
-        final d = _hammingDistance(queryHash, storedHash);
-        if (d < bestDist) bestDist = d;
+      var bestSim = 0.0;
+      for (final stored in entry.value) {
+        final s = _embedding.similarity(queryEmbedding, stored);
+        if (s > bestSim) bestSim = s;
       }
-      // Confidence = 1 − normalised Hamming distance (0.0–1.0)
-      final confidence = 1.0 - (bestDist / 256.0);
-      if (confidence >= minConfidence) {
+      if (bestSim >= threshold) {
         results.add(RecognitionCandidate(
           productId: entry.key,
-          confidence: confidence,
-          hammingDistance: bestDist,
+          confidence: bestSim,
+          hammingDistance: 0, // N/A for cosine; kept for API compat
         ));
       }
     }
@@ -111,40 +169,11 @@ class LocalProductIndexService {
 
   // ── Internal ────────────────────────────────────────────────────────────────
 
-  static List<String> _pathsFor(
-    ProductModel product,
-    List<String> extras,
-  ) {
+  static List<String> _pathsFor(ProductModel product, List<String> extras) {
     final paths = <String>[];
     final url = product.imageUrl;
     if (url != null && url.isNotEmpty) paths.add(url);
     paths.addAll(extras);
     return paths;
-  }
-
-  Future<void> _embedAndStore(String productId, List<String> paths) async {
-    final hashes = <Uint8List>[];
-    for (final path in paths) {
-      final h = await _embedding.embedFile(path);
-      if (h != null) hashes.add(h);
-    }
-    if (hashes.isNotEmpty) {
-      _index[productId] = hashes;
-    } else {
-      _index.remove(productId);
-    }
-  }
-
-  static int _hammingDistance(Uint8List a, Uint8List b) {
-    if (a.length != b.length) return 256;
-    var dist = 0;
-    for (var i = 0; i < a.length; i++) {
-      var x = a[i] ^ b[i];
-      while (x != 0) {
-        dist += x & 1;
-        x >>= 1;
-      }
-    }
-    return dist;
   }
 }

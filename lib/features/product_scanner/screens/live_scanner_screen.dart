@@ -12,6 +12,7 @@ import '../../../shared/models/product_model.dart';
 import '../../../shared/repositories/product_repository.dart';
 import '../../../shared/repositories/repository_exceptions.dart';
 import '../../../shared/repositories/sale_repository.dart';
+import '../../../shared/services/product_image_service.dart';
 import '../../../shared/services/recognition_pipeline.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -74,6 +75,7 @@ class _LiveScannerScreenState extends State<LiveScannerScreen>
   // ── Services ──────────────────────────────────────────────────────────────
   final _repo = ProductRepository();
   final _saleRepo = SaleRepository();
+  final _imageService = ProductImageService();
 
   /// Phase 2 recognition pipeline — owns embedding, index, temporal
   /// confirmation, and scan-lock management.
@@ -169,9 +171,19 @@ class _LiveScannerScreenState extends State<LiveScannerScreen>
 
   Future<void> _loadProducts() async {
     try {
+      // 1. Initialise the ML embedding model (TFLite → aHash fallback).
+      //    Safe to call multiple times; no-op after first successful init.
+      await _pipeline.initialize();
+
       final products = await _repo.getAllProducts();
-      // Build (or rebuild) the Phase 2 recognition index for all products.
-      await _pipeline.buildIndex(products);
+
+      // 2. Collect extra reference image paths from the ProductImages table
+      //    so that multi-angle reference images are included in the index.
+      final extraPaths = await _collectExtraImagePaths(products);
+
+      // 3. Build (or rebuild) the recognition index.
+      await _pipeline.buildIndex(products, extraImagePaths: extraPaths);
+
       if (!mounted) return;
       setState(() {
         _products = products;
@@ -180,6 +192,18 @@ class _LiveScannerScreenState extends State<LiveScannerScreen>
     } on RepositoryException catch (_) {
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  /// Query [ProductImageService] for additional reference images for each
+  /// product and return a map suitable for [RecognitionPipeline.buildIndex].
+  Future<Map<String, List<String>>> _collectExtraImagePaths(
+      List<ProductModel> products) async {
+    final result = <String, List<String>>{};
+    for (final p in products) {
+      final extras = await _imageService.getAdditionalImagePaths(p.id);
+      if (extras.isNotEmpty) result[p.id] = extras;
+    }
+    return result;
   }
 
   // ─── Camera ───────────────────────────────────────────────────────────────
@@ -288,7 +312,8 @@ class _LiveScannerScreenState extends State<LiveScannerScreen>
     _cam = null;
     // Rebuild index in case products were added while in invoice mode.
     final products = await _repo.getAllProducts();
-    await _pipeline.buildIndex(products);
+    final extraPaths = await _collectExtraImagePaths(products);
+    await _pipeline.buildIndex(products, extraImagePaths: extraPaths);
     if (!mounted) return;
     setState(() => _products = products);
     _startCamera();
