@@ -3493,6 +3493,14 @@ class $ProductEmbeddingsTable extends ProductEmbeddings
   late final GeneratedColumn<Uint8List> hashBytes = GeneratedColumn<Uint8List>(
       'hash_bytes', aliasedName, false,
       type: DriftSqlType.blob, requiredDuringInsert: true);
+  static const VerificationMeta _modelVersionMeta =
+      const VerificationMeta('modelVersion');
+  @override
+  late final GeneratedColumn<String> modelVersion = GeneratedColumn<String>(
+      'model_version', aliasedName, false,
+      type: DriftSqlType.string,
+      requiredDuringInsert: false,
+      defaultValue: const Constant(''));
   static const VerificationMeta _createdAtMeta =
       const VerificationMeta('createdAt');
   @override
@@ -3503,7 +3511,7 @@ class $ProductEmbeddingsTable extends ProductEmbeddings
       defaultValue: currentDateAndTime);
   @override
   List<GeneratedColumn> get $columns =>
-      [id, productId, imagePath, hashBytes, createdAt];
+      [id, productId, imagePath, hashBytes, modelVersion, createdAt];
   @override
   String get aliasedName => _alias ?? actualTableName;
   @override
@@ -3535,6 +3543,12 @@ class $ProductEmbeddingsTable extends ProductEmbeddings
     } else if (isInserting) {
       context.missing(_hashBytesMeta);
     }
+    if (data.containsKey('model_version')) {
+      context.handle(
+          _modelVersionMeta,
+          modelVersion.isAcceptableOrUnknown(
+              data['model_version']!, _modelVersionMeta));
+    }
     if (data.containsKey('created_at')) {
       context.handle(_createdAtMeta,
           createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta));
@@ -3556,6 +3570,8 @@ class $ProductEmbeddingsTable extends ProductEmbeddings
           .read(DriftSqlType.string, data['${effectivePrefix}image_path']),
       hashBytes: attachedDatabase.typeMapping
           .read(DriftSqlType.blob, data['${effectivePrefix}hash_bytes'])!,
+      modelVersion: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}model_version'])!,
       createdAt: attachedDatabase.typeMapping
           .read(DriftSqlType.dateTime, data['${effectivePrefix}created_at'])!,
     );
@@ -3573,12 +3589,17 @@ class ProductEmbedding extends DataClass
   final String productId;
   final String? imagePath;
   final Uint8List hashBytes;
+
+  /// Identifier of the model/algorithm that produced [hashBytes].
+  /// e.g. "mv3_small_224_float32_v1" or "ahash_16x16".
+  final String modelVersion;
   final DateTime createdAt;
   const ProductEmbedding(
       {required this.id,
       required this.productId,
       this.imagePath,
       required this.hashBytes,
+      required this.modelVersion,
       required this.createdAt});
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -3589,6 +3610,7 @@ class ProductEmbedding extends DataClass
       map['image_path'] = Variable<String>(imagePath);
     }
     map['hash_bytes'] = Variable<Uint8List>(hashBytes);
+    map['model_version'] = Variable<String>(modelVersion);
     map['created_at'] = Variable<DateTime>(createdAt);
     return map;
   }
@@ -3601,6 +3623,7 @@ class ProductEmbedding extends DataClass
           ? const Value.absent()
           : Value(imagePath),
       hashBytes: Value(hashBytes),
+      modelVersion: Value(modelVersion),
       createdAt: Value(createdAt),
     );
   }
@@ -3613,6 +3636,7 @@ class ProductEmbedding extends DataClass
       productId: serializer.fromJson<String>(json['productId']),
       imagePath: serializer.fromJson<String?>(json['imagePath']),
       hashBytes: serializer.fromJson<Uint8List>(json['hashBytes']),
+      modelVersion: serializer.fromJson<String>(json['modelVersion']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
     );
   }
@@ -3624,6 +3648,7 @@ class ProductEmbedding extends DataClass
       'productId': serializer.toJson<String>(productId),
       'imagePath': serializer.toJson<String?>(imagePath),
       'hashBytes': serializer.toJson<Uint8List>(hashBytes),
+      'modelVersion': serializer.toJson<String>(modelVersion),
       'createdAt': serializer.toJson<DateTime>(createdAt),
     };
   }
@@ -3633,12 +3658,14 @@ class ProductEmbedding extends DataClass
           String? productId,
           Value<String?> imagePath = const Value.absent(),
           Uint8List? hashBytes,
+          String? modelVersion,
           DateTime? createdAt}) =>
       ProductEmbedding(
         id: id ?? this.id,
         productId: productId ?? this.productId,
         imagePath: imagePath.present ? imagePath.value : this.imagePath,
         hashBytes: hashBytes ?? this.hashBytes,
+        modelVersion: modelVersion ?? this.modelVersion,
         createdAt: createdAt ?? this.createdAt,
       );
   ProductEmbedding copyWithCompanion(ProductEmbeddingsCompanion data) {
@@ -3647,6 +3674,9 @@ class ProductEmbedding extends DataClass
       productId: data.productId.present ? data.productId.value : this.productId,
       imagePath: data.imagePath.present ? data.imagePath.value : this.imagePath,
       hashBytes: data.hashBytes.present ? data.hashBytes.value : this.hashBytes,
+      modelVersion: data.modelVersion.present
+          ? data.modelVersion.value
+          : this.modelVersion,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
     );
   }
@@ -3658,14 +3688,15 @@ class ProductEmbedding extends DataClass
           ..write('productId: $productId, ')
           ..write('imagePath: $imagePath, ')
           ..write('hashBytes: $hashBytes, ')
+          ..write('modelVersion: $modelVersion, ')
           ..write('createdAt: $createdAt')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode => Object.hash(
-      id, productId, imagePath, $driftBlobEquality.hash(hashBytes), createdAt);
+  int get hashCode => Object.hash(id, productId, imagePath,
+      $driftBlobEquality.hash(hashBytes), modelVersion, createdAt);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -3674,6 +3705,7 @@ class ProductEmbedding extends DataClass
           other.productId == this.productId &&
           other.imagePath == this.imagePath &&
           $driftBlobEquality.equals(other.hashBytes, this.hashBytes) &&
+          other.modelVersion == this.modelVersion &&
           other.createdAt == this.createdAt);
 }
 
@@ -3682,6 +3714,7 @@ class ProductEmbeddingsCompanion extends UpdateCompanion<ProductEmbedding> {
   final Value<String> productId;
   final Value<String?> imagePath;
   final Value<Uint8List> hashBytes;
+  final Value<String> modelVersion;
   final Value<DateTime> createdAt;
   final Value<int> rowid;
   const ProductEmbeddingsCompanion({
@@ -3689,6 +3722,7 @@ class ProductEmbeddingsCompanion extends UpdateCompanion<ProductEmbedding> {
     this.productId = const Value.absent(),
     this.imagePath = const Value.absent(),
     this.hashBytes = const Value.absent(),
+    this.modelVersion = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.rowid = const Value.absent(),
   });
@@ -3697,6 +3731,7 @@ class ProductEmbeddingsCompanion extends UpdateCompanion<ProductEmbedding> {
     required String productId,
     this.imagePath = const Value.absent(),
     required Uint8List hashBytes,
+    this.modelVersion = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.rowid = const Value.absent(),
   })  : id = Value(id),
@@ -3707,6 +3742,7 @@ class ProductEmbeddingsCompanion extends UpdateCompanion<ProductEmbedding> {
     Expression<String>? productId,
     Expression<String>? imagePath,
     Expression<Uint8List>? hashBytes,
+    Expression<String>? modelVersion,
     Expression<DateTime>? createdAt,
     Expression<int>? rowid,
   }) {
@@ -3715,6 +3751,7 @@ class ProductEmbeddingsCompanion extends UpdateCompanion<ProductEmbedding> {
       if (productId != null) 'product_id': productId,
       if (imagePath != null) 'image_path': imagePath,
       if (hashBytes != null) 'hash_bytes': hashBytes,
+      if (modelVersion != null) 'model_version': modelVersion,
       if (createdAt != null) 'created_at': createdAt,
       if (rowid != null) 'rowid': rowid,
     });
@@ -3725,6 +3762,7 @@ class ProductEmbeddingsCompanion extends UpdateCompanion<ProductEmbedding> {
       Value<String>? productId,
       Value<String?>? imagePath,
       Value<Uint8List>? hashBytes,
+      Value<String>? modelVersion,
       Value<DateTime>? createdAt,
       Value<int>? rowid}) {
     return ProductEmbeddingsCompanion(
@@ -3732,6 +3770,7 @@ class ProductEmbeddingsCompanion extends UpdateCompanion<ProductEmbedding> {
       productId: productId ?? this.productId,
       imagePath: imagePath ?? this.imagePath,
       hashBytes: hashBytes ?? this.hashBytes,
+      modelVersion: modelVersion ?? this.modelVersion,
       createdAt: createdAt ?? this.createdAt,
       rowid: rowid ?? this.rowid,
     );
@@ -3752,6 +3791,9 @@ class ProductEmbeddingsCompanion extends UpdateCompanion<ProductEmbedding> {
     if (hashBytes.present) {
       map['hash_bytes'] = Variable<Uint8List>(hashBytes.value);
     }
+    if (modelVersion.present) {
+      map['model_version'] = Variable<String>(modelVersion.value);
+    }
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
     }
@@ -3768,6 +3810,7 @@ class ProductEmbeddingsCompanion extends UpdateCompanion<ProductEmbedding> {
           ..write('productId: $productId, ')
           ..write('imagePath: $imagePath, ')
           ..write('hashBytes: $hashBytes, ')
+          ..write('modelVersion: $modelVersion, ')
           ..write('createdAt: $createdAt, ')
           ..write('rowid: $rowid')
           ..write(')'))
@@ -5812,6 +5855,7 @@ typedef $$ProductEmbeddingsTableCreateCompanionBuilder
   required String productId,
   Value<String?> imagePath,
   required Uint8List hashBytes,
+  Value<String> modelVersion,
   Value<DateTime> createdAt,
   Value<int> rowid,
 });
@@ -5821,6 +5865,7 @@ typedef $$ProductEmbeddingsTableUpdateCompanionBuilder
   Value<String> productId,
   Value<String?> imagePath,
   Value<Uint8List> hashBytes,
+  Value<String> modelVersion,
   Value<DateTime> createdAt,
   Value<int> rowid,
 });
@@ -5845,6 +5890,9 @@ class $$ProductEmbeddingsTableFilterComposer
 
   ColumnFilters<Uint8List> get hashBytes => $composableBuilder(
       column: $table.hashBytes, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get modelVersion => $composableBuilder(
+      column: $table.modelVersion, builder: (column) => ColumnFilters(column));
 
   ColumnFilters<DateTime> get createdAt => $composableBuilder(
       column: $table.createdAt, builder: (column) => ColumnFilters(column));
@@ -5871,6 +5919,10 @@ class $$ProductEmbeddingsTableOrderingComposer
   ColumnOrderings<Uint8List> get hashBytes => $composableBuilder(
       column: $table.hashBytes, builder: (column) => ColumnOrderings(column));
 
+  ColumnOrderings<String> get modelVersion => $composableBuilder(
+      column: $table.modelVersion,
+      builder: (column) => ColumnOrderings(column));
+
   ColumnOrderings<DateTime> get createdAt => $composableBuilder(
       column: $table.createdAt, builder: (column) => ColumnOrderings(column));
 }
@@ -5895,6 +5947,9 @@ class $$ProductEmbeddingsTableAnnotationComposer
 
   GeneratedColumn<Uint8List> get hashBytes =>
       $composableBuilder(column: $table.hashBytes, builder: (column) => column);
+
+  GeneratedColumn<String> get modelVersion => $composableBuilder(
+      column: $table.modelVersion, builder: (column) => column);
 
   GeneratedColumn<DateTime> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
@@ -5932,6 +5987,7 @@ class $$ProductEmbeddingsTableTableManager extends RootTableManager<
             Value<String> productId = const Value.absent(),
             Value<String?> imagePath = const Value.absent(),
             Value<Uint8List> hashBytes = const Value.absent(),
+            Value<String> modelVersion = const Value.absent(),
             Value<DateTime> createdAt = const Value.absent(),
             Value<int> rowid = const Value.absent(),
           }) =>
@@ -5940,6 +5996,7 @@ class $$ProductEmbeddingsTableTableManager extends RootTableManager<
             productId: productId,
             imagePath: imagePath,
             hashBytes: hashBytes,
+            modelVersion: modelVersion,
             createdAt: createdAt,
             rowid: rowid,
           ),
@@ -5948,6 +6005,7 @@ class $$ProductEmbeddingsTableTableManager extends RootTableManager<
             required String productId,
             Value<String?> imagePath = const Value.absent(),
             required Uint8List hashBytes,
+            Value<String> modelVersion = const Value.absent(),
             Value<DateTime> createdAt = const Value.absent(),
             Value<int> rowid = const Value.absent(),
           }) =>
@@ -5956,6 +6014,7 @@ class $$ProductEmbeddingsTableTableManager extends RootTableManager<
             productId: productId,
             imagePath: imagePath,
             hashBytes: hashBytes,
+            modelVersion: modelVersion,
             createdAt: createdAt,
             rowid: rowid,
           ),
