@@ -24,6 +24,7 @@ android {
     defaultConfig {
         applicationId = "com.aistoreassistant.ai_store_assistant"
         minSdk = 26
+        // tflite_flutter requires Android API 26+
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
