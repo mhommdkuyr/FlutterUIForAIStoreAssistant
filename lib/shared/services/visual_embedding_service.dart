@@ -3,6 +3,7 @@ import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:camera/camera.dart';
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter/services.dart';
 import 'package:image/image.dart' as img;
 import 'package:tflite_flutter/tflite_flutter.dart';
@@ -295,9 +296,18 @@ class VisualEmbeddingProvider implements VisualEmbeddingService {
     try {
       await _tflite.initialize();
       _tfliteReady = true;
-    } catch (_) {
+      debugPrint(
+        '[Embedding] TFLite backend active '
+        '(${TfLiteEmbeddingService.assetPath})',
+      );
+    } catch (e) {
       // TFLite unavailable (e.g. unit-test host without native libs) → aHash.
+      // Recognition still works, but accuracy is lower (perceptual hash only).
       _tfliteReady = false;
+      debugPrint(
+        '[Embedding] TFLite init failed ($e). '
+        'Falling back to aHash — recognition is active but accuracy is reduced.',
+      );
     }
   }
 

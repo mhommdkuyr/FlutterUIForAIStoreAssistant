@@ -42,11 +42,24 @@ class ProductImageService {
   /// Images are stored under `product_images/{productId}/`.
   /// Returns the absolute local path of the saved file.
   Future<String> saveAdditionalImage(String productId, XFile file) async {
+    return saveAdditionalImageFromPath(productId, file.path);
+  }
+
+  /// Copy the file at [sourcePath] into `product_images/{productId}/` as an
+  /// additional reference image.
+  ///
+  /// Use this when you already have a local path (e.g. during [_saveProduct]
+  /// when moving a temp file into the permanent product directory).
+  /// Returns the absolute path of the copy inside the product's directory.
+  Future<String> saveAdditionalImageFromPath(
+    String productId,
+    String sourcePath,
+  ) async {
     final dir = await _productDir(productId);
-    final ext = path.extension(file.path);
+    final ext = path.extension(sourcePath);
     final fileName = '${DateTime.now().millisecondsSinceEpoch}$ext';
     final targetPath = path.join(dir.path, fileName);
-    final source = File(file.path);
+    final source = File(sourcePath);
     if (await source.exists()) {
       await source.copy(targetPath);
     }

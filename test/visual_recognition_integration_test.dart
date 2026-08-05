@@ -343,7 +343,59 @@ void main() {
     });
   });
 
-  // ── 6. EmbeddingPersistenceService — no DB, test interface contract ────────
+  // ── 6. Enrollment path — product + images → index → search ───────────────
+
+  group('Enrollment path: product + primary + 2 reference images → index → search', () {
+    test('enrolled product is found by querying any of its reference images', () async {
+      const productId = 'sku-test-001';
+      const primaryPath = 'images/$productId/primary.jpg';
+      const refPath1 = 'images/$productId/ref1.jpg';
+      const refPath2 = 'images/$productId/ref2.jpg';
+
+      final primaryHash = _makeEmbedding(10);
+      final ref1Hash = _makeEmbedding(20);
+      final ref2Hash = _makeEmbedding(30);
+
+      final stub = _StubEmbeddingService({
+        primaryPath: primaryHash,
+        refPath1: ref1Hash,
+        refPath2: ref2Hash,
+      });
+
+      final index = LocalProductIndexService(embeddingService: stub);
+
+      // Simulate getProductImages(productId) returning [refPath1, refPath2]
+      final extraPaths = {
+        productId: [refPath1, refPath2]
+      };
+
+      final product = _product(productId, imageUrl: primaryPath);
+      await index.buildIndex([product], extraImagePaths: extraPaths);
+
+      // Index must be built and contain exactly 1 product entry
+      expect(index.isBuilt, isTrue);
+      expect(index.indexedProductCount, 1);
+
+      // A query identical to ref1 must return the correct product
+      final resultsRef1 = index.search(ref1Hash, minConfidence: 0.90);
+      expect(resultsRef1, isNotEmpty, reason: 'ref1 query must match enrolled product');
+      expect(resultsRef1.first.productId, productId);
+      expect(resultsRef1.first.confidence, greaterThan(0.90));
+
+      // A query identical to ref2 must also return the correct product
+      final resultsRef2 = index.search(ref2Hash, minConfidence: 0.90);
+      expect(resultsRef2, isNotEmpty, reason: 'ref2 query must match enrolled product');
+      expect(resultsRef2.first.productId, productId);
+
+      // An unrelated hash must NOT be matched
+      final unrelatedHash = _makeEmbedding(200);
+      final noMatch = index.search(unrelatedHash, minConfidence: 0.90);
+      expect(noMatch.isEmpty, isTrue,
+          reason: 'unrelated query must not produce a false positive');
+    });
+  });
+
+  // ── 7. EmbeddingPersistenceService — no DB, test interface contract ────────
 
   group('EmbeddingPersistenceService — interface contract', () {
     // We test the service's public contract via the index service;

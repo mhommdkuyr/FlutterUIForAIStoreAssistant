@@ -187,6 +187,8 @@ class _LiveScannerScreenState extends State<LiveScannerScreen>
         _products = products;
         _loading = false;
       });
+      // Auto-start the camera image stream as soon as the index is ready.
+      _startCamera();
     } on RepositoryException catch (_) {
       if (mounted) setState(() => _loading = false);
     }

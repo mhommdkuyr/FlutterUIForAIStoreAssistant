@@ -207,9 +207,13 @@ class _EnrollmentScreenState extends State<EnrollmentScreen> {
         imageUrl: _primaryImagePath,
       );
 
-      // Persist all reference images into ProductImages table
-      for (final path in _refImagePaths) {
-        await _repo.addProductImage(product.id, path);
+      // Copy each reference image from its temporary/shared location into
+      // the permanent product directory (product_images/{productId}/),
+      // then persist the permanent path into the ProductImages table.
+      for (final tmpPath in _refImagePaths) {
+        final permanentPath =
+            await _imageService.saveAdditionalImageFromPath(product.id, tmpPath);
+        await _repo.addProductImage(product.id, permanentPath);
       }
 
       if (!mounted) return;

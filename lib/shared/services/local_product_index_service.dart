@@ -1,5 +1,7 @@
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart' show debugPrint;
+
 import '../models/product_model.dart';
 import 'embedding_persistence_service.dart';
 import 'product_recognition_result.dart';
@@ -83,6 +85,11 @@ class LocalProductIndexService {
             imagePath: path,
             embedding: computed,
             modelVersion: _embedding.modelVersion,
+          );
+        } else {
+          debugPrint(
+            '[Index] embedFile returned null for "$path" '
+            '(product ${product.id}) — file missing or unreadable; skipping.',
           );
         }
       }
