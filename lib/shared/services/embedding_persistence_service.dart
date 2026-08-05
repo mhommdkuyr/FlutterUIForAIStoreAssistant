@@ -36,7 +36,7 @@ class EmbeddingPersistenceService {
     for (final row in rows) {
       result
           .putIfAbsent(row.productId, () => {})
-          .putIfAbsent(row.imagePath ?? '', () => row.hashBytes as Uint8List);
+          .putIfAbsent(row.imagePath ?? '', () => Uint8List.fromList(row.hashBytes));
     }
     return result;
   }

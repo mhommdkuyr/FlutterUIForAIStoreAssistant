@@ -70,8 +70,7 @@ class RecognitionPipeline {
     EmbeddingPersistenceService? persistenceService,
   }) : _config = config ?? const RecognitionConfig() {
     // Use the provider (TFLite + aHash fallback) unless explicitly overridden.
-    _embedding =
-        (embeddingService ?? VisualEmbeddingProvider()) as VisualEmbeddingService;
+    _embedding = embeddingService ?? VisualEmbeddingProvider();
     _persistence = persistenceService;
     _index = indexService ??
         LocalProductIndexService(
@@ -108,13 +107,13 @@ class RecognitionPipeline {
   /// Safe to call multiple times (no-op after first successful init).
   Future<void> initialize() async {
     if (_embedding is VisualEmbeddingProvider) {
-      await (_embedding as VisualEmbeddingProvider).initialize();
+      await (_embedding as VisualEmbeddingProvider).initialize(); // ignore: unnecessary_cast
     }
   }
 
   bool get isTfLiteActive =>
       _embedding is VisualEmbeddingProvider &&
-      (_embedding as VisualEmbeddingProvider).isTfLiteActive;
+      (_embedding as VisualEmbeddingProvider).isTfLiteActive; // ignore: unnecessary_cast
 
   // ── Index management ───────────────────────────────────────────────────────
 

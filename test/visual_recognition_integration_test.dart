@@ -16,7 +16,6 @@ import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ai_store_assistant/shared/models/product_model.dart';
-import 'package:ai_store_assistant/shared/services/embedding_persistence_service.dart';
 import 'package:ai_store_assistant/shared/services/local_product_index_service.dart';
 import 'package:ai_store_assistant/shared/services/product_recognition_result.dart';
 import 'package:ai_store_assistant/shared/services/scan_lock_manager.dart';

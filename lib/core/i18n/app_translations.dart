@@ -266,6 +266,37 @@ class AppTranslations {
   String get saveProduct => _s('saveProduct');
   String get quickScanCashier => _s('quickScanCashier');
 
+  // ── Enrollment ────────────────────────────────────────────────────────────
+  String get enrollProduct => _s('enrollProduct');
+  String get addViaPhoto => _s('addViaPhoto');
+  String get addFromInvoice => _s('addFromInvoice');
+  String get addViaPhotoDesc => _s('addViaPhotoDesc');
+  String get addFromInvoiceDesc => _s('addFromInvoiceDesc');
+  String get tapToCapture => _s('tapToCapture');
+  String get replacePhoto => _s('replacePhoto');
+  String get primaryPhoto => _s('primaryPhoto');
+  String get addReferenceImage => _s('addReferenceImage');
+  String get referenceImages => _s('referenceImages');
+  String get orPickFromGallery => _s('orPickFromGallery');
+  String get searchWebImages => _s('searchWebImages');
+  String get searchingImages => _s('searchingImages');
+  String get noWebImages => _s('noWebImages');
+  String get tapImageToAdd => _s('tapImageToAdd');
+  String get webImageAdded => _s('webImageAdded');
+  String get productDetails => _s('productDetails');
+  String get enrollmentComplete => _s('enrollmentComplete');
+  String get captureInvoice => _s('captureInvoice');
+  String get replaceInvoicePhoto => _s('replaceInvoicePhoto');
+  String get invoiceLineItems => _s('invoiceLineItems');
+  String get addLineItem => _s('addLineItem');
+  String get lineItemNameHint => _s('lineItemNameHint');
+  String get saveAllDrafts => _s('saveAllDrafts');
+  String get draftsSaved => _s('draftsSaved');
+  String get noLineItems => _s('noLineItems');
+  String get removeImage => _s('removeImage');
+  String get imagesCount => _s('imagesCount');
+  String get enrollmentHint => _s('enrollmentHint');
+
   // ── Live Scanner ──────────────────────────────────────────────────────────
   String get liveScanTitle => _s('liveScanTitle');
   String get aimCameraAtProduct => _s('aimCameraAtProduct');
@@ -658,6 +689,35 @@ const _en = <String, String>{
   'openCamera': 'Open Camera',
   'saveProduct': 'Save Product',
   'quickScanCashier': 'Quick Scan',
+  'enrollProduct': 'Enroll Product',
+  'addViaPhoto': 'Take Product Photo',
+  'addFromInvoice': 'Scan Invoice',
+  'addViaPhotoDesc': 'Capture the product and add multiple reference images for better recognition.',
+  'addFromInvoiceDesc': 'Photograph an invoice to extract and save products as drafts.',
+  'tapToCapture': 'Tap to capture product image',
+  'replacePhoto': 'Replace photo',
+  'primaryPhoto': 'Primary Photo',
+  'addReferenceImage': 'Add reference image',
+  'referenceImages': 'Reference images',
+  'orPickFromGallery': 'or pick from gallery',
+  'searchWebImages': 'Search web for images',
+  'searchingImages': 'Searching online…',
+  'noWebImages': 'No images found online',
+  'tapImageToAdd': 'Tap an image to add as reference',
+  'webImageAdded': 'Web image added as reference',
+  'productDetails': 'Product Details',
+  'enrollmentComplete': 'Product enrolled successfully!',
+  'captureInvoice': 'Tap to capture invoice photo',
+  'replaceInvoicePhoto': 'Replace invoice photo',
+  'invoiceLineItems': 'Invoice Line Items',
+  'addLineItem': 'Add Line Item',
+  'lineItemNameHint': 'Product name on invoice',
+  'saveAllDrafts': 'Save All as Products',
+  'draftsSaved': 'Products saved!',
+  'noLineItems': 'Add line items from the invoice below',
+  'removeImage': 'Remove',
+  'imagesCount': 'images',
+  'enrollmentHint': 'More reference images = better recognition',
   'liveScanTitle': 'Live Scan',
   'aimCameraAtProduct': 'Aim camera at product',
   'recognizing': 'Recognizing…',
@@ -1026,6 +1086,35 @@ const _ar = <String, String>{
   'openCamera': 'فتح الكاميرا',
   'saveProduct': 'حفظ المنتج',
   'quickScanCashier': 'مسح سريع',
+  'enrollProduct': 'تسجيل منتج',
+  'addViaPhoto': 'التقاط صورة منتج',
+  'addFromInvoice': 'مسح فاتورة',
+  'addViaPhotoDesc': 'صوّر المنتج وأضف صوراً مرجعية متعددة لتحسين التعرف.',
+  'addFromInvoiceDesc': 'صوّر الفاتورة لاستخراج المنتجات وحفظها.',
+  'tapToCapture': 'اضغط لالتقاط صورة المنتج',
+  'replacePhoto': 'استبدال الصورة',
+  'primaryPhoto': 'الصورة الأساسية',
+  'addReferenceImage': 'إضافة صورة مرجعية',
+  'referenceImages': 'الصور المرجعية',
+  'orPickFromGallery': 'أو اختر من المعرض',
+  'searchWebImages': 'البحث عن صور على الويب',
+  'searchingImages': 'جارٍ البحث…',
+  'noWebImages': 'لم يتم العثور على صور',
+  'tapImageToAdd': 'اضغط على صورة لإضافتها كمرجع',
+  'webImageAdded': 'تمت إضافة الصورة كمرجع',
+  'productDetails': 'تفاصيل المنتج',
+  'enrollmentComplete': 'تم تسجيل المنتج بنجاح!',
+  'captureInvoice': 'اضغط لالتقاط صورة الفاتورة',
+  'replaceInvoicePhoto': 'استبدال صورة الفاتورة',
+  'invoiceLineItems': 'بنود الفاتورة',
+  'addLineItem': 'إضافة بند',
+  'lineItemNameHint': 'اسم المنتج في الفاتورة',
+  'saveAllDrafts': 'حفظ جميع المنتجات',
+  'draftsSaved': 'تم حفظ المنتجات!',
+  'noLineItems': 'أضف بنود الفاتورة بالأسفل',
+  'removeImage': 'إزالة',
+  'imagesCount': 'صور',
+  'enrollmentHint': 'صور مرجعية أكثر = تعرف أفضل',
   'liveScanTitle': 'المسح الحي',
   'aimCameraAtProduct': 'وجّه الكاميرا نحو المنتج',
   'recognizing': 'جارٍ التعرف…',

@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -371,16 +373,7 @@ class _ProductRow extends StatelessWidget {
       padding: const EdgeInsets.all(12),
       child: Row(
         children: [
-          Container(
-            width: AppConstants.thumbnailSize,
-            height: AppConstants.thumbnailSize,
-            decoration: BoxDecoration(
-              color: AppColors.primary.withOpacity(0.08),
-              borderRadius: BorderRadius.circular(AppConstants.radiusSmall),
-            ),
-            child: const Icon(Icons.inventory_2_outlined,
-                color: AppColors.primary),
-          ),
+          _ProductThumbnail(imageUrl: product.imageUrl),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -427,6 +420,40 @@ class _ProductRow extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _ProductThumbnail extends StatelessWidget {
+  const _ProductThumbnail({this.imageUrl});
+  final String? imageUrl;
+
+  @override
+  Widget build(BuildContext context) {
+    final hasImage = imageUrl != null &&
+        imageUrl!.isNotEmpty &&
+        File(imageUrl!).existsSync();
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(AppConstants.radiusSmall),
+      child: SizedBox(
+        width: AppConstants.thumbnailSize,
+        height: AppConstants.thumbnailSize,
+        child: hasImage
+            ? Image.file(
+                File(imageUrl!),
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => _placeholder(),
+              )
+            : _placeholder(),
+      ),
+    );
+  }
+
+  Widget _placeholder() {
+    return Container(
+      color: AppColors.primary.withValues(alpha: 0.08),
+      child: const Icon(Icons.inventory_2_outlined, color: AppColors.primary),
     );
   }
 }

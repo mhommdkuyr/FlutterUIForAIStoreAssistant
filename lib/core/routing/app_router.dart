@@ -9,7 +9,7 @@ import '../../features/merchant/screens/merchant_dashboard_screen.dart';
 import '../../features/worker/screens/worker_dashboard_screen.dart';
 import '../../features/customer/screens/customer_search_screen.dart';
 import '../../features/inventory/screens/inventory_screen.dart';
-import '../../features/product_scanner/screens/scanner_screen.dart';
+import '../../features/product_scanner/screens/enrollment_screen.dart';
 import '../../features/product_scanner/screens/live_scanner_screen.dart';
 import '../../features/sales/screens/invoice_screen.dart';
 import '../../features/sales/screens/sales_screen.dart';
@@ -81,7 +81,7 @@ class AppRouter {
       ),
       GoRoute(
         path: '/scanner',
-        builder: (context, state) => const ScannerScreen(),
+        builder: (context, state) => const EnrollmentScreen(),
       ),
       GoRoute(
         path: '/scanner/live',

@@ -225,6 +225,48 @@ class ProductRepository {
     }
   }
 
+  // ── ProductImages helpers ─────────────────────────────────────────────────
+
+  /// Saves a reference image path to the [ProductImages] table.
+  Future<void> addProductImage(String productId, String localPath) async {
+    try {
+      await _db.into(_db.productImages).insert(
+            ProductImagesCompanion(
+              id: Value(const Uuid().v4()),
+              productId: Value(productId),
+              localPath: Value(localPath),
+            ),
+          );
+    } catch (e) {
+      throw DatabaseException('Unable to save product image: $e');
+    }
+  }
+
+  /// Returns all reference image paths stored for [productId].
+  Future<List<String>> getProductImages(String productId) async {
+    try {
+      final rows = await (_db.select(_db.productImages)
+            ..where((t) => t.productId.equals(productId))
+            ..orderBy([(t) => OrderingTerm.asc(t.createdAt)]))
+          .get();
+      return rows.map((r) => r.localPath).toList();
+    } catch (e) {
+      throw DatabaseException('Unable to load product images: $e');
+    }
+  }
+
+  /// Removes a single reference image row by [localPath].
+  Future<void> removeProductImage(String productId, String localPath) async {
+    try {
+      await (_db.delete(_db.productImages)
+            ..where((t) =>
+                t.productId.equals(productId) & t.localPath.equals(localPath)))
+          .go();
+    } catch (e) {
+      throw DatabaseException('Unable to remove product image: $e');
+    }
+  }
+
   ProductModel _mapRow(Product row) {
     return ProductModel(
       id: row.id,
