@@ -23,7 +23,7 @@ android {
 
     defaultConfig {
         applicationId = "com.aistoreassistant.ai_store_assistant"
-        minSdk = 21
+        minSdk = 26
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
