@@ -12,7 +12,6 @@ import '../../../shared/models/product_model.dart';
 import '../../../shared/repositories/product_repository.dart';
 import '../../../shared/repositories/repository_exceptions.dart';
 import '../../../shared/repositories/sale_repository.dart';
-import '../../../shared/services/product_image_service.dart';
 import '../../../shared/services/recognition_pipeline.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -75,7 +74,6 @@ class _LiveScannerScreenState extends State<LiveScannerScreen>
   // ── Services ──────────────────────────────────────────────────────────────
   final _repo = ProductRepository();
   final _saleRepo = SaleRepository();
-  final _imageService = ProductImageService();
 
   /// Phase 2 recognition pipeline — owns embedding, index, temporal
   /// confirmation, and scan-lock management.
@@ -194,13 +192,18 @@ class _LiveScannerScreenState extends State<LiveScannerScreen>
     }
   }
 
-  /// Query [ProductImageService] for additional reference images for each
-  /// product and return a map suitable for [RecognitionPipeline.buildIndex].
+  /// Query the [ProductImages] DB table for additional reference image paths
+  /// for each product and return a map suitable for
+  /// [RecognitionPipeline.buildIndex].
+  ///
+  /// Using the DB table (written by [EnrollmentScreen]) rather than the
+  /// filesystem scan in [ProductImageService] ensures that every image
+  /// saved during enrollment is visible to the recognition index.
   Future<Map<String, List<String>>> _collectExtraImagePaths(
       List<ProductModel> products) async {
     final result = <String, List<String>>{};
     for (final p in products) {
-      final extras = await _imageService.getAdditionalImagePaths(p.id);
+      final extras = await _repo.getProductImages(p.id);
       if (extras.isNotEmpty) result[p.id] = extras;
     }
     return result;

@@ -33,6 +33,12 @@ class _StubEmbedding implements VisualEmbeddingService {
   int get embeddingLength => 32;
 
   @override
+  String get modelVersion => 'stub_v1';
+
+  @override
+  double get recommendedMinConfidence => 0.5;
+
+  @override
   Future<Uint8List?> embedFile(String path) async {
     // The path IS the productId in the stub.
     return _hashes[path];
