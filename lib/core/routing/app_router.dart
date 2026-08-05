@@ -81,7 +81,10 @@ class AppRouter {
       ),
       GoRoute(
         path: '/scanner',
-        builder: (context, state) => const ScannerScreen(),
+        builder: (context, state) {
+          final extra = state.extra as Map<String, dynamic>?;
+          return ScannerScreen(initialBarcode: extra?['barcode'] as String?);
+        },
       ),
       GoRoute(
         path: '/scanner/live',

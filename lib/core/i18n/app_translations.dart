@@ -219,6 +219,9 @@ class AppTranslations {
   String get suggestion3 => _s('suggestion3');
   String get suggestion4 => _s('suggestion4');
   String get suggestion5 => _s('suggestion5');
+  String get navCommandsHint => _s('navCommandsHint');
+  String get addThisProduct => _s('addThisProduct');
+  String get barcodeNotInInventory => _s('barcodeNotInInventory');
 
   // ── Inventory / Products ──────────────────────────────────────────────────
   String get addProduct => _s('addProduct');
@@ -616,6 +619,9 @@ const _en = <String, String>{
   'suggestion3': 'Which products are slow selling?',
   'suggestion4': 'What was my best day this week?',
   'suggestion5': "Show me today's sales summary",
+  'navCommandsHint': 'Or navigate with a command:',
+  'addThisProduct': 'Add as new product',
+  'barcodeNotInInventory': 'Barcode not in inventory',
   'addProduct': 'Add Product',
   'productName': 'Product Name',
   'quantity': 'Quantity',
@@ -984,6 +990,9 @@ const _ar = <String, String>{
   'suggestion3': 'ما المنتجات بطيئة البيع؟',
   'suggestion4': 'ما كان أفضل يوم هذا الأسبوع؟',
   'suggestion5': 'اعرض ملخص مبيعات اليوم',
+  'navCommandsHint': 'أو انتقل بأمر:',
+  'addThisProduct': 'أضف كمنتج جديد',
+  'barcodeNotInInventory': 'الباركود غير موجود في المخزون',
   'addProduct': 'إضافة منتج',
   'productName': 'اسم المنتج',
   'quantity': 'الكمية',

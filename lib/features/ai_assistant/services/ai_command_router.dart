@@ -27,74 +27,51 @@ class AiCommandRouter {
     final m = message.trim().toLowerCase();
 
     // Live barcode scanner (cashier scan)
-    if (_has(m, [
-      'افتح المسح',
-      'ابدأ المسح',
-      'مسح الباركود',
-      'open scanner',
-      'start scan',
-      'barcode scan',
-      'live scan'
-    ])) {
+    if (_has(m, ['افتح المسح', 'ابدأ المسح', 'مسح الباركود', 'مسح حي',
+        'المسح السريع', 'open scanner', 'start scan', 'barcode scan', 'live scan'])) {
+      return '/scanner/live';
+    }
+    // Add to invoice / cart scan (checked before add-product)
+    if (_has(m, ['أضف إلى الفاتورة', 'اضف الى الفاتورة', 'أضف للفاتورة',
+        'اضف للفاتورة', 'أضف منتج للفاتورة',
+        'add to invoice', 'add to cart', 'scan for sale'])) {
       return '/scanner/live';
     }
     // Add product
-    if (_has(m, [
-      'أضف منتج',
-      'إضافة منتج',
-      'منتج جديد',
-      'add product',
-      'new product',
-      'إضافة سلعة'
-    ])) {
+    if (_has(m, ['أضف منتج', 'إضافة منتج', 'منتج جديد', 'إضافة سلعة',
+        'add product', 'new product'])) {
       return '/scanner';
     }
     // Debts
-    if (_has(m, [
-      'أنشئ دين',
-      'إضافة دين',
-      'ديون',
-      'add debt',
-      'new debt',
-      'debts',
-      'debt'
-    ])) {
+    if (_has(m, ['افتح الديون', 'اضف دين', 'أضف دين', 'ديون العملاء',
+        'أنشئ دين', 'إضافة دين', 'ديون',
+        'add debt', 'new debt', 'debts', 'debt'])) {
       return '/debts';
     }
     // Sales / invoice
-    if (_has(m, [
-      'اذهب إلى المبيعات',
-      'فاتورة',
-      'مبيعات',
-      'أنشئ فاتورة',
-      'sales',
-      'invoice',
-      'checkout',
-      'new sale'
-    ])) {
+    if (_has(m, ['افتح المبيعات', 'أنشئ فاتورة', 'فاتورة جديدة',
+        'اذهب إلى المبيعات', 'فاتورة', 'مبيعات',
+        'sales', 'invoice', 'checkout', 'new sale'])) {
       return '/sales';
     }
     // Analytics
-    if (_has(m, [
-      'افتح التحليل',
-      'تحليل',
-      'تقارير',
-      'analytics',
-      'reports',
-      'statistics'
-    ])) {
+    if (_has(m, ['افتح التحليل', 'افتح التقارير', 'عرض التقارير',
+        'تحليل', 'تقارير', 'analytics', 'reports', 'statistics'])) {
       return '/analytics';
     }
-    // Inventory
-    if (_has(m, ['المخزون', 'المنتجات', 'inventory', 'products', 'stock'])) {
+    // Inventory / search product
+    if (_has(m, ['افتح المخزون', 'افتح المنتجات', 'ابحث عن منتج',
+        'ابحث عن', 'بحث منتج', 'عرض المنتجات',
+        'المخزون', 'المنتجات', 'inventory', 'products', 'stock'])) {
       return '/inventory';
     }
     // Marketing
-    if (_has(m, ['تسويق', 'عروض', 'marketing', 'promotions'])) {
+    if (_has(m, ['افتح التسويق', 'افتح العروض', 'تسويق', 'عروض',
+        'marketing', 'promotions'])) {
       return '/marketing';
     }
     // Branches
-    if (_has(m, ['فروع', 'الفروع', 'branches'])) {
+    if (_has(m, ['افتح الفروع', 'فروع', 'الفروع', 'branches'])) {
       return '/branches';
     }
     return null;

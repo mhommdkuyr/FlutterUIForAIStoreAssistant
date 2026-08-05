@@ -383,6 +383,27 @@ class _WelcomePane extends StatelessWidget {
                 _SuggestionChip(text: tr.suggestion1, onTap: onSuggestion),
                 _SuggestionChip(text: tr.suggestion2, onTap: onSuggestion),
                 _SuggestionChip(text: tr.suggestion3, onTap: onSuggestion),
+                _SuggestionChip(text: tr.suggestion4, onTap: onSuggestion),
+                _SuggestionChip(text: tr.suggestion5, onTap: onSuggestion),
+                const SizedBox(height: 10),
+                Text(
+                  tr.navCommandsHint,
+                  style: textTheme.labelMedium?.copyWith(
+                      color: Theme.of(context).colorScheme.outline),
+                ),
+                const SizedBox(height: 6),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  alignment: WrapAlignment.center,
+                  children: [
+                    _NavCommandChip(label: '📦 افتح المخزون', onTap: () => onSuggestion('افتح المنتجات')),
+                    _NavCommandChip(label: '🔍 مسح حي', onTap: () => onSuggestion('افتح المسح')),
+                    _NavCommandChip(label: '💰 مبيعات', onTap: () => onSuggestion('افتح المبيعات')),
+                    _NavCommandChip(label: '📊 تحليل', onTap: () => onSuggestion('افتح التحليل')),
+                    _NavCommandChip(label: '🧾 ديون', onTap: () => onSuggestion('افتح الديون')),
+                  ],
+                ),
               ],
             ),
           ),
@@ -868,6 +889,35 @@ class _QuickActionsSheet extends StatelessWidget {
     ];
     if (role == AppConstants.roleWorker) return all.sublist(0, 3);
     return all; // merchant gets all 5
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// _NavCommandChip  –  small tappable command badge in the welcome pane
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _NavCommandChip extends StatelessWidget {
+  const _NavCommandChip({required this.label, required this.onTap});
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: AppColors.primary.withOpacity(0.08),
+          borderRadius: BorderRadius.circular(AppConstants.radiusFull),
+          border: Border.all(color: AppColors.primary.withOpacity(0.2)),
+        ),
+        child: Text(
+          label,
+          style: const TextStyle(fontSize: 12, color: AppColors.primary),
+        ),
+      ),
+    );
   }
 }
 
