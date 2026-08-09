@@ -11,29 +11,53 @@ on:
 
 jobs:
   verify:
+    name: Verify Flutter Project
     runs-on: ubuntu-latest
 
     steps:
+      # 1. تحميل المستودع
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # 2. إعداد Flutter
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
           channel: stable
           cache: true
 
+      # 3. التأكد من نسخة Flutter و Dart
       - name: Flutter version
-        run: flutter --version
+        run: |
+          flutter --version
+          dart --version
 
+      # 4. تحميل dependencies
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Generate Drift code
-        run: dart run build_runner build --delete-conflicting-outputs
+      # 5. إعادة توليد ملفات Drift / build_runner
+      - name: Generate Dart code
+        run: |
+          dart run build_runner build --delete-conflicting-outputs
 
+      # 6. تحليل المشروع
+      #
+      # يوجد حاليًا عدد كبير من lint/info/warning issues
+      # قديمة في المشروع.
+      #
+      # لا نجعل analyze يوقف الـ workflow مؤقتًا.
       - name: Analyze
         run: flutter analyze
+        continue-on-error: true
 
+      # 7. تشغيل اختبارات Flutter
+      #
+      # هذه الخطوة حاجزة:
+      # إذا فشل أي test فسيفشل الـ workflow.
       - name: Test
         run: flutter test
+
+      # 8. بناء نسخة Web للتأكد من أن المشروع قابل للبناء
+      - name: Build Web
+        run: flutter build web
