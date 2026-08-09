@@ -100,6 +100,33 @@ class ProductVariants extends Table {
       ];
 }
 
+class InventoryMovements extends Table {
+  TextColumn get id => text()();
+  TextColumn get storeId => text()();
+  TextColumn get productId => text()();
+  TextColumn get productVariantId => text().nullable()();
+  TextColumn get movementType => text()();
+  RealColumn get quantity => real()();
+  RealColumn get unitPurchasePrice => real().nullable()();
+  RealColumn get unitSellingPrice => real().nullable()();
+  TextColumn get referenceType => text().nullable()();
+  TextColumn get referenceId => text().nullable()();
+  TextColumn get note => text().nullable()();
+  TextColumn get createdBy => text().nullable()();
+  TextColumn get branchId => text().nullable()();
+  DateTimeColumn get createdAt => dateTime()();
+
+  @override
+  Set<Column> get primaryKey => {id};
+
+  @override
+  List<Index> get indexes => [
+        Index('inventory_movements_product_id', [productId]),
+        Index('inventory_movements_variant_id', [productVariantId]),
+        Index('inventory_movements_created_at', [createdAt]),
+      ];
+}
+
 class Sales extends Table {
   TextColumn get id => text()();
   RealColumn get subtotal => real()();
@@ -177,6 +204,7 @@ class Promotions extends Table {
   ProductEmbeddings,
   ProductDrafts,
   ProductVariants,
+  InventoryMovements,
 ])
 class AppDatabase extends _$AppDatabase {
   AppDatabase([QueryExecutor? executor]) : super(executor ?? _openConnection());
@@ -203,7 +231,7 @@ class AppDatabase extends _$AppDatabase {
   }
 
   @override
-  int get schemaVersion => 5;
+  int get schemaVersion => 6;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -228,6 +256,9 @@ class AppDatabase extends _$AppDatabase {
           }
           if (from < 5) {
             await m.createTable(productVariants);
+          }
+          if (from < 6) {
+            await m.createTable(inventoryMovements);
           }
         },
       );
