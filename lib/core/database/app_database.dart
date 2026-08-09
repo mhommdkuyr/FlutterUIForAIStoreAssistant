@@ -76,6 +76,8 @@ class Products extends Table {
   TextColumn get branchId => text().nullable()();
 }
 
+@TableIndex(name: 'product_variants_product_id', columns: {#productId})
+@TableIndex(name: 'product_variants_barcode', columns: {#barcode})
 class ProductVariants extends Table {
   TextColumn get id => text()();
   TextColumn get productId => text()();
@@ -92,14 +94,11 @@ class ProductVariants extends Table {
 
   @override
   Set<Column> get primaryKey => {id};
-
-  @override
-  List<Index> get indexes => [
-        Index('product_variants_product_id', [productId]),
-        Index('product_variants_barcode', [barcode]),
-      ];
 }
 
+@TableIndex(name: 'inventory_movements_product_id', columns: {#productId})
+@TableIndex(name: 'inventory_movements_variant_id', columns: {#productVariantId})
+@TableIndex(name: 'inventory_movements_created_at', columns: {#createdAt})
 class InventoryMovements extends Table {
   TextColumn get id => text()();
   TextColumn get storeId => text()();
@@ -118,13 +117,6 @@ class InventoryMovements extends Table {
 
   @override
   Set<Column> get primaryKey => {id};
-
-  @override
-  List<Index> get indexes => [
-        Index('inventory_movements_product_id', [productId]),
-        Index('inventory_movements_variant_id', [productVariantId]),
-        Index('inventory_movements_created_at', [createdAt]),
-      ];
 }
 
 class Sales extends Table {
