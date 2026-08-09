@@ -76,6 +76,30 @@ class Products extends Table {
   TextColumn get branchId => text().nullable()();
 }
 
+class ProductVariants extends Table {
+  TextColumn get id => text()();
+  TextColumn get productId => text()();
+  TextColumn get name => text()();
+  RealColumn get sizeValue => real().nullable()();
+  TextColumn get sizeUnit => text().nullable()();
+  RealColumn get purchasePrice => real()();
+  RealColumn get sellingPrice => real()();
+  TextColumn get sku => text().nullable()();
+  TextColumn get barcode => text().nullable()();
+  BoolColumn get isActive => boolean().withDefault(const Constant(true))();
+  DateTimeColumn get createdAt => dateTime()();
+  DateTimeColumn get updatedAt => dateTime()();
+
+  @override
+  Set<Column> get primaryKey => {id};
+
+  @override
+  List<Index> get indexes => [
+        Index('product_variants_product_id', [productId]),
+        Index('product_variants_barcode', [barcode]),
+      ];
+}
+
 class Sales extends Table {
   TextColumn get id => text()();
   RealColumn get subtotal => real()();
@@ -152,6 +176,7 @@ class Promotions extends Table {
   ProductImages,
   ProductEmbeddings,
   ProductDrafts,
+  ProductVariants,
 ])
 class AppDatabase extends _$AppDatabase {
   AppDatabase([QueryExecutor? executor]) : super(executor ?? _openConnection());
@@ -178,7 +203,7 @@ class AppDatabase extends _$AppDatabase {
   }
 
   @override
-  int get schemaVersion => 4;
+  int get schemaVersion => 5;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -200,6 +225,9 @@ class AppDatabase extends _$AppDatabase {
             // Drop-and-recreate is safe since this is a pure cache.
             await m.drop(productEmbeddings);
             await m.createTable(productEmbeddings);
+          }
+          if (from < 5) {
+            await m.createTable(productVariants);
           }
         },
       );
@@ -228,6 +256,30 @@ class AppDatabase extends _$AppDatabase {
       sellingPrice: const Value(1200),
       quantity: const Value(8),
       barcode: const Value('6281234567891'),
+      createdAt: Value(DateTime.now()),
+      updatedAt: Value(DateTime.now()),
+    ));
+
+    await into(productVariants).insert(ProductVariantsCompanion(
+      id: const Value('seed-product-1-variant'),
+      productId: const Value('seed-product-1'),
+      name: const Value('5kg'),
+      sizeValue: const Value(5),
+      sizeUnit: const Value('kg'),
+      purchasePrice: const Value(2100),
+      sellingPrice: const Value(2500),
+      createdAt: Value(DateTime.now()),
+      updatedAt: Value(DateTime.now()),
+    ));
+
+    await into(productVariants).insert(ProductVariantsCompanion(
+      id: const Value('seed-product-2-variant'),
+      productId: const Value('seed-product-2'),
+      name: const Value('1L'),
+      sizeValue: const Value(1),
+      sizeUnit: const Value('L'),
+      purchasePrice: const Value(1000),
+      sellingPrice: const Value(1200),
       createdAt: Value(DateTime.now()),
       updatedAt: Value(DateTime.now()),
     ));
