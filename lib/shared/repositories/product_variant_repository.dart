@@ -62,7 +62,7 @@ class ProductVariantRepository {
     );
   }
 
-  ProductVariantsCompanion _toCompanion(ProductVariant variant) {
+  ProductVariantsCompanion _toCompanion(ProductVariantModel variant) {
     return ProductVariantsCompanion(
       id: Value(variant.id),
       productId: Value(variant.productId),
