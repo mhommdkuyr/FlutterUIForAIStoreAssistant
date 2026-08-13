@@ -52,6 +52,7 @@ class InventoryMovementRepository {
           case 'adjustment':
             return stock + movement.quantity;
           case 'out':
+          case 'sale':
             return stock - movement.quantity;
           default:
             return stock;
