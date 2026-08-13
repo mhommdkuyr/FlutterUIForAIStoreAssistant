@@ -1,0 +1,71 @@
+name: Android PR Validation
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    name: Build Debug APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.32.0'
+          channel: 'stable'
+          cache: true
+
+      - name: Install Android NDK 27.0.12077973
+        run: |
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager \
+            --licenses > /dev/null 2>&1 || true
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager \
+            "ndk;27.0.12077973" --channel=0
+
+      - name: Install Flutter dependencies
+        run: flutter pub get
+
+      - name: Build debug APK
+        run: |
+          set -o pipefail
+          flutter build apk --debug 2>&1 | tee build_output.log
+
+      - name: Upload build log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-pr-build-log
+          path: build_output.log
+          retention-days: 7
+
+      - name: Verify APK exists
+        run: |
+          echo "=== flutter-apk output directory ==="
+          ls -R build/app/outputs/flutter-apk || true
+          APK_PATH="build/app/outputs/flutter-apk/app-debug.apk"
+          if [ ! -f "$APK_PATH" ]; then
+            echo "ERROR: APK not found at $APK_PATH — build step must have failed silently."
+            exit 1
+          fi
+          echo "APK found: $(du -sh $APK_PATH)"
+
+      - name: Upload validation APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-pr-debug-apk
+          path: build/app/outputs/flutter-apk/app-debug.apk
+          retention-days: 7
+          if-no-files-found: error
