@@ -1,4 +1,4 @@
-name: Android Release Build
+name: Android Production Release
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
 
 jobs:
   build:
-    name: Build Release APK
+    name: Build Signed Release APK
     runs-on: ubuntu-latest
 
     steps:
