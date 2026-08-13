@@ -35,6 +35,13 @@ class InventoryMovementRepository {
     required String productId,
     String? variantId,
   }) async {
+    if (variantId == null) {
+      final product = await (_db.select(_db.products)
+            ..where((table) => table.id.equals(productId)))
+          .getSingleOrNull();
+      if (product != null) return product.quantity.toDouble();
+    }
+
     final query = _db.select(_db.inventoryMovements)
       ..where((table) {
         final productFilter = table.productId.equals(productId);

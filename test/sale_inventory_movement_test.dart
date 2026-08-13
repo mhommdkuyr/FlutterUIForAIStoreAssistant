@@ -64,7 +64,7 @@ void main() {
     expect(updatedProduct?.quantity, 8);
     expect(
       await movementRepository.getCurrentStock(productId: product.id),
-      -2,
+      8,
     );
   });
 
