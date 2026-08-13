@@ -43,6 +43,7 @@ class SaleRepository {
     String? customerId,
     String? customerName,
     String? branchId,
+    String storeId = 'local-store',
     String paymentMethod = 'cash',
   }) async {
     if (items.isEmpty) {
@@ -101,6 +102,23 @@ class SaleRepository {
                 unitPrice: Value(item.sellingPrice),
                 totalPrice: Value(item.sellingPrice * quantity),
               ));
+
+          await _db.into(_db.inventoryMovements).insert(
+                InventoryMovementsCompanion(
+                  id: Value(Uuid().v4()),
+                  storeId: Value(storeId),
+                  productId: Value(item.id),
+                  movementType: const Value('sale'),
+                  quantity: Value(quantity.toDouble()),
+                  unitPurchasePrice: Value(product.purchasePrice),
+                  unitSellingPrice: Value(item.sellingPrice),
+                  referenceType: const Value('sale'),
+                  referenceId: Value(saleId),
+                  createdBy: Value(workerId),
+                  branchId: Value(branchId),
+                  createdAt: Value(now),
+                ),
+              );
 
           await (_db.update(_db.products)
                 ..where((tbl) => tbl.id.equals(item.id)))
