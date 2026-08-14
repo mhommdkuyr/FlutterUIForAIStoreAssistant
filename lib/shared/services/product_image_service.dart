@@ -26,7 +26,7 @@ class ProductImageService {
   Future<String> savePickedImage(XFile file) async {
     final imagesDir = await _sharedImagesDir();
     final ext = path.extension(file.path);
-    final fileName = '${DateTime.now().millisecondsSinceEpoch}$ext';
+    final fileName = '${DateTime.now().microsecondsSinceEpoch}$ext';
     final targetPath = path.join(imagesDir.path, fileName);
     final source = File(file.path);
     if (await source.exists()) {
@@ -44,7 +44,7 @@ class ProductImageService {
   Future<String> saveAdditionalImage(String productId, XFile file) async {
     final dir = await _productDir(productId);
     final ext = path.extension(file.path);
-    final fileName = '${DateTime.now().millisecondsSinceEpoch}$ext';
+    final fileName = '${DateTime.now().microsecondsSinceEpoch}$ext';
     final targetPath = path.join(dir.path, fileName);
     final source = File(file.path);
     if (await source.exists()) {

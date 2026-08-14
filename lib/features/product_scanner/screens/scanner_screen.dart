@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
@@ -6,6 +8,7 @@ import '../../../core/i18n/app_translations.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../shared/repositories/product_repository.dart';
 import '../../../shared/repositories/repository_exceptions.dart';
+import '../../../shared/services/product_image_service.dart';
 import '../../../shared/widgets/custom_button.dart';
 import '../../../shared/widgets/custom_text_field.dart';
 
@@ -31,8 +34,10 @@ class _ScannerScreenState extends State<ScannerScreen> {
   bool _isSaving = false;
   bool _inlineScanHandled = false;
   XFile? _pickedImage;
+  final List<XFile> _additionalImages = [];
   late MobileScannerController _barcodeController;
   final ProductRepository _repository = ProductRepository();
+  final ProductImageService _imageService = ProductImageService();
 
   // Form controllers for manual / confirmed entry
   final _formKey = GlobalKey<FormState>();
@@ -116,6 +121,25 @@ class _ScannerScreenState extends State<ScannerScreen> {
     }
   }
 
+  Future<void> _pickPrimaryImage() async {
+    final file = await ImagePicker().pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 80,
+    );
+    if (!mounted || file == null) return;
+    setState(() => _pickedImage = file);
+  }
+
+  Future<void> _pickAdditionalImages() async {
+    final files = await ImagePicker().pickMultiImage(imageQuality: 80);
+    if (!mounted || files.isEmpty) return;
+    setState(() => _additionalImages.addAll(files));
+  }
+
+  void _removeAdditionalImage(int index) {
+    setState(() => _additionalImages.removeAt(index));
+  }
+
   void _handleActivate() {
     // Barcode mode uses the inline live scanner — no tap needed.
     if (_mode == _ScanMode.image) {
@@ -127,14 +151,24 @@ class _ScannerScreenState extends State<ScannerScreen> {
     if (!(_formKey.currentState?.validate() ?? false)) return;
     setState(() => _isSaving = true);
     try {
-      await _repository.createProduct(
+      final primaryImagePath = _pickedImage == null
+          ? null
+          : await _imageService.savePickedImage(_pickedImage!);
+
+      final product = await _repository.createProduct(
         name: _nameCtrl.text.trim(),
         category: _categoryCtrl.text.trim(),
         purchasePrice: double.parse(_purchasePriceCtrl.text),
         sellingPrice: double.parse(_priceCtrl.text),
         quantity: int.parse(_qtyCtrl.text),
         barcode: _barcodeCtrl.text.trim().isEmpty ? null : _barcodeCtrl.text.trim(),
+        imageUrl: primaryImagePath,
       );
+
+      for (final image in _additionalImages) {
+        await _imageService.saveAdditionalImage(product.id, image);
+      }
+
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -266,6 +300,15 @@ class _ScannerScreenState extends State<ScannerScreen> {
                             controller: _categoryCtrl,
                             textInputAction: TextInputAction.next,
                             validator: (v) => (v?.isEmpty ?? true) ? tr.required : null,
+                          ),
+                          const SizedBox(height: 12),
+                          _ProductImagesSection(
+                            primaryImage: _pickedImage,
+                            additionalImages: _additionalImages,
+                            onCapturePrimary: _openImageCamera,
+                            onPickPrimary: _pickPrimaryImage,
+                            onPickAdditional: _pickAdditionalImages,
+                            onRemoveAdditional: _removeAdditionalImage,
                           ),
                           const SizedBox(height: 12),
                           Row(
@@ -456,6 +499,133 @@ class _ScannerViewport extends StatelessWidget {
               ),
             ],
           ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ProductImagesSection extends StatelessWidget {
+  const _ProductImagesSection({
+    required this.primaryImage,
+    required this.additionalImages,
+    required this.onCapturePrimary,
+    required this.onPickPrimary,
+    required this.onPickAdditional,
+    required this.onRemoveAdditional,
+  });
+
+  final XFile? primaryImage;
+  final List<XFile> additionalImages;
+  final VoidCallback onCapturePrimary;
+  final VoidCallback onPickPrimary;
+  final VoidCallback onPickAdditional;
+  final ValueChanged<int> onRemoveAdditional;
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppConstants.paddingSM),
+      decoration: BoxDecoration(
+        color: Theme.of(context).cardTheme.color,
+        borderRadius: BorderRadius.circular(AppConstants.radiusMedium),
+        border: Border.all(color: Theme.of(context).colorScheme.outline),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Product images', style: textTheme.titleSmall),
+          const SizedBox(height: 8),
+          if (primaryImage != null) ...[
+            ClipRRect(
+              borderRadius: BorderRadius.circular(AppConstants.radiusSmall),
+              child: Image.file(
+                File(primaryImage!.path),
+                width: double.infinity,
+                height: 160,
+                fit: BoxFit.cover,
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              OutlinedButton.icon(
+                onPressed: onCapturePrimary,
+                icon: const Icon(Icons.add_a_photo_rounded),
+                label: Text(
+                  primaryImage == null
+                      ? 'Capture primary image'
+                      : 'Retake primary image',
+                ),
+              ),
+              OutlinedButton.icon(
+                onPressed: onPickPrimary,
+                icon: const Icon(Icons.photo_rounded),
+                label: Text(
+                  primaryImage == null
+                      ? 'Add primary image'
+                      : 'Replace primary image',
+                ),
+              ),
+              OutlinedButton.icon(
+                onPressed: onPickAdditional,
+                icon: const Icon(Icons.photo_library_rounded),
+                label: Text('Add references (${additionalImages.length})'),
+              ),
+            ],
+          ),
+          if (additionalImages.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            SizedBox(
+              height: 72,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: additionalImages.length,
+                separatorBuilder: (_, __) => const SizedBox(width: 8),
+                itemBuilder: (context, index) {
+                  final image = additionalImages[index];
+                  return Stack(
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(
+                          AppConstants.radiusSmall,
+                        ),
+                        child: Image.file(
+                          File(image.path),
+                          width: 72,
+                          height: 72,
+                          fit: BoxFit.cover,
+                        ),
+                      ),
+                      Positioned(
+                        top: 2,
+                        right: 2,
+                        child: InkWell(
+                          onTap: () => onRemoveAdditional(index),
+                          child: Container(
+                            decoration: const BoxDecoration(
+                              color: Colors.black54,
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.close_rounded,
+                              color: Colors.white,
+                              size: 18,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              ),
+            ),
+          ],
         ],
       ),
     );

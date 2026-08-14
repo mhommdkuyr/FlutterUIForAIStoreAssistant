@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -378,8 +380,8 @@ class _ProductRow extends StatelessWidget {
               color: AppColors.primary.withOpacity(0.08),
               borderRadius: BorderRadius.circular(AppConstants.radiusSmall),
             ),
-            child: const Icon(Icons.inventory_2_outlined,
-                color: AppColors.primary),
+            clipBehavior: Clip.antiAlias,
+            child: _ProductThumbnail(imageUrl: product.imageUrl),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -428,6 +430,22 @@ class _ProductRow extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+class _ProductThumbnail extends StatelessWidget {
+  const _ProductThumbnail({required this.imageUrl});
+
+  final String? imageUrl;
+
+  @override
+  Widget build(BuildContext context) {
+    final path = imageUrl;
+    if (path != null && path.isNotEmpty && File(path).existsSync()) {
+      return Image.file(File(path), fit: BoxFit.cover);
+    }
+
+    return const Icon(Icons.inventory_2_outlined, color: AppColors.primary);
   }
 }
 
