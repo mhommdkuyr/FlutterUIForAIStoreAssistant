@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
@@ -119,10 +121,23 @@ class _ScannerScreenState extends State<ScannerScreen> {
     }
   }
 
+  Future<void> _pickPrimaryImage() async {
+    final file = await ImagePicker().pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 80,
+    );
+    if (!mounted || file == null) return;
+    setState(() => _pickedImage = file);
+  }
+
   Future<void> _pickAdditionalImages() async {
     final files = await ImagePicker().pickMultiImage(imageQuality: 80);
     if (!mounted || files.isEmpty) return;
     setState(() => _additionalImages.addAll(files));
+  }
+
+  void _removeAdditionalImage(int index) {
+    setState(() => _additionalImages.removeAt(index));
   }
 
   void _handleActivate() {
@@ -289,9 +304,11 @@ class _ScannerScreenState extends State<ScannerScreen> {
                           const SizedBox(height: 12),
                           _ProductImagesSection(
                             primaryImage: _pickedImage,
-                            additionalImageCount: _additionalImages.length,
-                            onPickPrimary: _openImageCamera,
+                            additionalImages: _additionalImages,
+                            onCapturePrimary: _openImageCamera,
+                            onPickPrimary: _pickPrimaryImage,
                             onPickAdditional: _pickAdditionalImages,
+                            onRemoveAdditional: _removeAdditionalImage,
                           ),
                           const SizedBox(height: 12),
                           Row(
@@ -491,15 +508,19 @@ class _ScannerViewport extends StatelessWidget {
 class _ProductImagesSection extends StatelessWidget {
   const _ProductImagesSection({
     required this.primaryImage,
-    required this.additionalImageCount,
+    required this.additionalImages,
+    required this.onCapturePrimary,
     required this.onPickPrimary,
     required this.onPickAdditional,
+    required this.onRemoveAdditional,
   });
 
   final XFile? primaryImage;
-  final int additionalImageCount;
+  final List<XFile> additionalImages;
+  final VoidCallback onCapturePrimary;
   final VoidCallback onPickPrimary;
   final VoidCallback onPickAdditional;
+  final ValueChanged<int> onRemoveAdditional;
 
   @override
   Widget build(BuildContext context) {
@@ -517,13 +538,34 @@ class _ProductImagesSection extends StatelessWidget {
         children: [
           Text('Product images', style: textTheme.titleSmall),
           const SizedBox(height: 8),
+          if (primaryImage != null) ...[
+            ClipRRect(
+              borderRadius: BorderRadius.circular(AppConstants.radiusSmall),
+              child: Image.file(
+                File(primaryImage!.path),
+                width: double.infinity,
+                height: 160,
+                fit: BoxFit.cover,
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
           Wrap(
             spacing: 8,
             runSpacing: 8,
             children: [
               OutlinedButton.icon(
-                onPressed: onPickPrimary,
+                onPressed: onCapturePrimary,
                 icon: const Icon(Icons.add_a_photo_rounded),
+                label: Text(
+                  primaryImage == null
+                      ? 'Capture primary image'
+                      : 'Retake primary image',
+                ),
+              ),
+              OutlinedButton.icon(
+                onPressed: onPickPrimary,
+                icon: const Icon(Icons.photo_rounded),
                 label: Text(
                   primaryImage == null
                       ? 'Add primary image'
@@ -533,10 +575,57 @@ class _ProductImagesSection extends StatelessWidget {
               OutlinedButton.icon(
                 onPressed: onPickAdditional,
                 icon: const Icon(Icons.photo_library_rounded),
-                label: Text('Add references ($additionalImageCount)'),
+                label: Text('Add references (${additionalImages.length})'),
               ),
             ],
           ),
+          if (additionalImages.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            SizedBox(
+              height: 72,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: additionalImages.length,
+                separatorBuilder: (_, __) => const SizedBox(width: 8),
+                itemBuilder: (context, index) {
+                  final image = additionalImages[index];
+                  return Stack(
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(
+                          AppConstants.radiusSmall,
+                        ),
+                        child: Image.file(
+                          File(image.path),
+                          width: 72,
+                          height: 72,
+                          fit: BoxFit.cover,
+                        ),
+                      ),
+                      Positioned(
+                        top: 2,
+                        right: 2,
+                        child: InkWell(
+                          onTap: () => onRemoveAdditional(index),
+                          child: Container(
+                            decoration: const BoxDecoration(
+                              color: Colors.black54,
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.close_rounded,
+                              color: Colors.white,
+                              size: 18,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              ),
+            ),
+          ],
         ],
       ),
     );
