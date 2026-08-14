@@ -167,12 +167,13 @@ class RecognitionPipeline {
 
   // ── Frame processing ───────────────────────────────────────────────────────
 
-  void processFrame(CameraImage image) {
-    if (!_active || _processing) return;
-    if (++_frameCount % _config.frameSkip != 0) return;
+  bool processFrame(CameraImage image) {
+    if (!_active || _processing) return false;
+    if (++_frameCount % _config.frameSkip != 0) return false;
     _processing = true;
     try {
       _processSync(image);
+      return true;
     } finally {
       _processing = false;
     }

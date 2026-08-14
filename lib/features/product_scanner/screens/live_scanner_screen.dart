@@ -1,8 +1,8 @@
 import 'dart:async';
 
+import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../../../core/constants/app_constants.dart';
 import '../../../core/i18n/app_translations.dart';
@@ -10,6 +10,10 @@ import '../../../core/theme/app_colors.dart';
 import '../../../shared/models/product_model.dart';
 import '../../../shared/repositories/product_repository.dart';
 import '../../../shared/repositories/repository_exceptions.dart';
+import '../../../shared/services/embedding_persistence_service.dart';
+import '../../../shared/services/product_image_service.dart';
+import '../../../shared/services/product_recognition_result.dart';
+import '../../../shared/services/recognition_pipeline.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Public data class shared with SalesScreen via router extra.
@@ -40,7 +44,7 @@ class ScanCartItem {
 // ─────────────────────────────────────────────────────────────────────────────
 // Scan status
 // ─────────────────────────────────────────────────────────────────────────────
-enum _ScanStatus { idle, recognizing, found, notFound }
+enum _ScanStatus { initializing, idle, recognizing, found, notFound }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // LiveScannerScreen
@@ -55,16 +59,19 @@ class LiveScannerScreen extends StatefulWidget {
 class _LiveScannerScreenState extends State<LiveScannerScreen>
     with TickerProviderStateMixin {
   final ProductRepository _repository = ProductRepository();
+  final ProductImageService _imageService = ProductImageService();
+  late final RecognitionPipeline _pipeline;
+  CameraController? _cameraController;
   List<ProductModel> _products = [];
   final List<ScanCartItem> _cart = [];
 
-  _ScanStatus _status = _ScanStatus.idle;
+  _ScanStatus _status = _ScanStatus.initializing;
   ProductModel? _lastScanned;
-  DateTime? _lastScanTime;
+  ProductRecognitionResult? _lastResult;
+  int? _lastInferenceMs;
+  String _engineState = 'تهيئة النموذج...';
 
   Timer? _statusResetTimer;
-  late final MobileScannerController _controller;
-  bool _cameraStarted = true;
   String? _notFoundBarcode;
 
   late final AnimationController _frameAnimCtrl;
@@ -99,14 +106,23 @@ class _LiveScannerScreenState extends State<LiveScannerScreen>
       curve: Curves.easeOut,
     );
 
-    _controller = MobileScannerController();
-    _loadProducts();
+    _pipeline = RecognitionPipeline(
+      persistenceService: EmbeddingPersistenceService(),
+      config: const RecognitionConfig(
+        frameSkip: 6,
+        confirmationFrames: 3,
+        absentTicksToUnlock: 12,
+      ),
+    );
+    _pipeline.onUncertain = _onVisualResult;
+    _pipeline.onConfirmed = _onVisualResult;
+    _loadProductsAndStartVisualRecognition();
   }
 
   @override
   void dispose() {
     _statusResetTimer?.cancel();
-    _controller.dispose();
+    _cameraController?.dispose();
     _frameAnimCtrl.dispose();
     _overlayAnimCtrl.dispose();
     super.dispose();
@@ -114,84 +130,116 @@ class _LiveScannerScreenState extends State<LiveScannerScreen>
 
   // ── Data ────────────────────────────────────────────────────────────────────
 
-  Future<void> _loadProducts() async {
+  Future<void> _loadProductsAndStartVisualRecognition() async {
     try {
       final products = await _repository.getAllProducts();
+      final extraPaths = <String, List<String>>{};
+      for (final product in products) {
+        extraPaths[product.id] =
+            await _imageService.getAdditionalImagePaths(product.id);
+      }
+
+      if (mounted) {
+        setState(() {
+          _products = products;
+          _engineState = 'يبني فهرس المنتجات...';
+        });
+      }
+
+      await _pipeline.initialize();
+      await _pipeline.buildIndex(products, extraImagePaths: extraPaths);
+      await _startVisualCamera();
+
       if (!mounted) return;
       setState(() {
-        _products = products;
         _isLoading = false;
+        _status = _ScanStatus.idle;
+        _engineState = _pipeline.indexedProductCount == 0
+            ? 'جاهز - لا توجد صور مفهرسة'
+            : 'جاهز - ${_pipeline.indexedProductCount} منتج مفهرس';
       });
     } on RepositoryException catch (_) {
       if (mounted) setState(() => _isLoading = false);
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _status = _ScanStatus.notFound;
+          _engineState = 'تعذر تشغيل التعرف: $e';
+        });
+      }
     }
+  }
+
+  Future<void> _startVisualCamera() async {
+    final cameras = await availableCameras();
+    if (cameras.isEmpty) return;
+    final camera = cameras.firstWhere(
+      (c) => c.lensDirection == CameraLensDirection.back,
+      orElse: () => cameras.first,
+    );
+    final controller = CameraController(
+      camera,
+      ResolutionPreset.medium,
+      enableAudio: false,
+      imageFormatGroup: ImageFormatGroup.yuv420,
+    );
+    await controller.initialize();
+    await controller.startImageStream(_onCameraFrame);
+    _cameraController = controller;
   }
 
   // ── Camera & scanning ────────────────────────────────────────────────────────
 
-  void _startCamera() {
-    setState(() => _cameraStarted = true);
-  }
-
-  /// Called by [MobileScanner] when a barcode frame is detected.
-  void _onBarcodeDetected(BarcodeCapture capture) {
-    if (_status != _ScanStatus.idle || !mounted) return;
-    final value = capture.barcodes.firstOrNull?.rawValue;
-    if (value == null || value.isEmpty) return;
-
-    setState(() => _status = _ScanStatus.recognizing);
-
-    final product = _findByBarcode(value);
-    if (product != null) {
-      // Debounce: skip the same product scanned within 2 seconds.
-      final now = DateTime.now();
-      if (_lastScanned?.id == product.id &&
-          _lastScanTime != null &&
-          now.difference(_lastScanTime!) < const Duration(seconds: 2)) {
-        setState(() => _status = _ScanStatus.idle);
-        return;
-      }
-
-      _lastScanned = product;
-      _lastScanTime = now;
-      _addToCart(product);
-
+  void _onCameraFrame(CameraImage image) {
+    if (!mounted || !_pipeline.isIndexReady) return;
+    final sw = Stopwatch()..start();
+    final didProcess = _pipeline.processFrame(image);
+    if (!didProcess) return;
+    sw.stop();
+    if (mounted) {
       setState(() {
-        _status = _ScanStatus.found;
-        _notFoundBarcode = null; // Clear any previous not-found state
-      });
-      _overlayAnimCtrl.forward(from: 0);
-
-      _statusResetTimer?.cancel();
-      _statusResetTimer = Timer(const Duration(milliseconds: 1500), () {
-        if (mounted) {
-          _overlayAnimCtrl.reverse();
-          setState(() => _status = _ScanStatus.idle);
-        }
-      });
-    } else {
-      setState(() {
-        _status = _ScanStatus.notFound;
-        _notFoundBarcode = value; // Save so user can add it
-      });
-      _statusResetTimer?.cancel();
-      _statusResetTimer = Timer(const Duration(milliseconds: 1500), () {
-        if (mounted) setState(() => _status = _ScanStatus.idle);
+        _lastInferenceMs = sw.elapsedMilliseconds;
+        if (_status == _ScanStatus.recognizing) _status = _ScanStatus.idle;
+        if (_status == _ScanStatus.idle) _engineState = 'جاهز';
       });
     }
   }
 
-  /// Returns the first product whose barcode matches [value], or null.
-  ProductModel? _findByBarcode(String value) {
-    final normalized = value.trim().toLowerCase();
+  void _onVisualResult(ProductRecognitionResult result) {
+    if (!mounted) return;
+    final product = result.productId == null ? null : _findById(result.productId!);
+    setState(() {
+      _lastResult = result;
+      _lastScanned = product;
+      _status = result.isConfirmed ? _ScanStatus.found : _ScanStatus.recognizing;
+      _engineState = result.isConfirmed ? 'نتيجة مؤكدة' : 'يتحقق زمنيًا...';
+      _notFoundBarcode = null;
+    });
+
+    if (result.isConfirmed && product != null) {
+      _addToCart(product);
+      _pipeline.pause();
+      _overlayAnimCtrl.forward(from: 0);
+      _statusResetTimer?.cancel();
+      _statusResetTimer = Timer(const Duration(milliseconds: 1800), () {
+        if (mounted) {
+          _overlayAnimCtrl.reverse();
+          _pipeline.resume();
+          setState(() => _status = _ScanStatus.idle);
+        }
+      });
+    }
+  }
+
+  ProductModel? _findById(String id) {
     try {
-      return _products.firstWhere(
-        (p) => (p.barcode?.trim().toLowerCase() ?? '') == normalized,
-      );
+      return _products.firstWhere((p) => p.id == id);
     } catch (_) {
       return null;
     }
   }
+
 
   // ── Cart helpers ─────────────────────────────────────────────────────────────
 
@@ -230,16 +278,13 @@ class _LiveScannerScreenState extends State<LiveScannerScreen>
       backgroundColor: Colors.black,
       body: Stack(
         children: [
-          // ── Real camera feed (MobileScanner) or placeholder ───────────────
-          if (_cameraStarted)
-            Positioned.fill(
-              child: MobileScanner(
-                controller: _controller,
-                onDetect: _onBarcodeDetected,
-              ),
-            )
-          else
-            const _CameraBackground(),
+          // ── Real camera feed for local visual recognition ───────────────
+          Positioned.fill(
+            child: _cameraController != null &&
+                    _cameraController!.value.isInitialized
+                ? CameraPreview(_cameraController!)
+                : const _CameraBackground(),
+          ),
 
           // ── Scan frame (center) ───────────────────────────────────────────
           Center(
@@ -303,6 +348,14 @@ class _LiveScannerScreenState extends State<LiveScannerScreen>
                   ),
                   const SizedBox(height: 8),
                   _StatusChip(status: _status, tr: tr),
+                  const SizedBox(height: 8),
+                  _VisualDebugPanel(
+                    engineState: _engineState,
+                    product: _lastScanned,
+                    result: _lastResult,
+                    inferenceMs: _lastInferenceMs,
+                    indexedCount: _pipeline.indexedProductCount,
+                  ),
                 ],
               ),
             ),
@@ -646,6 +699,11 @@ class _StatusChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (text, color, icon) = switch (status) {
+      _ScanStatus.initializing => (
+          'تهيئة النموذج...',
+          AppColors.warning,
+          Icons.hourglass_top_rounded,
+        ),
       _ScanStatus.idle => (
           tr.aimCameraAtProduct,
           Colors.white.withOpacity(0.85),
@@ -706,6 +764,61 @@ class _StatusChip extends StatelessWidget {
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
               ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// _VisualDebugPanel  –  temporary recognition test telemetry
+// ─────────────────────────────────────────────────────────────────────────────
+class _VisualDebugPanel extends StatelessWidget {
+  const _VisualDebugPanel({
+    required this.engineState,
+    required this.product,
+    required this.result,
+    required this.inferenceMs,
+    required this.indexedCount,
+  });
+
+  final String engineState;
+  final ProductModel? product;
+  final ProductRecognitionResult? result;
+  final int? inferenceMs;
+  final int indexedCount;
+
+  @override
+  Widget build(BuildContext context) {
+    final confidence = result == null
+        ? '—'
+        : '${(result!.confidence * 100).toStringAsFixed(1)}%';
+    final confirmed = result?.isConfirmed == true ? 'نعم' : 'لا';
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.symmetric(horizontal: 18),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: Colors.black.withOpacity(0.55),
+        borderRadius: BorderRadius.circular(AppConstants.radiusMedium),
+        border: Border.all(color: Colors.white.withOpacity(0.18)),
+      ),
+      child: DefaultTextStyle(
+        style: const TextStyle(color: Colors.white, fontSize: 12, height: 1.35),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('المحرك: $engineState'),
+            Text('الفهرس: $indexedCount منتجات'),
+            Text('المنتج: ${product?.name ?? '—'}'),
+            Text('Product ID: ${result?.productId ?? '—'}'),
+            Text('التشابه: $confidence · مؤكد: $confirmed'),
+            Text(
+              'زمن الاستدلال التقريبي: '
+              "${inferenceMs == null ? '—' : '$inferenceMs ms'}",
             ),
           ],
         ),
