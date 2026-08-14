@@ -44,7 +44,7 @@ class ScanCartItem {
 // ─────────────────────────────────────────────────────────────────────────────
 // Scan status
 // ─────────────────────────────────────────────────────────────────────────────
-enum _ScanStatus { initializing, idle, recognizing, found, notFound }
+enum _ScanStatus { initializing, ready, processing, noMatch, uncertain, confirmed, error }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // LiveScannerScreen
@@ -62,17 +62,23 @@ class _LiveScannerScreenState extends State<LiveScannerScreen>
   final ProductImageService _imageService = ProductImageService();
   late final RecognitionPipeline _pipeline;
   CameraController? _cameraController;
+
   List<ProductModel> _products = [];
   final List<ScanCartItem> _cart = [];
 
   _ScanStatus _status = _ScanStatus.initializing;
-  ProductModel? _lastScanned;
-  ProductRecognitionResult? _lastResult;
-  int? _lastInferenceMs;
-  String _engineState = 'تهيئة النموذج...';
+  ProductModel? _currentCandidate;
+  ProductModel? _lastConfirmedProduct;
+  ProductRecognitionResult? _currentFrameResult;
+  RecognitionDiagnostics? _diagnostics;
+  String? _errorMessage;
 
   Timer? _statusResetTimer;
-  String? _notFoundBarcode;
+  CameraImage? _latestFrame;
+  bool _frameWorkerActive = false;
+  int _cameraFrameCount = 0;
+  int _cameraFps = 0;
+  DateTime _fpsWindowStarted = DateTime.now();
 
   late final AnimationController _frameAnimCtrl;
   late final AnimationController _overlayAnimCtrl;
@@ -80,8 +86,6 @@ class _LiveScannerScreenState extends State<LiveScannerScreen>
   late final Animation<double> _overlayAnim;
 
   bool _isLoading = true;
-
-  // ── Lifecycle ───────────────────────────────────────────────────────────────
 
   @override
   void initState() {
@@ -109,13 +113,15 @@ class _LiveScannerScreenState extends State<LiveScannerScreen>
     _pipeline = RecognitionPipeline(
       persistenceService: EmbeddingPersistenceService(),
       config: const RecognitionConfig(
-        frameSkip: 6,
+        frameSkip: 5,
+        minMargin: 0.12,
+        minSupportingReferences: 1,
         confirmationFrames: 3,
         absentTicksToUnlock: 12,
       ),
     );
-    _pipeline.onUncertain = _onVisualResult;
-    _pipeline.onConfirmed = _onVisualResult;
+    _pipeline.onReport = _handleRecognitionReport;
+    _pipeline.onConfirmed = _handleConfirmed;
     _loadProductsAndStartVisualRecognition();
   }
 
@@ -128,8 +134,6 @@ class _LiveScannerScreenState extends State<LiveScannerScreen>
     super.dispose();
   }
 
-  // ── Data ────────────────────────────────────────────────────────────────────
-
   Future<void> _loadProductsAndStartVisualRecognition() async {
     try {
       final products = await _repository.getAllProducts();
@@ -139,12 +143,7 @@ class _LiveScannerScreenState extends State<LiveScannerScreen>
             await _imageService.getAdditionalImagePaths(product.id);
       }
 
-      if (mounted) {
-        setState(() {
-          _products = products;
-          _engineState = 'يبني فهرس المنتجات...';
-        });
-      }
+      if (mounted) setState(() => _products = products);
 
       await _pipeline.initialize();
       await _pipeline.buildIndex(products, extraImagePaths: extraPaths);
@@ -153,27 +152,18 @@ class _LiveScannerScreenState extends State<LiveScannerScreen>
       if (!mounted) return;
       setState(() {
         _isLoading = false;
-        _status = _ScanStatus.idle;
-        _engineState = _pipeline.indexedProductCount == 0
-            ? 'جاهز - لا توجد صور مفهرسة'
-            : 'جاهز - ${_pipeline.indexedProductCount} منتج مفهرس';
+        _status = _ScanStatus.ready;
       });
-    } on RepositoryException catch (_) {
-      if (mounted) setState(() => _isLoading = false);
+    } on RepositoryException catch (e) {
+      _showError(e.message);
     } catch (e) {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-          _status = _ScanStatus.notFound;
-          _engineState = 'تعذر تشغيل التعرف: $e';
-        });
-      }
+      _showError(e.toString());
     }
   }
 
   Future<void> _startVisualCamera() async {
     final cameras = await availableCameras();
-    if (cameras.isEmpty) return;
+    if (cameras.isEmpty) throw StateError('No camera available');
     final camera = cameras.firstWhere(
       (c) => c.lensDirection == CameraLensDirection.back,
       orElse: () => cameras.first,
@@ -185,50 +175,111 @@ class _LiveScannerScreenState extends State<LiveScannerScreen>
       imageFormatGroup: ImageFormatGroup.yuv420,
     );
     await controller.initialize();
-    await controller.startImageStream(_onCameraFrame);
     _cameraController = controller;
+    await controller.startImageStream(_onCameraFrame);
   }
 
-  // ── Camera & scanning ────────────────────────────────────────────────────────
-
   void _onCameraFrame(CameraImage image) {
-    if (!mounted || !_pipeline.isIndexReady) return;
-    final sw = Stopwatch()..start();
-    final didProcess = _pipeline.processFrame(image);
-    if (!didProcess) return;
-    sw.stop();
-    if (mounted) {
-      setState(() {
-        _lastInferenceMs = sw.elapsedMilliseconds;
-        if (_status == _ScanStatus.recognizing) _status = _ScanStatus.idle;
-        if (_status == _ScanStatus.idle) _engineState = 'جاهز';
-      });
+    _trackCameraFps();
+    _latestFrame = image;
+    if (_frameWorkerActive) return;
+    _frameWorkerActive = true;
+    Future<void>(_drainLatestFrame);
+  }
+
+  Future<void> _drainLatestFrame() async {
+    try {
+      while (mounted && _latestFrame != null) {
+        final frame = _latestFrame!;
+        _latestFrame = null;
+        final report = _pipeline.processFrame(frame);
+        if (!report.processed) continue;
+        await Future<void>.delayed(Duration.zero);
+      }
+    } finally {
+      _frameWorkerActive = false;
+      if (mounted && _latestFrame != null) {
+        _onCameraFrame(_latestFrame!);
+      }
     }
   }
 
-  void _onVisualResult(ProductRecognitionResult result) {
-    if (!mounted) return;
-    final product = result.productId == null ? null : _findById(result.productId!);
-    setState(() {
-      _lastResult = result;
-      _lastScanned = product;
-      _status = result.isConfirmed ? _ScanStatus.found : _ScanStatus.recognizing;
-      _engineState = result.isConfirmed ? 'نتيجة مؤكدة' : 'يتحقق زمنيًا...';
-      _notFoundBarcode = null;
-    });
+  void _trackCameraFps() {
+    _cameraFrameCount++;
+    final now = DateTime.now();
+    final elapsed = now.difference(_fpsWindowStarted);
+    if (elapsed >= const Duration(seconds: 1)) {
+      _cameraFps = (_cameraFrameCount * 1000 / elapsed.inMilliseconds).round();
+      _cameraFrameCount = 0;
+      _fpsWindowStarted = now;
+    }
+  }
 
-    if (result.isConfirmed && product != null) {
-      _addToCart(product);
-      _pipeline.pause();
-      _overlayAnimCtrl.forward(from: 0);
-      _statusResetTimer?.cancel();
-      _statusResetTimer = Timer(const Duration(milliseconds: 1800), () {
-        if (mounted) {
-          _overlayAnimCtrl.reverse();
-          _pipeline.resume();
-          setState(() => _status = _ScanStatus.idle);
-        }
+  void _handleRecognitionReport(RecognitionFrameReport report) {
+    if (!mounted) return;
+    final result = report.result;
+    final candidate = result.productId == null ? null : _findById(result.productId!);
+    setState(() {
+      _diagnostics = report.diagnostics;
+      _currentFrameResult = result;
+      _currentCandidate = result.isNoMatch ? null : candidate;
+      _status = _statusFromRecognition(result.status);
+      if (result.isNoMatch) {
+        _overlayAnimCtrl.reverse();
+      }
+    });
+  }
+
+  void _handleConfirmed(ProductRecognitionResult result) {
+    final product = result.productId == null ? null : _findById(result.productId!);
+    if (!mounted || product == null) return;
+    setState(() {
+      _lastConfirmedProduct = product;
+      _currentCandidate = product;
+      _status = _ScanStatus.confirmed;
+    });
+    _addToCart(product);
+    _pipeline.pause();
+    _overlayAnimCtrl.forward(from: 0);
+    _statusResetTimer?.cancel();
+    _statusResetTimer = Timer(const Duration(milliseconds: 1800), () {
+      if (!mounted) return;
+      _overlayAnimCtrl.reverse();
+      _pipeline.resume();
+      setState(() {
+        _status = _ScanStatus.ready;
+        _currentCandidate = null;
+        _currentFrameResult = ProductRecognitionResult.ready();
       });
+    });
+  }
+
+  void _showError(String message) {
+    if (!mounted) return;
+    setState(() {
+      _isLoading = false;
+      _status = _ScanStatus.error;
+      _errorMessage = message;
+    });
+  }
+
+  _ScanStatus _statusFromRecognition(RecognitionStatus status) {
+    switch (status) {
+      case RecognitionStatus.initializing:
+        return _ScanStatus.initializing;
+      case RecognitionStatus.ready:
+        return _ScanStatus.ready;
+      case RecognitionStatus.processing:
+        return _ScanStatus.processing;
+      case RecognitionStatus.uncertain:
+        return _ScanStatus.uncertain;
+      case RecognitionStatus.confirmed:
+        return _ScanStatus.confirmed;
+      case RecognitionStatus.noMatch:
+      case RecognitionStatus.rejected:
+        return _ScanStatus.noMatch;
+      case RecognitionStatus.error:
+        return _ScanStatus.error;
     }
   }
 
@@ -239,9 +290,6 @@ class _LiveScannerScreenState extends State<LiveScannerScreen>
       return null;
     }
   }
-
-
-  // ── Cart helpers ─────────────────────────────────────────────────────────────
 
   void _addToCart(ProductModel product) {
     final idx = _cart.indexWhere((c) => c.id == product.id);
@@ -258,17 +306,12 @@ class _LiveScannerScreenState extends State<LiveScannerScreen>
 
   int get _totalItems => _cart.fold(0, (s, c) => s + c.quantity);
 
-  // ── Navigation ───────────────────────────────────────────────────────────────
-
   void _goToInvoice() {
     _statusResetTimer?.cancel();
-    // Navigate to InvoiceScreen with scanned items.
     context.go('/invoice', extra: {
       'cartItems': _cart.map((c) => c.toMap()).toList(),
     });
   }
-
-  // ── Build ────────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -278,7 +321,6 @@ class _LiveScannerScreenState extends State<LiveScannerScreen>
       backgroundColor: Colors.black,
       body: Stack(
         children: [
-          // ── Real camera feed for local visual recognition ───────────────
           Positioned.fill(
             child: _cameraController != null &&
                     _cameraController!.value.isInitialized
@@ -286,26 +328,26 @@ class _LiveScannerScreenState extends State<LiveScannerScreen>
                 : const _CameraBackground(),
           ),
 
-          // ── Scan frame (center) ───────────────────────────────────────────
           Center(
             child: AnimatedBuilder(
               animation: _frameOpacity,
               builder: (context, _) {
                 final color = switch (_status) {
-                  _ScanStatus.found => AppColors.success,
-                  _ScanStatus.notFound => AppColors.error,
+                  _ScanStatus.confirmed => AppColors.success,
+                  _ScanStatus.noMatch || _ScanStatus.error => AppColors.error,
+                  _ScanStatus.uncertain || _ScanStatus.processing => AppColors.warning,
                   _ => AppColors.primary,
                 };
                 return _ScanFrame(
                   size: 220,
                   color: color.withOpacity(_frameOpacity.value),
-                  isRecognizing: _status == _ScanStatus.recognizing,
+                  isRecognizing: _status == _ScanStatus.processing ||
+                      _status == _ScanStatus.uncertain,
                 );
               },
             ),
           ),
 
-          // ── Top bar (title + status chip) ─────────────────────────────────
           Positioned(
             top: 0,
             left: 0,
@@ -334,14 +376,12 @@ class _LiveScannerScreenState extends State<LiveScannerScreen>
                               fontSize: 18,
                               fontWeight: FontWeight.w600,
                               shadows: [
-                                Shadow(
-                                    blurRadius: 6, color: Colors.black54),
+                                Shadow(blurRadius: 6, color: Colors.black54),
                               ],
                             ),
                             textAlign: TextAlign.center,
                           ),
                         ),
-                        // Scanned-items badge
                         _CartBadge(count: _totalItems),
                       ],
                     ),
@@ -350,19 +390,30 @@ class _LiveScannerScreenState extends State<LiveScannerScreen>
                   _StatusChip(status: _status, tr: tr),
                   const SizedBox(height: 8),
                   _VisualDebugPanel(
-                    engineState: _engineState,
-                    product: _lastScanned,
-                    result: _lastResult,
-                    inferenceMs: _lastInferenceMs,
-                    indexedCount: _pipeline.indexedProductCount,
+                    status: _status,
+                    candidate: _currentCandidate,
+                    lastConfirmed: _lastConfirmedProduct,
+                    result: _currentFrameResult,
+                    diagnostics: _diagnostics,
+                    cameraFps: _cameraFps,
+                    fallbackActive: _pipeline.isFallbackActive,
+                    minConfidence: _pipeline.minConfidence,
+                    minMargin: _pipeline.minMargin,
+                    errorMessage: _errorMessage,
+                  ),
+                  const SizedBox(height: 8),
+                  TextButton.icon(
+                    onPressed: () => context.push('/scanner'),
+                    icon: const Icon(Icons.qr_code_scanner_rounded, size: 16),
+                    label: const Text('Barcode / manual fallback'),
+                    style: TextButton.styleFrom(foregroundColor: Colors.white),
                   ),
                 ],
               ),
             ),
           ),
 
-          // ── Product-found overlay (slides up, auto-hides) ─────────────────
-          if (_lastScanned != null)
+          if (_lastConfirmedProduct != null)
             Positioned(
               left: 24,
               right: 24,
@@ -375,9 +426,9 @@ class _LiveScannerScreenState extends State<LiveScannerScreen>
                     end: Offset.zero,
                   ).animate(_overlayAnim),
                   child: _ProductFoundCard(
-                    product: _lastScanned!,
+                    product: _lastConfirmedProduct!,
                     quantity: _cart
-                        .where((c) => c.id == _lastScanned!.id)
+                        .where((c) => c.id == _lastConfirmedProduct!.id)
                         .fold(0, (_, c) => c.quantity),
                     tr: tr,
                   ),
@@ -385,7 +436,6 @@ class _LiveScannerScreenState extends State<LiveScannerScreen>
               ),
             ),
 
-          // ── Bottom bar ────────────────────────────────────────────────────
           Positioned(
             bottom: 0,
             left: 0,
@@ -399,40 +449,6 @@ class _LiveScannerScreenState extends State<LiveScannerScreen>
                     if (_cart.isNotEmpty) ...[
                       _CartSummaryBar(cart: _cart, tr: tr),
                       const SizedBox(height: 10),
-                    ],
-                    // "Add product" shortcut when barcode wasn't found
-                    if (_notFoundBarcode != null) ...[
-                      SizedBox(
-                        width: double.infinity,
-                        child: OutlinedButton.icon(
-                          onPressed: () => context.push(
-                            '/scanner',
-                            extra: {'barcode': _notFoundBarcode},
-                          ),
-                          icon: const Icon(Icons.add_circle_outline_rounded),
-                          label: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(tr.addThisProduct,
-                                  style: const TextStyle(fontWeight: FontWeight.w600)),
-                              Text(_notFoundBarcode!,
-                                  style: const TextStyle(fontSize: 11)),
-                            ],
-                          ),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: AppColors.warning,
-                            side: const BorderSide(color: AppColors.warning),
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 16, vertical: 10),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(
-                                  AppConstants.radiusMedium),
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 8),
                     ],
                     SizedBox(
                       width: double.infinity,
@@ -457,7 +473,8 @@ class _LiveScannerScreenState extends State<LiveScannerScreen>
                           ),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(
-                                AppConstants.radiusMedium),
+                              AppConstants.radiusMedium,
+                            ),
                           ),
                           elevation: 0,
                         ),
@@ -469,13 +486,11 @@ class _LiveScannerScreenState extends State<LiveScannerScreen>
             ),
           ),
 
-          // ── Loading spinner ────────────────────────────────────────────────
           if (_isLoading)
             Container(
               color: Colors.black54,
               child: const Center(
-                child:
-                    CircularProgressIndicator(color: AppColors.primary),
+                child: CircularProgressIndicator(color: AppColors.primary),
               ),
             ),
         ],
@@ -700,29 +715,39 @@ class _StatusChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final (text, color, icon) = switch (status) {
       _ScanStatus.initializing => (
-          'تهيئة النموذج...',
+          'Initializing visual model...',
           AppColors.warning,
           Icons.hourglass_top_rounded,
         ),
-      _ScanStatus.idle => (
+      _ScanStatus.ready => (
           tr.aimCameraAtProduct,
           Colors.white.withOpacity(0.85),
           Icons.center_focus_strong_rounded,
         ),
-      _ScanStatus.recognizing => (
+      _ScanStatus.processing => (
           tr.recognizing,
           AppColors.warning,
           Icons.radar_rounded,
         ),
-      _ScanStatus.found => (
+      _ScanStatus.uncertain => (
+          'Verifying match...',
+          AppColors.warning,
+          Icons.youtube_searched_for_rounded,
+        ),
+      _ScanStatus.confirmed => (
           tr.productFoundLabel,
           AppColors.success,
           Icons.check_circle_rounded,
         ),
-      _ScanStatus.notFound => (
-          tr.productNotRecognized,
+      _ScanStatus.noMatch => (
+          'No visual match',
           AppColors.error,
           Icons.highlight_off_rounded,
+        ),
+      _ScanStatus.error => (
+          'Visual recognition error',
+          AppColors.error,
+          Icons.error_outline_rounded,
         ),
     };
 
@@ -730,8 +755,7 @@ class _StatusChip extends StatelessWidget {
       duration: const Duration(milliseconds: 250),
       child: Container(
         key: ValueKey(status),
-        padding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
         decoration: BoxDecoration(
           color: Colors.black.withOpacity(0.55),
           borderRadius: BorderRadius.circular(AppConstants.radiusFull),
@@ -740,7 +764,7 @@ class _StatusChip extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            if (status == _ScanStatus.recognizing)
+            if (status == _ScanStatus.processing || status == _ScanStatus.uncertain)
               Padding(
                 padding: const EdgeInsets.only(right: 6),
                 child: SizedBox(
@@ -772,37 +796,41 @@ class _StatusChip extends StatelessWidget {
   }
 }
 
-
-// ─────────────────────────────────────────────────────────────────────────────
-// _VisualDebugPanel  –  temporary recognition test telemetry
-// ─────────────────────────────────────────────────────────────────────────────
 class _VisualDebugPanel extends StatelessWidget {
   const _VisualDebugPanel({
-    required this.engineState,
-    required this.product,
+    required this.status,
+    required this.candidate,
+    required this.lastConfirmed,
     required this.result,
-    required this.inferenceMs,
-    required this.indexedCount,
+    required this.diagnostics,
+    required this.cameraFps,
+    required this.fallbackActive,
+    required this.minConfidence,
+    required this.minMargin,
+    required this.errorMessage,
   });
 
-  final String engineState;
-  final ProductModel? product;
+  final _ScanStatus status;
+  final ProductModel? candidate;
+  final ProductModel? lastConfirmed;
   final ProductRecognitionResult? result;
-  final int? inferenceMs;
-  final int indexedCount;
+  final RecognitionDiagnostics? diagnostics;
+  final int cameraFps;
+  final bool fallbackActive;
+  final double minConfidence;
+  final double minMargin;
+  final String? errorMessage;
 
   @override
   Widget build(BuildContext context) {
-    final confidence = result == null
-        ? '—'
-        : '${(result!.confidence * 100).toStringAsFixed(1)}%';
-    final confirmed = result?.isConfirmed == true ? 'نعم' : 'لا';
+    final d = diagnostics;
+    String pct(double value) => '${(value * 100).toStringAsFixed(1)}%';
     return Container(
       width: double.infinity,
       margin: const EdgeInsets.symmetric(horizontal: 18),
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.55),
+        color: Colors.black.withOpacity(0.58),
         borderRadius: BorderRadius.circular(AppConstants.radiusMedium),
         border: Border.all(color: Colors.white.withOpacity(0.18)),
       ),
@@ -811,15 +839,32 @@ class _VisualDebugPanel extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('المحرك: $engineState'),
-            Text('الفهرس: $indexedCount منتجات'),
-            Text('المنتج: ${product?.name ?? '—'}'),
+            Text('State: ${status.name}${fallbackActive ? ' · fallback active' : ''}'),
+            if (errorMessage != null) Text('Error: $errorMessage'),
+            Text('Candidate: ${candidate?.name ?? '—'}'),
+            Text('Last confirmed: ${lastConfirmed?.name ?? '—'}'),
             Text('Product ID: ${result?.productId ?? '—'}'),
-            Text('التشابه: $confidence · مؤكد: $confirmed'),
             Text(
-              'زمن الاستدلال التقريبي: '
-              "${inferenceMs == null ? '—' : '$inferenceMs ms'}",
+              'Best: ${pct(d?.bestScore ?? result?.confidence ?? 0)} · '
+              'Second: ${pct(d?.secondBestScore ?? result?.secondBestConfidence ?? 0)} · '
+              'Margin: ${pct(d?.margin ?? result?.margin ?? 0)}',
             ),
+            Text('Threshold: ${pct(minConfidence)} · Min margin: ${pct(minMargin)}'),
+            Text(
+              'Indexed: ${d?.indexedProducts ?? 0} products / '
+              '${d?.indexedEmbeddings ?? 0} embeddings',
+            ),
+            Text('Backend: ${d?.backend ?? 'initializing'}'),
+            Text(
+              'FPS: $cameraFps · prep ${d?.preprocessingMs ?? 0}ms · '
+              'infer ${d?.inferenceMs ?? 0}ms · search ${d?.searchMs ?? 0}ms · '
+              'total ${d?.totalMs ?? 0}ms',
+            ),
+            Text(
+              'Frame: brightness ${d?.meanBrightness?.toStringAsFixed(1) ?? '—'} · '
+              'texture ${d?.lumaStdDev?.toStringAsFixed(1) ?? '—'}',
+            ),
+            if (result?.reason != null) Text('Reason: ${result!.reason}'),
           ],
         ),
       ),

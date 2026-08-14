@@ -39,6 +39,8 @@ class LocalProductIndexService {
 
   bool get isBuilt => _built;
   int get indexedProductCount => _index.length;
+  int get indexedEmbeddingCount =>
+      _index.values.fold(0, (sum, embeddings) => sum + embeddings.length);
 
   // ── Index management ───────────────────────────────────────────────────────
 
@@ -103,6 +105,9 @@ class LocalProductIndexService {
     final paths = _pathsFor(product, extraPaths);
     final hashes = <Uint8List>[];
 
+    // Drop stale embeddings for images no longer attached to this product.
+    await _persistence?.deleteProduct(product.id);
+
     for (final path in paths) {
       final h = await _embedding.embedFile(path);
       if (h != null) {
@@ -144,27 +149,68 @@ class LocalProductIndexService {
     double? minConfidence,
   }) {
     final threshold = minConfidence ?? _embedding.recommendedMinConfidence;
-    if (_index.isEmpty) return const [];
+    return evaluate(
+      queryEmbedding,
+      topK: topK,
+      minConfidence: threshold,
+      minMargin: 0,
+    ).candidates.where((c) => c.confidence >= threshold).toList();
+  }
+
+  /// Evaluate all products and keep best + second-best information.
+  ///
+  /// Unlike [search], this method does not drop below-threshold products before
+  /// computing ambiguity. That prevents the scanner from treating "A=0.81,
+  /// B=0.80" as a confident A match just because both are above threshold.
+  RecognitionSearchResult evaluate(
+    Uint8List queryEmbedding, {
+    int topK = 3,
+    double? minConfidence,
+    double minMargin = 0.12,
+    double? supportDelta,
+    int minSupportingReferences = 1,
+  }) {
+    final threshold = minConfidence ?? _embedding.recommendedMinConfidence;
+    final supportWindow = supportDelta ?? (1 - threshold) / 2;
+    if (_index.isEmpty) {
+      return RecognitionSearchResult(
+        candidates: const [],
+        minConfidence: threshold,
+        minMargin: minMargin,
+        minSupportingReferences: minSupportingReferences,
+      );
+    }
 
     final results = <RecognitionCandidate>[];
 
     for (final entry in _index.entries) {
       var bestSim = 0.0;
+      var support = 0;
       for (final stored in entry.value) {
         final s = _embedding.similarity(queryEmbedding, stored);
         if (s > bestSim) bestSim = s;
       }
-      if (bestSim >= threshold) {
-        results.add(RecognitionCandidate(
-          productId: entry.key,
-          confidence: bestSim,
-          hammingDistance: 0, // N/A for cosine; kept for API compat
-        ));
+      final supportThreshold = (bestSim - supportWindow).clamp(0.0, 1.0);
+      for (final stored in entry.value) {
+        final s = _embedding.similarity(queryEmbedding, stored);
+        if (s >= supportThreshold && s >= threshold) support++;
       }
+      results.add(RecognitionCandidate(
+        productId: entry.key,
+        confidence: bestSim,
+        hammingDistance: 0,
+        referenceCount: entry.value.length,
+        supportingReferenceCount: support,
+      ));
     }
 
     results.sort((a, b) => b.confidence.compareTo(a.confidence));
-    return results.take(topK).toList();
+    return RecognitionSearchResult(
+      candidates: results.take(topK).toList(),
+      minConfidence: threshold,
+      minMargin: minMargin,
+      minSupportingReferences: minSupportingReferences,
+    );
   }
 
   // ── Internal ────────────────────────────────────────────────────────────────
