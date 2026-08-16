@@ -96,7 +96,7 @@ void main() {
     test('best, second-best, margin and threshold are reported', () async {
       final embedding = _StubEmbeddingService({
         'a': _e(220),
-        'b': _e(170),
+        'b': _e(150),
         'c': _e(20),
       });
       final index = LocalProductIndexService(embeddingService: embedding);
