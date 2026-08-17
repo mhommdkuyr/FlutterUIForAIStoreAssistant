@@ -15,12 +15,11 @@ import 'frame_preprocessor.dart';
 
 /// Computes visual feature vectors ("embeddings") from images.
 ///
-/// Two production implementations are provided:
-///   • [TfLiteEmbeddingService]  — MobileNetV3-Small on-device model (primary)
-///   • [AHashEmbeddingService]   — 16×16 average hash (fallback / fast path)
+/// Production implementation:
+///   • [MobileVisionEmbeddingService] — MobileCLIP2-S0 image encoder.
 ///
-/// Use [VisualEmbeddingProvider] to get automatic primary/fallback dispatch
-/// without knowing which backend is active.
+/// [AHashEmbeddingService] is retained only for tests/diagnostics and must not
+/// be used as a silent commercial fallback.
 abstract class VisualEmbeddingService {
   /// Compute an embedding for a local image file (I/O-bound, async).
   Future<Uint8List?> embedFile(String path);
@@ -42,25 +41,26 @@ abstract class VisualEmbeddingService {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// TfLiteEmbeddingService  —  MobileNetV3-Small local inference (primary)
+// MobileVisionEmbeddingService  —  MobileCLIP2-S0 local inference
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// Real on-device visual embedding using a bundled MobileNetV3-Small model.
+/// Real on-device visual embedding using MobileCLIP2-S0 image encoder.
 ///
-/// **Model**: `assets/models/mobilenet_v3_small_embedder.tflite`
-///   Input  : [1, 224, 224, 3] float32, values normalised to [0.0, 1.0]
-///   Output : [1, N] float32 feature vector (N discovered at load time, ~1024)
+/// **Model**: `assets/models/mobileclip2/mobileclip2_s0_image_encoder.tflite`
+///   Input  : [1, 256, 256, 3] float32, CLIP normalized RGB.
+///   Output : [1, 512] float32 feature vector.
 ///
-/// The model is packaged inside the APK/IPA — no internet required.
-/// Call [initialize] once before use; the service is safe to share.
-class TfLiteEmbeddingService implements VisualEmbeddingService {
+/// The model must be exported from the official Apple MobileCLIP2-S0
+/// checkpoint. Initialization fails loudly if the model asset is missing or has
+/// unexpected I/O shapes; no aHash fallback is used in production.
+class MobileVisionEmbeddingService implements VisualEmbeddingService {
   static const String assetPath =
-      'assets/models/mobilenet_v3_small_embedder.tflite';
+      'assets/models/mobileclip2/mobileclip2_s0_image_encoder.tflite';
 
-  static const int _inputSize = 224;
+  static const int _inputSize = 256;
 
   Interpreter? _interpreter;
-  int _outputDims = 1024; // updated after model load
+  int _outputDims = 512; // verified after model load
 
   bool get isInitialized => _interpreter != null;
 
@@ -69,20 +69,32 @@ class TfLiteEmbeddingService implements VisualEmbeddingService {
     final data = await rootBundle.load(assetPath);
     final bytes =
         data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
-    final interpreter = Interpreter.fromBuffer(bytes);
-    // Discover actual output dimension from the model graph.
+    final options = InterpreterOptions();
+    final interpreter = Interpreter.fromBuffer(bytes, options: options);
+    final inShape = interpreter.getInputTensor(0).shape;
     final outShape = interpreter.getOutputTensor(0).shape;
-    _outputDims = outShape.last; // [1, N] → N
+    if (inShape.length != 4 ||
+        inShape[1] != _inputSize ||
+        inShape[2] != _inputSize ||
+        inShape[3] != 3) {
+      interpreter.close();
+      throw StateError('Unexpected MobileCLIP2-S0 input shape: $inShape');
+    }
+    if (outShape.length != 2 || outShape.last != 512) {
+      interpreter.close();
+      throw StateError('Unexpected MobileCLIP2-S0 output shape: $outShape');
+    }
+    _outputDims = outShape.last;
     _interpreter = interpreter;
   }
 
   // ── VisualEmbeddingService ─────────────────────────────────────────────────
 
   @override
-  String get modelVersion => 'mv3_small_224_float32_v1';
+  String get modelVersion => 'mobileclip2_s0_image_encoder_256_float32_v1';
 
   @override
-  double get recommendedMinConfidence => 0.45;
+  double get recommendedMinConfidence => 0.78;
 
   @override
   int get embeddingLength => _outputDims * 4; // float32 = 4 bytes each
@@ -129,9 +141,9 @@ class TfLiteEmbeddingService implements VisualEmbeddingService {
     for (var y = 0; y < _inputSize; y++) {
       for (var x = 0; x < _inputSize; x++) {
         final p = resized.getPixel(x, y);
-        input[i++] = p.r / 255.0;
-        input[i++] = p.g / 255.0;
-        input[i++] = p.b / 255.0;
+        input[i++] = _normalizeRed(p.r / 255.0);
+        input[i++] = _normalizeGreen(p.g / 255.0);
+        input[i++] = _normalizeBlue(p.b / 255.0);
       }
     }
     return input;
@@ -195,9 +207,9 @@ class TfLiteEmbeddingService implements VisualEmbeddingService {
         final g = (yv - 0.344136 * uv - 0.714136 * vv).clamp(0, 255).toInt();
         final b = (yv + 1.772 * uv).clamp(0, 255).toInt();
 
-        input[idx++] = r / 255.0;
-        input[idx++] = g / 255.0;
-        input[idx++] = b / 255.0;
+        input[idx++] = _normalizeRed(r / 255.0);
+        input[idx++] = _normalizeGreen(g / 255.0);
+        input[idx++] = _normalizeBlue(b / 255.0);
       }
     }
     return input;
@@ -224,13 +236,20 @@ class TfLiteEmbeddingService implements VisualEmbeddingService {
           input[idx++] = 0;
           continue;
         }
-        input[idx++] = bytes[base + 2] / 255.0; // R
-        input[idx++] = bytes[base + 1] / 255.0; // G
-        input[idx++] = bytes[base + 0] / 255.0; // B (BGRA → B at base+0)
+        input[idx++] = _normalizeRed(bytes[base + 2] / 255.0); // R
+        input[idx++] = _normalizeGreen(bytes[base + 1] / 255.0); // G
+        input[idx++] = _normalizeBlue(bytes[base + 0] / 255.0); // B
       }
     }
     return input;
   }
+
+  static double _normalizeRed(double value) =>
+      (value - 0.48145466) / 0.26862954;
+  static double _normalizeGreen(double value) =>
+      (value - 0.4578275) / 0.26130258;
+  static double _normalizeBlue(double value) =>
+      (value - 0.40821073) / 0.27577711;
 
   // ── Inference ──────────────────────────────────────────────────────────────
 
@@ -274,57 +293,67 @@ class TfLiteEmbeddingService implements VisualEmbeddingService {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// VisualEmbeddingProvider  —  primary/fallback dispatch
+// VisualEmbeddingProvider  —  production MobileCLIP2 dispatch
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// Wraps [TfLiteEmbeddingService] (primary) with [AHashEmbeddingService]
-/// (fallback) so the rest of the stack never has to deal with init failures.
+/// Provides the production MobileCLIP2-S0 embedder.
 ///
-/// Call [initialize] once before using the provider. If TFLite fails to load
-/// (model missing, platform unsupported, etc.) the provider transparently
-/// falls back to aHash — the scanner keeps working, just with lower accuracy.
+/// Call [initialize] once before using the provider. If the runtime model is
+/// missing or invalid, initialization throws and the scanner must report the
+/// visual engine as unavailable. It never silently falls back to aHash.
 class VisualEmbeddingProvider implements VisualEmbeddingService {
-  final TfLiteEmbeddingService _tflite = TfLiteEmbeddingService();
-  final AHashEmbeddingService _ahash = AHashEmbeddingService();
+  final MobileVisionEmbeddingService _mobileClip =
+      MobileVisionEmbeddingService();
+  Object? _initializationError;
+  bool _ready = false;
 
-  bool _tfliteReady = false;
-
-  bool get isTfLiteActive => _tfliteReady;
+  bool get isMobileClipActive => _ready;
+  bool get isTfLiteActive => _ready;
+  Object? get initializationError => _initializationError;
 
   Future<void> initialize() async {
     try {
-      await _tflite.initialize();
-      _tfliteReady = true;
-    } catch (_) {
-      // TFLite unavailable (e.g. unit-test host without native libs) → aHash.
-      _tfliteReady = false;
+      await _mobileClip.initialize();
+      _ready = true;
+      _initializationError = null;
+    } catch (e) {
+      _ready = false;
+      _initializationError = e;
+      rethrow;
     }
   }
 
-  VisualEmbeddingService get _active => _tfliteReady ? _tflite : _ahash;
+  VisualEmbeddingService get _active {
+    if (!_ready) {
+      throw StateError(
+        'MobileCLIP2-S0 embedding engine is unavailable: $_initializationError',
+      );
+    }
+    return _mobileClip;
+  }
 
   @override
-  String get modelVersion => _active.modelVersion;
+  String get modelVersion => _mobileClip.modelVersion;
   @override
-  double get recommendedMinConfidence => _active.recommendedMinConfidence;
+  double get recommendedMinConfidence => _mobileClip.recommendedMinConfidence;
   @override
-  int get embeddingLength => _active.embeddingLength;
+  int get embeddingLength => _mobileClip.embeddingLength;
   @override
   Future<Uint8List?> embedFile(String path) => _active.embedFile(path);
   @override
   Uint8List? embedFrame(CameraImage image) => _active.embedFrame(image);
   @override
-  double similarity(Uint8List a, Uint8List b) => _active.similarity(a, b);
+  double similarity(Uint8List a, Uint8List b) => _mobileClip.similarity(a, b);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// AHashEmbeddingService  —  16×16 average hash (fallback)
+// AHashEmbeddingService  —  16×16 average hash (tests/diagnostics only)
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// Average-hash (aHash) visual embedding — 256-bit hash stored in 32 bytes.
 ///
-/// Used as the fallback when TFLite is unavailable (e.g. in unit tests running
-/// on the host machine, or on devices without TFLite native libraries).
+/// Retained for unit tests and diagnostics only. Production recognition must use
+/// [MobileVisionEmbeddingService] and fail closed when it is unavailable.
 class AHashEmbeddingService implements VisualEmbeddingService {
   AHashEmbeddingService({int gridSize = 16})
       : _n = gridSize,

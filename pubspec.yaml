@@ -40,3 +40,4 @@ flutter:
   generate: true
   assets:
     - assets/models/
+    - assets/models/mobileclip2/
