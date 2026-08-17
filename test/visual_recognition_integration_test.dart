@@ -1,15 +1,16 @@
 /// Integration-style tests for the visual recognition stack.
 ///
-/// These tests run on the host machine — TFLite native libraries are NOT
-/// available there. Tests are therefore designed around:
-///   1. The VisualEmbeddingProvider fallback behaviour (always aHash on host).
-///   2. The LocalProductIndexService using the correct similarity dispatch.
-///   3. The RecognitionPipeline architecture (temporal tracker, scan lock).
+/// These tests run on the host machine. They verify that production recognition
+/// fails closed when the MobileCLIP2-S0 runtime asset is absent instead of
+/// silently falling back to aHash. Tests are designed around:
+///   1. VisualEmbeddingProvider fail-closed behavior.
+///   2. LocalProductIndexService using the correct similarity dispatch.
+///   3. RecognitionPipeline architecture (temporal tracker, scan lock).
 ///   4. Deterministic embedding round-trips (same image → same embedding).
 ///   5. Boundary and false-positive guards.
 ///
-/// On a real Android device (debug APK), TfLiteEmbeddingService is used
-/// instead of aHash — the architecture is identical; only the backend differs.
+/// On a real Android device, MobileVisionEmbeddingService must load the bundled
+/// MobileCLIP2-S0 image encoder; aHash remains tests/diagnostics only.
 library;
 
 import 'dart:typed_data';
@@ -130,34 +131,19 @@ void main() {
     });
   });
 
-  // ── 2. VisualEmbeddingProvider — fallback ─────────────────────────────────
+  // ── 2. VisualEmbeddingProvider — fail closed ──────────────────────────────
 
-  group('VisualEmbeddingProvider — fallback to aHash when TFLite unavailable',
-      () {
-    test('initialize does not throw even when TFLite libs missing', () async {
+  group('VisualEmbeddingProvider — no silent aHash fallback', () {
+    test('initialize fails closed when MobileCLIP2 asset is absent on host', () async {
       final provider = VisualEmbeddingProvider();
-      await expectLater(provider.initialize(), completes);
+      await expectLater(provider.initialize(), throwsA(isA<Object>()));
+      expect(provider.isTfLiteActive, isFalse);
     });
 
-    test('isTfLiteActive is false on host (no native TFLite libs)', () async {
+    test('model metadata is MobileCLIP2-S0 before initialization', () {
       final provider = VisualEmbeddingProvider();
-      await provider.initialize();
-      // On the CI host, native libs are absent → aHash fallback.
-      // On Android device, this may be true — test still passes either way.
-      expect(provider.isTfLiteActive, isA<bool>());
-    });
-
-    test('provider embeddingLength is > 0 after init', () async {
-      final provider = VisualEmbeddingProvider();
-      await provider.initialize();
-      expect(provider.embeddingLength, greaterThan(0));
-    });
-
-    test('provider similarity(x,x)==1.0 regardless of backend', () async {
-      final provider = VisualEmbeddingProvider();
-      await provider.initialize();
-      final h = Uint8List(provider.embeddingLength)..fillRange(0, provider.embeddingLength, 0x55);
-      expect(provider.similarity(h, h), closeTo(1.0, 0.001));
+      expect(provider.modelVersion, contains('mobileclip2_s0'));
+      expect(provider.embeddingLength, 512 * 4);
     });
   });
 

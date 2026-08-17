@@ -154,12 +154,11 @@ class RecognitionPipeline {
       _embedding is VisualEmbeddingProvider &&
       (_embedding as VisualEmbeddingProvider).isTfLiteActive;
 
-  bool get isFallbackActive =>
-      _embedding is VisualEmbeddingProvider && !isTfLiteActive;
+  bool get isFallbackActive => false;
 
   String get backendName {
     if (_embedding is VisualEmbeddingProvider) {
-      return isTfLiteActive ? 'TFLite' : 'aHash fallback';
+      return isTfLiteActive ? 'MobileCLIP2-S0/TFLite' : 'unavailable';
     }
     return _embedding.runtimeType.toString();
   }
