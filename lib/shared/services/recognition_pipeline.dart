@@ -150,16 +150,16 @@ class RecognitionPipeline {
     _minConfidence = _config.minConfidence ?? _embedding.recommendedMinConfidence;
   }
 
-  bool get isTfLiteActive =>
+  bool get isOnnxActive =>
       _embedding is VisualEmbeddingProvider &&
-      (_embedding as VisualEmbeddingProvider).isTfLiteActive;
+      (_embedding as VisualEmbeddingProvider).isOnnxActive;
 
   bool get isFallbackActive =>
-      _embedding is VisualEmbeddingProvider && !isTfLiteActive;
+      _embedding is VisualEmbeddingProvider && !isOnnxActive;
 
   String get backendName {
     if (_embedding is VisualEmbeddingProvider) {
-      return isTfLiteActive ? 'TFLite' : 'aHash fallback';
+      return isOnnxActive ? 'ONNX Runtime' : 'visual engine unavailable';
     }
     return _embedding.runtimeType.toString();
   }

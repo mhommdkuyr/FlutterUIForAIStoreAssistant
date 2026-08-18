@@ -1,15 +1,14 @@
 /// Integration-style tests for the visual recognition stack.
 ///
-/// These tests run on the host machine — TFLite native libraries are NOT
-/// available there. Tests are therefore designed around:
-///   1. The VisualEmbeddingProvider fallback behaviour (always aHash on host).
+/// These tests run on the host machine — ONNX Runtime native libraries and model assets may be unavailable there.
+/// Tests are therefore designed around:
+///   1. The VisualEmbeddingProvider fail-closed behaviour on host.
 ///   2. The LocalProductIndexService using the correct similarity dispatch.
 ///   3. The RecognitionPipeline architecture (temporal tracker, scan lock).
 ///   4. Deterministic embedding round-trips (same image → same embedding).
 ///   5. Boundary and false-positive guards.
 ///
-/// On a real Android device (debug APK), TfLiteEmbeddingService is used
-/// instead of aHash — the architecture is identical; only the backend differs.
+/// On a real Android device (debug APK), MobileVisionEmbeddingService uses MobileCLIP2 ONNX Runtime.
 library;
 
 import 'dart:typed_data';
@@ -132,25 +131,23 @@ void main() {
 
   // ── 2. VisualEmbeddingProvider — fallback ─────────────────────────────────
 
-  group('VisualEmbeddingProvider — fallback to aHash when TFLite unavailable',
+  group('VisualEmbeddingProvider — fail closed when ONNX unavailable',
       () {
-    test('initialize does not throw even when TFLite libs missing', () async {
+    test('initialize does not throw even when ONNX assets/libs are missing', () async {
       final provider = VisualEmbeddingProvider();
       await expectLater(provider.initialize(), completes);
     });
 
-    test('isTfLiteActive is false on host (no native TFLite libs)', () async {
+    test('isOnnxActive reports backend availability', () async {
       final provider = VisualEmbeddingProvider();
       await provider.initialize();
-      // On the CI host, native libs are absent → aHash fallback.
-      // On Android device, this may be true — test still passes either way.
-      expect(provider.isTfLiteActive, isA<bool>());
+      expect(provider.isOnnxActive, isA<bool>());
     });
 
-    test('provider embeddingLength is > 0 after init', () async {
+    test('provider embeddingLength is either unavailable or the 512-float ONNX embedding length', () async {
       final provider = VisualEmbeddingProvider();
       await provider.initialize();
-      expect(provider.embeddingLength, greaterThan(0));
+      expect(provider.embeddingLength == 0 || provider.embeddingLength == 512 * 4, isTrue);
     });
 
     test('provider similarity(x,x)==1.0 regardless of backend', () async {
