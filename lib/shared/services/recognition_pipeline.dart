@@ -208,7 +208,7 @@ class RecognitionPipeline {
     _processing = false;
   }
 
-  RecognitionFrameReport processFrame(CameraImage image) {
+  Future<RecognitionFrameReport> processFrame(CameraImage image) async {
     final baseDiagnostics = _diagnostics();
     if (!_active || _processing || !isIndexReady) {
       return RecognitionFrameReport.skipped(baseDiagnostics);
@@ -242,7 +242,7 @@ class RecognitionPipeline {
       }
 
       final inference = Stopwatch()..start();
-      final embedding = _embedding.embedFrame(image);
+      final embedding = await _embedding.embedFrame(image);
       inference.stop();
       final report = embedding == null
           ? _noMatchReport(

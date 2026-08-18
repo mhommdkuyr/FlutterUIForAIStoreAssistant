@@ -45,7 +45,7 @@ class _StubEmbedding implements VisualEmbeddingService {
   }
 
   @override
-  Uint8List? embedFrame(camera) => null;
+  Future<Uint8List?> embedFrame(camera) async => null;
 
   @override
   double similarity(Uint8List a, Uint8List b) {

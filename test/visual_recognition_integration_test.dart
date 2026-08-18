@@ -62,7 +62,7 @@ class _StubEmbeddingService implements VisualEmbeddingService {
   Future<Uint8List?> embedFile(String path) async => _map[path];
 
   @override
-  Uint8List? embedFrame(camera) => null;
+  Future<Uint8List?> embedFrame(camera) async => null;
 
   @override
   double similarity(Uint8List a, Uint8List b) {
@@ -150,11 +150,18 @@ void main() {
       expect(provider.embeddingLength == 0 || provider.embeddingLength == 512 * 4, isTrue);
     });
 
-    test('provider similarity(x,x)==1.0 regardless of backend', () async {
+    test('provider similarity distinguishes unavailable backend from valid embeddings', () async {
       final provider = VisualEmbeddingProvider();
       await provider.initialize();
-      final h = Uint8List(provider.embeddingLength)..fillRange(0, provider.embeddingLength, 0x55);
-      expect(provider.similarity(h, h), closeTo(1.0, 0.001));
+      if (!provider.isOnnxActive) {
+        expect(provider.embeddingLength, 0);
+        expect(provider.similarity(Uint8List(0), Uint8List(0)), 0.0);
+        expect(await provider.embedFile('/nonexistent/path.jpg'), isNull);
+      } else {
+        final h = Uint8List(provider.embeddingLength)
+          ..fillRange(0, provider.embeddingLength, 0x55);
+        expect(provider.similarity(h, h), closeTo(1.0, 0.001));
+      }
     });
   });
 

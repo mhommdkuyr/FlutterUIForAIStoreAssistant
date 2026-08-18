@@ -26,7 +26,7 @@ class LocalProductIndexService {
   LocalProductIndexService({
     VisualEmbeddingService? embeddingService,
     EmbeddingPersistenceService? persistenceService,
-  })  : _embedding = embeddingService ?? AHashEmbeddingService(),
+  })  : _embedding = embeddingService ?? VisualEmbeddingProvider(),
         _persistence = persistenceService;
 
   final VisualEmbeddingService _embedding;

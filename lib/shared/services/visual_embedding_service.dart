@@ -12,8 +12,9 @@ import 'frame_preprocessor.dart';
 
 abstract class VisualEmbeddingService {
   Future<Uint8List?> embedFile(String path);
-  Uint8List? embedFrame(CameraImage image);
+  Future<Uint8List?> embedFrame(CameraImage image);
   double similarity(Uint8List a, Uint8List b);
+  Future<void> dispose() async {}
   int get embeddingLength;
   String get modelVersion;
   double get recommendedMinConfidence;
@@ -43,9 +44,14 @@ class MobileClip2ModelContract {
   );
 
   factory MobileClip2ModelContract.fromJson(Map<String, dynamic> json) {
+    final preprocessing = json['preprocessing'];
+    final source = preprocessing is Map<String, dynamic>
+        ? <String, dynamic>{...json, ...preprocessing}
+        : json;
+
     int readInt(List<String> keys, int fallback) {
       for (final key in keys) {
-        final value = json[key];
+        final value = source[key];
         if (value is int) return value;
         if (value is num) return value.toInt();
         if (value is List && value.isNotEmpty) {
@@ -59,34 +65,47 @@ class MobileClip2ModelContract {
 
     List<double> readDoubles(List<String> keys, List<double> fallback) {
       for (final key in keys) {
-        final value = json[key];
+        final value = source[key];
         if (value is List && value.length >= 3) {
           return value.take(3).map((v) => (v as num).toDouble()).toList();
         }
       }
-      final preprocessing = json['preprocessing'];
-      if (preprocessing is Map<String, dynamic>) {
-        return readDoubles(keys, fallback);
-      }
       return fallback;
     }
 
-    final preprocessing = json['preprocessing'];
-    final source = preprocessing is Map<String, dynamic>
-        ? <String, dynamic>{...json, ...preprocessing}
-        : json;
     final shape = source['input_shape'] ?? source['inputShape'];
-    var layout = (source['layout'] ?? source['input_layout'] ?? 'NCHW').toString().toUpperCase();
+    var layout = (source['layout'] ?? source['input_layout'] ?? 'NCHW')
+        .toString()
+        .toUpperCase();
     if (shape is List && shape.length == 4) {
       final dims = shape.map((e) => e is num ? e.toInt() : -1).toList();
       if (dims[1] == 3) layout = 'NCHW';
       if (dims[3] == 3) layout = 'NHWC';
     }
     return MobileClip2ModelContract(
-      inputSize: readInt(['input_resolution', 'input_size', 'image_size', 'resolution', 'input_shape', 'inputShape'], 224),
-      mean: readDoubles(['mean', 'normalization_mean'], fallback.mean),
-      std: readDoubles(['std', 'normalization_std'], fallback.std),
-      embeddingDimensions: readInt(['embedding_dimension', 'embedding_dimensions', 'output_dimension'], 512),
+      inputSize: readInt(
+        const [
+          'input_resolution',
+          'input_size',
+          'image_size',
+          'resolution',
+          'input_shape',
+          'inputShape',
+        ],
+        fallback.inputSize,
+      ),
+      mean: readDoubles(const ['mean', 'normalization_mean'], fallback.mean),
+      std: readDoubles(const ['std', 'normalization_std'], fallback.std),
+      embeddingDimensions: readInt(
+        const [
+          'embedding_dimension',
+          'embedding_dimensions',
+          'output_dimension',
+          'output_shape',
+          'outputShape',
+        ],
+        fallback.embeddingDimensions,
+      ),
       layout: layout,
     );
   }
@@ -99,27 +118,84 @@ class MobileVisionEmbeddingService implements VisualEmbeddingService {
 
   final OnnxRuntime _runtime = OnnxRuntime();
   OrtSession? _session;
+  Object? _initializationError;
   MobileClip2ModelContract _contract = MobileClip2ModelContract.fallback;
   String? _inputName;
   String? _outputName;
 
   bool get isInitialized => _session != null;
+  Object? get initializationError => _initializationError;
   String get inputName => _inputName ?? '';
   String get outputName => _outputName ?? '';
   MobileClip2ModelContract get contract => _contract;
 
   Future<void> initialize() async {
-    await _loadMetadata();
-    await _assertAssetReadable(assetPath);
-    await _assertAssetReadable(externalDataAssetPath);
-    final session = await _runtime.createSessionFromAsset(assetPath);
-    if (session.inputNames.isEmpty || session.outputNames.isEmpty) {
-      await session.close();
-      throw StateError('MobileCLIP2 ONNX model exposes no inputs or outputs.');
+    _initializationError = null;
+    try {
+      await _loadMetadata();
+      await _assertAssetReadable(assetPath);
+      await _assertAssetReadable(externalDataAssetPath);
+      final session = await _runtime.createSessionFromAsset(assetPath);
+      try {
+        _validateSessionContract(session);
+        _session = session;
+      } catch (_) {
+        await session.close();
+        rethrow;
+      }
+    } catch (error) {
+      _initializationError = error;
+      _session = null;
+      rethrow;
     }
-    _inputName = session.inputNames.first;
-    _outputName = session.outputNames.first;
-    _session = session;
+  }
+
+  void _validateSessionContract(OrtSession session) {
+    final inputNames = session.inputNames;
+    final outputNames = session.outputNames;
+    if (inputNames.length != 1) {
+      throw StateError('MobileCLIP2 ONNX must expose exactly one input, got ${inputNames.length}.');
+    }
+    if (outputNames.length != 1) {
+      throw StateError('MobileCLIP2 ONNX must expose exactly one output, got ${outputNames.length}.');
+    }
+    _inputName = inputNames.single;
+    _outputName = outputNames.single;
+    _validateGraphShape(_readShape(session, isInput: true), isInput: true);
+    _validateGraphShape(_readShape(session, isInput: false), isInput: false);
+  }
+
+  List<int>? _readShape(OrtSession session, {required bool isInput}) {
+    final dynamic dynamicSession = session;
+    try {
+      final info = isInput ? dynamicSession.inputInfo : dynamicSession.outputInfo;
+      final dynamic first = info is Map
+          ? info.values.first
+          : (info is List && info.isNotEmpty ? info.first : null);
+      final shape = first?.shape;
+      if (shape is List) return shape.map((v) => v is num ? v.toInt() : -1).toList();
+    } catch (_) {}
+    return null;
+  }
+
+  void _validateGraphShape(List<int>? shape, {required bool isInput}) {
+    if (shape == null) return;
+    if (isInput) {
+      if (shape.length != 4) throw StateError('MobileCLIP2 input must be rank 4, got $shape.');
+      final nchw = shape[1] == 3 && shape[2] == _contract.inputSize && shape[3] == _contract.inputSize;
+      final nhwc = shape[3] == 3 && shape[1] == _contract.inputSize && shape[2] == _contract.inputSize;
+      if (!nchw && !nhwc) {
+        throw StateError('MobileCLIP2 input shape $shape disagrees with metadata ${_contract.inputSize}/${_contract.layout}.');
+      }
+      final graphLayout = nchw ? 'NCHW' : 'NHWC';
+      if (graphLayout != _contract.layout) {
+        throw StateError('MobileCLIP2 input layout $graphLayout disagrees with metadata ${_contract.layout}.');
+      }
+    } else {
+      if (!shape.contains(_contract.embeddingDimensions)) {
+        throw StateError('MobileCLIP2 output shape $shape does not contain ${_contract.embeddingDimensions}.');
+      }
+    }
   }
 
   Future<void> _loadMetadata() async {
@@ -136,7 +212,7 @@ class MobileVisionEmbeddingService implements VisualEmbeddingService {
   }
 
   @override
-  String get modelVersion => 'mobileclip2_s0_vision_onnx_${_contract.inputSize}_${_contract.layout}_v1';
+  String get modelVersion => 'mobileclip2_s0_vision_onnx_v1';
   @override
   double get recommendedMinConfidence => 0.45;
   @override
@@ -157,14 +233,12 @@ class MobileVisionEmbeddingService implements VisualEmbeddingService {
   }
 
   @override
-  Uint8List? embedFrame(CameraImage image) {
+  Future<Uint8List?> embedFrame(CameraImage image) async {
     if (_session == null) return null;
     try {
       final input = _prepareFrameTensor(image);
       if (input == null) return null;
-      Uint8List? result;
-      _runInference(input).then((value) => result = value);
-      return result;
+      return await _runInference(input);
     } catch (_) {
       return null;
     }
@@ -235,9 +309,13 @@ class MobileVisionEmbeddingService implements VisualEmbeddingService {
       for (var col = 0; col < size; col++) {
         final sx = (col * w / size).toInt().clamp(0, w - 1), sy = (row * h / size).toInt().clamp(0, h - 1);
         final base = sy * stride + sx * 4;
-        final b = base + 2 < bytes.length ? bytes[base].toDouble() : 0.0;
-        final g = base + 2 < bytes.length ? bytes[base + 1].toDouble() : 0.0;
-        final r = base + 2 < bytes.length ? bytes[base + 2].toDouble() : 0.0;
+        if (base < 0 || base + 3 >= bytes.length) {
+          _writePixel(input, row, col, 0, 0, 0);
+          continue;
+        }
+        final b = bytes[base].toDouble();
+        final g = bytes[base + 1].toDouble();
+        final r = bytes[base + 2].toDouble();
         _writePixel(input, row, col, r, g, b);
       }
     }
@@ -271,6 +349,12 @@ class MobileVisionEmbeddingService implements VisualEmbeddingService {
   @override
   double similarity(Uint8List a, Uint8List b) => _cosineSimilarity(a, b);
 
+  @override
+  Future<void> dispose() async {
+    await _session?.close();
+    _session = null;
+  }
+
   static void _l2Normalize(Float32List v) {
     var norm = 0.0;
     for (final x in v) { norm += x * x; }
@@ -295,13 +379,13 @@ class VisualEmbeddingProvider implements VisualEmbeddingService {
   bool _onnxReady = false;
 
   bool get isOnnxActive => _onnxReady;
-  bool get isTfLiteActive => false;
+  Object? get initializationError => _mobileClip.initializationError;
 
   Future<void> initialize() async {
     try {
       await _mobileClip.initialize();
       _onnxReady = true;
-    } catch (_) {
+    } catch (error) {
       _onnxReady = false;
     }
   }
@@ -317,9 +401,15 @@ class VisualEmbeddingProvider implements VisualEmbeddingService {
   @override
   Future<Uint8List?> embedFile(String path) => _active?.embedFile(path) ?? Future.value(null);
   @override
-  Uint8List? embedFrame(CameraImage image) => _active?.embedFrame(image);
+  Future<Uint8List?> embedFrame(CameraImage image) => _active?.embedFrame(image) ?? Future.value(null);
   @override
   double similarity(Uint8List a, Uint8List b) => _active?.similarity(a, b) ?? 0.0;
+
+  @override
+  Future<void> dispose() async {
+    await _mobileClip.dispose();
+    _onnxReady = false;
+  }
 }
 
 class AHashEmbeddingService implements VisualEmbeddingService {
@@ -347,11 +437,14 @@ class AHashEmbeddingService implements VisualEmbeddingService {
     } catch (_) { return null; }
   }
   @override
-  Uint8List? embedFrame(CameraImage image) {
+  Future<Uint8List?> embedFrame(CameraImage image) async {
     try { final pix = _preprocessor.extractLuminanceGrid(image); return pix == null ? null : _averageHash(pix); } catch (_) { return null; }
   }
   @override
-  double similarity(Uint8List a, Uint8List b) => 1.0 - (hammingDistance(a, b) / (_n * _n));
+  double similarity(Uint8List a, Uint8List b) {
+    if (a.length != b.length) return 0.0;
+    return 1.0 - (hammingDistance(a, b) / (_n * _n));
+  }
   int hammingDistance(Uint8List a, Uint8List b) {
     if (a.length != b.length) return _n * _n;
     var dist = 0;

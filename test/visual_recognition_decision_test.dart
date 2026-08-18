@@ -31,7 +31,7 @@ class _StubEmbeddingService implements VisualEmbeddingService {
   Future<Uint8List?> embedFile(String path) async => _files[path];
 
   @override
-  Uint8List? embedFrame(image) => null;
+  Future<Uint8List?> embedFrame(image) async => null;
 
   @override
   int get embeddingLength => 3;
