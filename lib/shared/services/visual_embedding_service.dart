@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
@@ -35,13 +36,7 @@ class MobileClip2ModelContract {
   final int embeddingDimensions;
   final String layout;
 
-  static const fallback = MobileClip2ModelContract(
-    inputSize: 224,
-    mean: [0.48145466, 0.4578275, 0.40821073],
-    std: [0.26862954, 0.26130258, 0.27577711],
-    embeddingDimensions: 512,
-    layout: 'NCHW',
-  );
+  static const expectedEmbeddingDimensions = 512;
 
   factory MobileClip2ModelContract.fromJson(Map<String, dynamic> json) {
     final preprocessing = json['preprocessing'];
@@ -49,65 +44,138 @@ class MobileClip2ModelContract {
         ? <String, dynamic>{...json, ...preprocessing}
         : json;
 
-    int readInt(List<String> keys, int fallback) {
-      for (final key in keys) {
-        final value = source[key];
-        if (value is int) return value;
-        if (value is num) return value.toInt();
-        if (value is List && value.isNotEmpty) {
-          final ints = value.whereType<num>().map((v) => v.toInt()).toList();
-          final spatial = ints.where((v) => v > 1 && v != 3).toList();
-          if (spatial.isNotEmpty) return spatial.last;
-        }
-      }
-      return fallback;
-    }
-
-    List<double> readDoubles(List<String> keys, List<double> fallback) {
-      for (final key in keys) {
-        final value = source[key];
-        if (value is List && value.length >= 3) {
-          return value.take(3).map((v) => (v as num).toDouble()).toList();
-        }
-      }
-      return fallback;
-    }
-
-    final shape = source['input_shape'] ?? source['inputShape'];
-    var layout = (source['layout'] ?? source['input_layout'] ?? 'NCHW')
-        .toString()
-        .toUpperCase();
-    if (shape is List && shape.length == 4) {
-      final dims = shape.map((e) => e is num ? e.toInt() : -1).toList();
-      if (dims[1] == 3) layout = 'NCHW';
-      if (dims[3] == 3) layout = 'NHWC';
-    }
-    return MobileClip2ModelContract(
-      inputSize: readInt(
-        const [
-          'input_resolution',
-          'input_size',
-          'image_size',
-          'resolution',
-          'input_shape',
-          'inputShape',
-        ],
-        fallback.inputSize,
+    final inputShape = readShape(source, const ['input_shape', 'inputShape']);
+    final inputSize = readPositiveInt(
+      source,
+      const ['input_resolution', 'input_size', 'image_size', 'resolution'],
+      fallback: inputShape == null ? null : inferInputSize(inputShape),
+    );
+    final layout = readLayout(source, inputShape);
+    final mean = readDoubleArray(source, const ['mean', 'normalization_mean']);
+    final std = readDoubleArray(source, const ['std', 'normalization_std']);
+    final embeddingDimensions = readPositiveInt(
+      source,
+      const ['embedding_dimension', 'embedding_dimensions', 'output_dimension'],
+      fallback: inferEmbeddingDimension(
+        readShape(source, const ['output_shape', 'outputShape']),
       ),
-      mean: readDoubles(const ['mean', 'normalization_mean'], fallback.mean),
-      std: readDoubles(const ['std', 'normalization_std'], fallback.std),
-      embeddingDimensions: readInt(
-        const [
-          'embedding_dimension',
-          'embedding_dimensions',
-          'output_dimension',
-          'output_shape',
-          'outputShape',
-        ],
-        fallback.embeddingDimensions,
-      ),
+    );
+
+    final contract = MobileClip2ModelContract(
+      inputSize: inputSize,
+      mean: mean,
+      std: std,
+      embeddingDimensions: embeddingDimensions,
       layout: layout,
     );
+    contract.validate();
+    return contract;
+  }
+
+  void validate() {
+    if (inputSize <= 0) {
+      throw StateError('MobileCLIP2 metadata inputSize must be > 0.');
+    }
+    if (layout != 'NCHW' && layout != 'NHWC') {
+      throw StateError('MobileCLIP2 metadata layout must be NCHW or NHWC.');
+    }
+    if (mean.length != 3 || mean.any((value) => !value.isFinite)) {
+      throw StateError('MobileCLIP2 metadata mean must contain 3 finite values.');
+    }
+    if (std.length != 3 || std.any((value) => !value.isFinite || value <= 0)) {
+      throw StateError('MobileCLIP2 metadata std must contain 3 finite positive values.');
+    }
+    if (embeddingDimensions != expectedEmbeddingDimensions) {
+      throw StateError(
+        'MobileCLIP2 metadata embedding dimension must be '
+        '$expectedEmbeddingDimensions, got $embeddingDimensions.',
+      );
+    }
+  }
+
+  static int readPositiveInt(
+    Map<String, dynamic> source,
+    List<String> keys, {
+    int? fallback,
+  }) {
+    for (final key in keys) {
+      final value = source[key];
+      if (value is int && value > 0) return value;
+      if (value is num && value > 0) return value.toInt();
+    }
+    if (fallback != null && fallback > 0) return fallback;
+    throw StateError('MobileCLIP2 metadata is missing positive integer ${keys.join('/')}');
+  }
+
+  static List<double> readDoubleArray(
+    Map<String, dynamic> source,
+    List<String> keys,
+  ) {
+    for (final key in keys) {
+      final value = source[key];
+      if (value is List) {
+        if (value.length != 3) {
+          throw StateError('MobileCLIP2 metadata $key must contain exactly 3 values.');
+        }
+        return value.map((item) {
+          if (item is! num) {
+            throw StateError('MobileCLIP2 metadata $key contains a non-numeric value.');
+          }
+          return item.toDouble();
+        }).toList(growable: false);
+      }
+    }
+    throw StateError('MobileCLIP2 metadata is missing ${keys.join('/')}');
+  }
+
+  static List<int>? readShape(Map<String, dynamic> source, List<String> keys) {
+    for (final key in keys) {
+      final value = source[key];
+      if (value is List) {
+        return value.map((item) {
+          if (item is! num) return -1;
+          return item.toInt();
+        }).toList(growable: false);
+      }
+    }
+    return null;
+  }
+
+  static int? inferInputSize(List<int>? shape) {
+    if (shape == null || shape.length != 4) return null;
+    if (shape[1] == 3 && shape[2] > 0 && shape[2] == shape[3]) return shape[2];
+    if (shape[3] == 3 && shape[1] > 0 && shape[1] == shape[2]) return shape[1];
+    return null;
+  }
+
+  static String readLayout(Map<String, dynamic> source, List<int>? inputShape) {
+    final explicit = source['layout'] ?? source['input_layout'] ?? source['inputLayout'];
+    if (explicit != null) {
+      final layout = explicit.toString().toUpperCase();
+      if (layout == 'NCHW' || layout == 'NHWC') return layout;
+      throw StateError('MobileCLIP2 metadata layout must be NCHW or NHWC.');
+    }
+    if (inputShape != null && inputShape.length == 4) {
+      if (inputShape[1] == 3) return 'NCHW';
+      if (inputShape[3] == 3) return 'NHWC';
+    }
+    throw StateError('MobileCLIP2 metadata is missing input layout.');
+  }
+
+  static int? inferEmbeddingDimension(List<int>? shape) {
+    if (shape == null) return null;
+    if (isSingleEmbeddingShape(shape, expectedEmbeddingDimensions)) {
+      return expectedEmbeddingDimensions;
+    }
+    return null;
+  }
+
+  static bool isSingleEmbeddingShape(List<int> shape, int dimension) {
+    if (shape.isEmpty) return false;
+    final concrete = shape.where((value) => value > 0).toList(growable: false);
+    if (concrete.isEmpty) return false;
+    final nonBatch = concrete.where((value) => value != 1).toList(growable: false);
+    return nonBatch.length == 1 && nonBatch.single == dimension;
   }
 }
 
@@ -119,12 +187,15 @@ class MobileVisionEmbeddingService implements VisualEmbeddingService {
   final OnnxRuntime _runtime = OnnxRuntime();
   OrtSession? _session;
   Object? _initializationError;
+  Object? _lastInferenceError;
+  Future<void> _inferenceQueue = Future<void>.value();
   MobileClip2ModelContract _contract = MobileClip2ModelContract.fallback;
   String? _inputName;
   String? _outputName;
 
   bool get isInitialized => _session != null;
   Object? get initializationError => _initializationError;
+  Object? get lastInferenceError => _lastInferenceError;
   String get inputName => _inputName ?? '';
   String get outputName => _outputName ?? '';
   MobileClip2ModelContract get contract => _contract;
@@ -165,45 +236,49 @@ class MobileVisionEmbeddingService implements VisualEmbeddingService {
     _validateGraphShape(_readShape(session, isInput: false), isInput: false);
   }
 
-  List<int>? _readShape(OrtSession session, {required bool isInput}) {
-    final dynamic dynamicSession = session;
-    try {
-      final info = isInput ? dynamicSession.inputInfo : dynamicSession.outputInfo;
-      final dynamic first = info is Map
-          ? info.values.first
-          : (info is List && info.isNotEmpty ? info.first : null);
-      final shape = first?.shape;
-      if (shape is List) return shape.map((v) => v is num ? v.toInt() : -1).toList();
-    } catch (_) {}
-    return null;
+  List<int> _readShape(OrtSession session, {required bool isInput}) {
+    final infoByName = isInput ? session.inputInfo : session.outputInfo;
+    final name = isInput ? _inputName : _outputName;
+    if (name == null) {
+      throw StateError('MobileCLIP2 ${isInput ? 'input' : 'output'} name was not discovered.');
+    }
+    final tensorInfo = infoByName[name];
+    if (tensorInfo == null) {
+      throw StateError('MobileCLIP2 ${isInput ? 'input' : 'output'} info missing for $name.');
+    }
+    final shape = tensorInfo.shape;
+    if (shape.isEmpty) {
+      throw StateError('MobileCLIP2 ${isInput ? 'input' : 'output'} shape is empty.');
+    }
+    return shape.map((value) => value.toInt()).toList(growable: false);
   }
 
-  void _validateGraphShape(List<int>? shape, {required bool isInput}) {
-    if (shape == null) return;
+  void _validateGraphShape(List<int> shape, {required bool isInput}) {
     if (isInput) {
       if (shape.length != 4) throw StateError('MobileCLIP2 input must be rank 4, got $shape.');
       final nchw = shape[1] == 3 && shape[2] == _contract.inputSize && shape[3] == _contract.inputSize;
       final nhwc = shape[3] == 3 && shape[1] == _contract.inputSize && shape[2] == _contract.inputSize;
-      if (!nchw && !nhwc) {
-        throw StateError('MobileCLIP2 input shape $shape disagrees with metadata ${_contract.inputSize}/${_contract.layout}.');
+      final graphLayout = nchw ? 'NCHW' : (nhwc ? 'NHWC' : null);
+      if (graphLayout == null) {
+        throw StateError('MobileCLIP2 input shape $shape disagrees with metadata input size ${_contract.inputSize}.');
       }
-      final graphLayout = nchw ? 'NCHW' : 'NHWC';
       if (graphLayout != _contract.layout) {
         throw StateError('MobileCLIP2 input layout $graphLayout disagrees with metadata ${_contract.layout}.');
       }
-    } else {
-      if (!shape.contains(_contract.embeddingDimensions)) {
-        throw StateError('MobileCLIP2 output shape $shape does not contain ${_contract.embeddingDimensions}.');
-      }
+    } else if (!MobileClip2ModelContract.isSingleEmbeddingShape(
+      shape,
+      _contract.embeddingDimensions,
+    )) {
+      throw StateError(
+        'MobileCLIP2 output shape $shape must represent exactly one '
+        '${_contract.embeddingDimensions}-dimensional embedding.',
+      );
     }
   }
 
   Future<void> _loadMetadata() async {
     final raw = await rootBundle.loadString(metadataAssetPath);
     _contract = MobileClip2ModelContract.fromJson(jsonDecode(raw) as Map<String, dynamic>);
-    if (_contract.embeddingDimensions != 512) {
-      throw StateError('MobileCLIP2 embedding dimension must be 512, got ${_contract.embeddingDimensions}.');
-    }
   }
 
   static Future<void> _assertAssetReadable(String path) async {
@@ -216,7 +291,7 @@ class MobileVisionEmbeddingService implements VisualEmbeddingService {
   @override
   double get recommendedMinConfidence => 0.45;
   @override
-  int get embeddingLength => _contract.embeddingDimensions * 4;
+  int get embeddingLength => isInitialized ? _contract.embeddingDimensions * 4 : 0;
 
   @override
   Future<Uint8List?> embedFile(String path) async {
@@ -227,7 +302,8 @@ class MobileVisionEmbeddingService implements VisualEmbeddingService {
       final decoded = img.decodeImage(await file.readAsBytes());
       if (decoded == null) return null;
       return await _runInference(_prepareImageTensor(decoded));
-    } catch (_) {
+    } catch (error) {
+      _lastInferenceError = error;
       return null;
     }
   }
@@ -239,7 +315,8 @@ class MobileVisionEmbeddingService implements VisualEmbeddingService {
       final input = _prepareFrameTensor(image);
       if (input == null) return null;
       return await _runInference(input);
-    } catch (_) {
+    } catch (error) {
+      _lastInferenceError = error;
       return null;
     }
   }
@@ -322,7 +399,20 @@ class MobileVisionEmbeddingService implements VisualEmbeddingService {
     return input;
   }
 
-  Future<Uint8List?> _runInference(Float32List inputTensor) async {
+  Future<Uint8List?> _runInference(Float32List inputTensor) {
+    final completer = Completer<Uint8List?>();
+    _inferenceQueue = _inferenceQueue.then((_) async {
+      try {
+        completer.complete(await _runInferenceLocked(inputTensor));
+      } catch (error, stackTrace) {
+        _lastInferenceError = error;
+        completer.completeError(error, stackTrace);
+      }
+    });
+    return completer.future.catchError((_) => null);
+  }
+
+  Future<Uint8List?> _runInferenceLocked(Float32List inputTensor) async {
     final session = _session;
     final inputName = _inputName;
     final outputName = _outputName;
@@ -331,18 +421,30 @@ class MobileVisionEmbeddingService implements VisualEmbeddingService {
         ? [1, _contract.inputSize, _contract.inputSize, 3]
         : [1, 3, _contract.inputSize, _contract.inputSize];
     final input = await OrtValue.fromList(inputTensor, shape);
+    Map<String, OrtValue>? outputs;
     try {
-      final outputs = await session.run({inputName: input});
-      final output = outputs[outputName] ?? outputs.values.first;
-      final values = (await output.asList()).cast<num>().map((v) => v.toDouble()).toList();
-      for (final tensor in outputs.values) { tensor.dispose(); }
+      outputs = await session.run({inputName: input});
+      final output = outputs[outputName];
+      if (output == null) {
+        throw StateError('MobileCLIP2 ONNX output $outputName was not returned.');
+      }
+      final values = (await output.asList())
+          .cast<num>()
+          .map((value) => value.toDouble())
+          .toList(growable: false);
       if (values.length != _contract.embeddingDimensions) return null;
       final embedding = Float32List.fromList(values);
-      if (embedding.any((v) => v.isNaN || v.isInfinite)) return null;
+      if (embedding.any((value) => value.isNaN || value.isInfinite)) return null;
       _l2Normalize(embedding);
+      _lastInferenceError = null;
       return embedding.buffer.asUint8List();
     } finally {
       input.dispose();
+      if (outputs != null) {
+        for (final tensor in outputs.values) {
+          tensor.dispose();
+        }
+      }
     }
   }
 
@@ -353,6 +455,13 @@ class MobileVisionEmbeddingService implements VisualEmbeddingService {
   Future<void> dispose() async {
     await _session?.close();
     _session = null;
+    try {
+      final dynamic runtime = _runtime;
+      final dispose = runtime.dispose;
+      if (dispose is Function) dispose();
+    } on NoSuchMethodError {
+      // flutter_onnxruntime 1.8.3 does not require runtime disposal.
+    }
   }
 
   static void _l2Normalize(Float32List v) {
@@ -380,6 +489,7 @@ class VisualEmbeddingProvider implements VisualEmbeddingService {
 
   bool get isOnnxActive => _onnxReady;
   Object? get initializationError => _mobileClip.initializationError;
+  Object? get lastInferenceError => _mobileClip.lastInferenceError;
 
   Future<void> initialize() async {
     try {
