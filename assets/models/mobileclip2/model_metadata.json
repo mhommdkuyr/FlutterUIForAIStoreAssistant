@@ -1,0 +1,23 @@
+{
+    "model_name": "MobileCLIP2-S0-Vision",
+    "embedding_dimension": 512,
+    "input_size": [
+        224,
+        224
+    ],
+    "normalization": {
+        "mean": [
+            0.48145466,
+            0.4578275,
+            0.40821073
+        ],
+        "std": [
+            0.26862954,
+            0.26130258,
+            0.27577711
+        ]
+    },
+    "l2_normalized_required": true,
+    "onnx_opset": 18,
+    "export_timestamp": "Mon Aug 17 19:56:42 2026"
+}
