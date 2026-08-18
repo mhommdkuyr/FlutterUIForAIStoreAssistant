@@ -3,48 +3,120 @@ import 'dart:typed_data';
 import 'package:ai_store_assistant/shared/services/visual_embedding_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-Map<String, dynamic> _validMetadata() => {
-      'model_format': 'ONNX',
-      'onnx_opset': 18,
-      'input_shape': [1, 3, 224, 224],
-      'input_layout': 'NCHW',
+Map<String, dynamic> _actualMetadata() => {
+      'model_name': 'MobileCLIP2-S0-Vision',
       'embedding_dimension': 512,
-      'preprocessing': {
+      'input_size': [224, 224],
+      'normalization': {
         'mean': [0.48145466, 0.4578275, 0.40821073],
         'std': [0.26862954, 0.26130258, 0.27577711],
       },
+      'l2_normalized_required': true,
+      'onnx_opset': 18,
     };
 
 void main() {
-  group('MobileClip2ModelContract', () {
-    test('valid metadata parses without mutating metadata layout from graph', () {
-      final contract = MobileClip2ModelContract.fromJson(_validMetadata());
+  group('MobileClip2ModelContract actual metadata schema', () {
+    test('parses [224,224] input_size and nested normalization', () {
+      final contract = MobileClip2ModelContract.fromJson(_actualMetadata());
 
       expect(contract.inputSize, 224);
-      expect(contract.layout, 'NCHW');
-      expect(contract.embeddingDimensions, 512);
-      expect(contract.mean, hasLength(3));
-      expect(contract.std, hasLength(3));
+      expect(contract.layout, isNull);
+      expect(contract.mean, [0.48145466, 0.4578275, 0.40821073]);
+      expect(contract.std, [0.26862954, 0.26130258, 0.27577711]);
     });
 
-    test('invalid metadata fails closed', () {
-      final metadata = _validMetadata()..['embedding_dimension'] = 384;
+    test('requires 512 dimension, l2_normalized_required=true, and opset=18', () {
+      final contract = MobileClip2ModelContract.fromJson(_actualMetadata());
 
+      expect(contract.embeddingDimensions, 512);
+      expect(contract.l2NormalizedRequired, isTrue);
+      expect(contract.onnxOpset, 18);
+    });
+
+    test('invalid input_size fails closed', () {
       expect(
-        () => MobileClip2ModelContract.fromJson(metadata),
+        () => MobileClip2ModelContract.fromJson(
+          _actualMetadata()..['input_size'] = [224, 256],
+        ),
+        throwsStateError,
+      );
+      expect(
+        () => MobileClip2ModelContract.fromJson(
+          _actualMetadata()..['input_size'] = [224],
+        ),
         throwsStateError,
       );
     });
 
-    test('invalid mean/std fail closed', () {
-      final metadata = _validMetadata();
-      metadata['preprocessing'] = {
+    test('invalid mean/std fails closed', () {
+      final invalidMean = _actualMetadata();
+      invalidMean['normalization'] = {
         'mean': [0.1, double.nan, 0.3],
         'std': [0.2, 0.2, 0.2],
       };
-
       expect(
-        () => MobileClip2ModelContract.fromJson(metadata),
+        () => MobileClip2ModelContract.fromJson(invalidMean),
+        throwsStateError,
+      );
+
+      final invalidStd = _actualMetadata();
+      invalidStd['normalization'] = {
+        'mean': [0.1, 0.2, 0.3],
+        'std': [0.2, 0.0, 0.2],
+      };
+      expect(
+        () => MobileClip2ModelContract.fromJson(invalidStd),
+        throwsStateError,
+      );
+    });
+
+    test('invalid dimension fails closed', () {
+      expect(
+        () => MobileClip2ModelContract.fromJson(
+          _actualMetadata()..['embedding_dimension'] = 384,
+        ),
+        throwsStateError,
+      );
+    });
+
+    test('invalid l2 flag fails closed', () {
+      expect(
+        () => MobileClip2ModelContract.fromJson(
+          _actualMetadata()..['l2_normalized_required'] = false,
+        ),
+        throwsStateError,
+      );
+    });
+
+    test('invalid opset fails closed', () {
+      expect(
+        () => MobileClip2ModelContract.fromJson(
+          _actualMetadata()..['onnx_opset'] = 17,
+        ),
+        throwsStateError,
+      );
+    });
+  });
+
+  group('MobileCLIP2 graph shape helpers', () {
+    test('[1,3,224,224] is NCHW', () {
+      expect(
+        MobileClip2ModelContract.detectGraphLayout([1, 3, 224, 224], 224),
+        'NCHW',
+      );
+    });
+
+    test('[1,224,224,3] is NHWC', () {
+      expect(
+        MobileClip2ModelContract.detectGraphLayout([1, 224, 224, 3], 224),
+        'NHWC',
+      );
+    });
+
+    test('invalid input graph shape fails closed', () {
+      expect(
+        () => MobileClip2ModelContract.detectGraphLayout([1, 3, 256, 256], 224),
         throwsStateError,
       );
     });
