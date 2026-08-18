@@ -1,0 +1,27 @@
+{
+    "final_status": "VERIFIED",
+    "checkpoint_source": "/root/.cache/huggingface/hub/models--apple--MobileCLIP2-S0/snapshots/3136ea51c8ed56b9f9abfab04cb816735aaad6cb/mobileclip2_s0.pt",
+    "deterministic": true,
+    "metrics": [
+        {
+            "img_id": 0,
+            "cosine_similarity": 1.000000238418579,
+            "max_abs_error": 1.30385160446167e-07
+        },
+        {
+            "img_id": 1,
+            "cosine_similarity": 1.0000001192092896,
+            "max_abs_error": 3.2782554626464844e-07
+        },
+        {
+            "img_id": 2,
+            "cosine_similarity": 1.0,
+            "max_abs_error": 2.7194619178771973e-07
+        },
+        {
+            "img_id": 3,
+            "cosine_similarity": 1.0000001192092896,
+            "max_abs_error": 1.4156103134155273e-07
+        }
+    ]
+}
