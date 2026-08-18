@@ -37,6 +37,12 @@ void main() {
     test('invalid input_size fails closed', () {
       expect(
         () => MobileClip2ModelContract.fromJson(
+          _actualMetadata()..['input_size'] = [256, 256],
+        ),
+        throwsStateError,
+      );
+      expect(
+        () => MobileClip2ModelContract.fromJson(
           _actualMetadata()..['input_size'] = [224, 256],
         ),
         throwsStateError,
@@ -52,7 +58,7 @@ void main() {
     test('invalid mean/std fails closed', () {
       final invalidMean = _actualMetadata();
       invalidMean['normalization'] = {
-        'mean': [0.1, double.nan, 0.3],
+        'mean': [0.48145466, double.nan, 0.40821073],
         'std': [0.2, 0.2, 0.2],
       };
       expect(
@@ -62,8 +68,30 @@ void main() {
 
       final invalidStd = _actualMetadata();
       invalidStd['normalization'] = {
-        'mean': [0.1, 0.2, 0.3],
-        'std': [0.2, 0.0, 0.2],
+        'mean': [0.48145466, 0.4578275, 0.40821073],
+        'std': [0.26862954, 0.0, 0.27577711],
+      };
+      expect(
+        () => MobileClip2ModelContract.fromJson(invalidStd),
+        throwsStateError,
+      );
+    });
+
+    test('unexpected normalization constants fail closed', () {
+      final invalidMean = _actualMetadata();
+      invalidMean['normalization'] = {
+        'mean': [0.5, 0.4578275, 0.40821073],
+        'std': [0.26862954, 0.26130258, 0.27577711],
+      };
+      expect(
+        () => MobileClip2ModelContract.fromJson(invalidMean),
+        throwsStateError,
+      );
+
+      final invalidStd = _actualMetadata();
+      invalidStd['normalization'] = {
+        'mean': [0.48145466, 0.4578275, 0.40821073],
+        'std': [0.3, 0.26130258, 0.27577711],
       };
       expect(
         () => MobileClip2ModelContract.fromJson(invalidStd),

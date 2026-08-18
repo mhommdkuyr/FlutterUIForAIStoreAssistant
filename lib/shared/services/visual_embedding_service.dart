@@ -42,6 +42,9 @@ class MobileClip2ModelContract {
 
   static const expectedEmbeddingDimensions = 512;
   static const expectedOnnxOpset = 18;
+  static const expectedInputSize = 224;
+  static const expectedMean = [0.48145466, 0.4578275, 0.40821073];
+  static const expectedStd = [0.26862954, 0.26130258, 0.27577711];
 
   factory MobileClip2ModelContract.fromJson(Map<String, dynamic> json) {
     final inputSizeValue = json['input_size'];
@@ -97,12 +100,20 @@ class MobileClip2ModelContract {
     if (inputSize <= 0) {
       throw StateError('MobileCLIP2 metadata input_size must be positive.');
     }
+    if (inputSize != expectedInputSize) {
+      throw StateError(
+        'MobileCLIP2 metadata input_size must be '
+        '[$expectedInputSize, $expectedInputSize], got [$inputSize, $inputSize].',
+      );
+    }
     if (mean.length != 3 || mean.any((value) => !value.isFinite)) {
       throw StateError('MobileCLIP2 metadata normalization.mean must contain 3 finite values.');
     }
     if (std.length != 3 || std.any((value) => !value.isFinite || value <= 0)) {
       throw StateError('MobileCLIP2 metadata normalization.std must contain 3 finite positive values.');
     }
+    _validateExactDoubles(mean, expectedMean, 'normalization.mean');
+    _validateExactDoubles(std, expectedStd, 'normalization.std');
     if (embeddingDimensions != expectedEmbeddingDimensions) {
       throw StateError(
         'MobileCLIP2 metadata embedding_dimension must be '
@@ -186,6 +197,22 @@ class MobileClip2ModelContract {
       );
     }
     return parsed;
+  }
+
+  static void _validateExactDoubles(
+    List<double> actual,
+    List<double> expected,
+    String fieldName,
+  ) {
+    const epsilon = 1e-8;
+    for (var i = 0; i < expected.length; i++) {
+      if ((actual[i] - expected[i]).abs() > epsilon) {
+        throw StateError(
+          'MobileCLIP2 metadata $fieldName must match the verified '
+          'model contract, got $actual.',
+        );
+      }
+    }
   }
 }
 
@@ -470,13 +497,6 @@ class MobileVisionEmbeddingService implements VisualEmbeddingService {
   Future<void> dispose() async {
     await _session?.close();
     _session = null;
-    try {
-      final dynamic runtime = _runtime;
-      final dispose = runtime.dispose;
-      if (dispose is Function) dispose();
-    } on NoSuchMethodError {
-      // flutter_onnxruntime 1.8.3 does not require runtime disposal.
-    }
   }
 
   static void _l2Normalize(Float32List v) {
