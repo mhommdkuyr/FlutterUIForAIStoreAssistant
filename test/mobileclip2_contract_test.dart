@@ -53,7 +53,7 @@ void main() {
     test('modified mean fails closed', () {
       final invalidMean = _actualMetadata();
       invalidMean['normalization'] = {
-        'mean': [0.48145467, 0.4578275, 0.40821073],
+        'mean': [0.48145566, 0.4578275, 0.40821073],
         'std': [0.26862954, 0.26130258, 0.27577711],
       };
 
@@ -67,7 +67,7 @@ void main() {
       final invalidStd = _actualMetadata();
       invalidStd['normalization'] = {
         'mean': [0.48145466, 0.4578275, 0.40821073],
-        'std': [0.26862954, 0.26130259, 0.27577711],
+        'std': [0.26862954, 0.26130358, 0.27577711],
       };
 
       expect(
