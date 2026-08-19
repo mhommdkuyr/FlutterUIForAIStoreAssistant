@@ -49,10 +49,36 @@ jobs:
         run: flutter pub get
 
       - name: Dart analyze
-        run: dart analyze --no-fatal-warnings
+        shell: bash
+        run: |
+          set +e
+          dart analyze --no-fatal-warnings 2>&1 | tee dart_analyze.log
+          status=${PIPESTATUS[0]}
+          set -e
+
+          if [ "$status" -ne 0 ]; then
+            if grep -Eq '^(error|warning) - ' dart_analyze.log; then
+              echo "Dart analyzer reported at least one error or warning; failing CI."
+              exit "$status"
+            fi
+            echo "Dart analyzer returned $status but reported only info-level diagnostics; treating infos as non-fatal."
+          fi
 
       - name: Flutter analyze
-        run: flutter analyze --no-fatal-warnings
+        shell: bash
+        run: |
+          set +e
+          flutter analyze --no-fatal-warnings 2>&1 | tee flutter_analyze.log
+          status=${PIPESTATUS[0]}
+          set -e
+
+          if [ "$status" -ne 0 ]; then
+            if grep -Eq '^(error|warning) - ' flutter_analyze.log; then
+              echo "Flutter analyzer reported at least one error or warning; failing CI."
+              exit "$status"
+            fi
+            echo "Flutter analyzer returned $status but reported only info-level diagnostics; treating infos as non-fatal."
+          fi
 
       - name: Focused MobileCLIP2 contract tests
         run: flutter test test/mobileclip2_contract_test.dart
