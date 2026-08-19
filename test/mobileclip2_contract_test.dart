@@ -121,17 +121,28 @@ void main() {
       );
     });
 
-    test('output shape must represent exactly one 512-dimensional embedding', () {
+    test('valid output shape is one batched 512-dimensional embedding', () {
       expect(
         MobileClip2ModelContract.isSingleEmbeddingShape([1, 512], 512),
         isTrue,
       );
+    });
+
+    test('invalid output shape fails closed', () {
       expect(
         MobileClip2ModelContract.isSingleEmbeddingShape([512], 512),
-        isTrue,
+        isFalse,
       );
       expect(
         MobileClip2ModelContract.isSingleEmbeddingShape([2, 512], 512),
+        isFalse,
+      );
+      expect(
+        MobileClip2ModelContract.isSingleEmbeddingShape([1, 1, 512], 512),
+        isFalse,
+      );
+      expect(
+        MobileClip2ModelContract.isSingleEmbeddingShape([1, 256, 2], 512),
         isFalse,
       );
       expect(
@@ -148,6 +159,14 @@ void main() {
       expect(provider.isOnnxActive, isFalse);
       expect(provider.embeddingLength, 0);
       expect(provider.similarity(Uint8List(0), Uint8List(0)), 0.0);
+    });
+
+    test('unavailable backend fails closed instead of using diagnostics ahash', () async {
+      final provider = VisualEmbeddingProvider();
+
+      expect(await provider.embedFile('does-not-exist.jpg'), isNull);
+      expect(provider.modelVersion, 'visual_engine_unavailable');
+      expect(provider.diagnosticsAHash.modelVersion, startsWith('ahash_'));
     });
   });
 }
