@@ -142,12 +142,10 @@ class MobileClip2ModelContract {
   }
 
   static bool isSingleEmbeddingShape(List<int> shape, int dimension) {
-    if (shape.isEmpty || shape.any((value) => value <= 0)) return false;
-    var elementCount = 1;
-    for (final value in shape) {
-      elementCount *= value;
+    if (shape.length == 2 && shape[0] == 1 && shape[1] == dimension) {
+      return true;
     }
-    return elementCount == dimension && shape.where((value) => value == dimension).length == 1;
+    return false;
   }
 
   static int _positiveInt(Object? value, String fieldName) {
@@ -322,7 +320,10 @@ class MobileVisionEmbeddingService implements VisualEmbeddingService {
 
   @override
   Future<Uint8List?> embedFile(String path) async {
-    if (_session == null) return null;
+    if (_session == null) {
+      _lastInferenceError = StateError('MobileCLIP2 ONNX session unavailable.');
+      return null;
+    }
     try {
       final file = File(path);
       if (!file.existsSync()) return null;
@@ -337,7 +338,10 @@ class MobileVisionEmbeddingService implements VisualEmbeddingService {
 
   @override
   Future<Uint8List?> embedFrame(CameraImage image) async {
-    if (_session == null) return null;
+    if (_session == null) {
+      _lastInferenceError = StateError('MobileCLIP2 ONNX session unavailable.');
+      return null;
+    }
     try {
       final input = _prepareFrameTensor(image);
       if (input == null) return null;
@@ -444,34 +448,59 @@ class MobileVisionEmbeddingService implements VisualEmbeddingService {
     final session = _session;
     final inputName = _inputName;
     final outputName = _outputName;
-    if (session == null || inputName == null || outputName == null) return null;
+    if (session == null || inputName == null || outputName == null) {
+      _lastInferenceError = StateError('MobileCLIP2 ONNX session unavailable.');
+      return null;
+    }
     final contract = _requireContract();
     final shape = contract.layout == 'NHWC'
         ? [1, contract.inputSize, contract.inputSize, 3]
         : [1, 3, contract.inputSize, contract.inputSize];
-    final input = await OrtValue.fromList(inputTensor, shape);
+    late final OrtValue input;
+    try {
+      input = await OrtValue.fromList(inputTensor, shape);
+    } catch (error) {
+      _lastInferenceError = StateError('MobileCLIP2 tensor creation failed: $error');
+      return null;
+    }
     Map<String, OrtValue>? outputs;
     try {
-      outputs = await session.run({inputName: input});
+      try {
+        outputs = await session.run({inputName: input});
+      } catch (error) {
+        throw StateError('MobileCLIP2 session.run failed: $error');
+      }
       final output = outputs[outputName];
       if (output == null) {
         throw StateError('MobileCLIP2 ONNX output $outputName was not returned.');
       }
-      final values = (await output.asList())
+      final values = (await output.asFlattenedList())
           .cast<num>()
           .map((value) => value.toDouble())
           .toList(growable: false);
-      if (values.length != contract.embeddingDimensions) return null;
+      if (values.length != contract.embeddingDimensions) {
+        throw StateError(
+          'MobileCLIP2 output length must be ${contract.embeddingDimensions}, got ${values.length}.',
+        );
+      }
       final embedding = Float32List.fromList(values);
-      if (embedding.any((value) => value.isNaN || value.isInfinite)) return null;
+      if (embedding.any((value) => value.isNaN)) {
+        throw StateError('MobileCLIP2 output contains NaN.');
+      }
+      if (embedding.any((value) => value.isInfinite)) {
+        throw StateError('MobileCLIP2 output contains Infinity.');
+      }
       _l2Normalize(embedding);
       _lastInferenceError = null;
       return embedding.buffer.asUint8List();
+    } catch (error) {
+      _lastInferenceError = error;
+      return null;
     } finally {
-      input.dispose();
+      await input.dispose();
       if (outputs != null) {
         for (final tensor in outputs.values) {
-          tensor.dispose();
+          await tensor.dispose();
         }
       }
     }
@@ -484,6 +513,8 @@ class MobileVisionEmbeddingService implements VisualEmbeddingService {
   Future<void> dispose() async {
     await _session?.close();
     _session = null;
+    // flutter_onnxruntime 1.8.3 exposes OrtSession.close() and
+    // OrtValue.dispose(); OnnxRuntime itself has no public dispose API.
   }
 
   static void _l2Normalize(Float32List v) {
