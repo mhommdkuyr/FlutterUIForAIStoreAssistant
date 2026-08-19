@@ -56,53 +56,7 @@ jobs:
           status=$?
           set -e
           cat dart_analyze.json
-
-          python3 - "$status" dart_analyze.json <<'PY'
-          import json
-          import sys
-
-          status = int(sys.argv[1])
-          path = sys.argv[2]
-          with open(path, encoding="utf-8") as f:
-              raw = f.read()
-
-          try:
-              data = json.loads(raw)
-          except json.JSONDecodeError as exc:
-              print(f"Dart analyzer did not produce valid JSON: {exc}")
-              sys.exit(1)
-
-          def diagnostics(value):
-              if isinstance(value, dict):
-                  if "severity" in value and any(k in value for k in ("code", "problemMessage", "problem")):
-                      yield value
-                  for child in value.values():
-                      yield from diagnostics(child)
-              elif isinstance(value, list):
-                  for child in value:
-                      yield from diagnostics(child)
-
-          fatal = []
-          seen = set()
-          for issue in diagnostics(data):
-              key = json.dumps(issue, sort_keys=True, ensure_ascii=False)
-              if key in seen:
-                  continue
-              seen.add(key)
-              severity = str(issue.get("severity", "")).strip().lower()
-              if severity in {"error", "warning"}:
-                  fatal.append(issue)
-
-          if fatal:
-              print(f"Dart analyzer reported {len(fatal)} error/warning diagnostics; failing CI.")
-              sys.exit(1)
-
-          if status != 0:
-              print(f"Dart analyzer returned exit code {status}, but produced no error/warning diagnostics; treating info-only diagnostics as non-fatal.")
-          else:
-              print("Dart analyzer completed with no error/warning diagnostics.")
-          sys.exit(0)
-          PY
+          exit "$status"
 
       - name: Flutter analyze
         shell: bash
@@ -112,53 +66,7 @@ jobs:
           status=$?
           set -e
           cat flutter_analyze.json
-
-          python3 - "$status" flutter_analyze.json <<'PY'
-          import json
-          import sys
-
-          status = int(sys.argv[1])
-          path = sys.argv[2]
-          with open(path, encoding="utf-8") as f:
-              raw = f.read()
-
-          try:
-              data = json.loads(raw)
-          except json.JSONDecodeError as exc:
-              print(f"Flutter analyzer did not produce valid JSON: {exc}")
-              sys.exit(1)
-
-          def diagnostics(value):
-              if isinstance(value, dict):
-                  if "severity" in value and any(k in value for k in ("code", "problemMessage", "problem")):
-                      yield value
-                  for child in value.values():
-                      yield from diagnostics(child)
-              elif isinstance(value, list):
-                  for child in value:
-                      yield from diagnostics(child)
-
-          fatal = []
-          seen = set()
-          for issue in diagnostics(data):
-              key = json.dumps(issue, sort_keys=True, ensure_ascii=False)
-              if key in seen:
-                  continue
-              seen.add(key)
-              severity = str(issue.get("severity", "")).strip().lower()
-              if severity in {"error", "warning"}:
-                  fatal.append(issue)
-
-          if fatal:
-              print(f"Flutter analyzer reported {len(fatal)} error/warning diagnostics; failing CI.")
-              sys.exit(1)
-
-          if status != 0:
-              print(f"Flutter analyzer returned exit code {status}, but produced no error/warning diagnostics; treating info-only diagnostics as non-fatal.")
-          else:
-              print("Flutter analyzer completed with no error/warning diagnostics.")
-          sys.exit(0)
-          PY
+          exit "$status"
 
       - name: Focused MobileCLIP2 contract tests
         run: flutter test test/mobileclip2_contract_test.dart
