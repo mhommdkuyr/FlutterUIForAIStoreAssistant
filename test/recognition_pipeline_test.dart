@@ -23,7 +23,7 @@ ProductModel _makeProduct(String id, {String? imageUrl}) => ProductModel(
     );
 
 /// Stub embedding service — returns predictable hashes without file I/O.
-class _StubEmbedding implements VisualEmbeddingService {
+class _StubEmbedding extends VisualEmbeddingService {
   /// productId → hash bytes. Registered hashes are returned by [embedFile].
   final Map<String, Uint8List> _hashes;
 
