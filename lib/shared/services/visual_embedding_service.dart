@@ -40,8 +40,12 @@ class MobileClip2ModelContract {
   final int onnxOpset;
   final String? layout;
 
+  static const expectedInputSize = 224;
+  static const expectedMean = [0.48145466, 0.4578275, 0.40821073];
+  static const expectedStd = [0.26862954, 0.26130258, 0.27577711];
   static const expectedEmbeddingDimensions = 512;
   static const expectedOnnxOpset = 18;
+  static const _metadataEpsilon = 1e-8;
 
   factory MobileClip2ModelContract.fromJson(Map<String, dynamic> json) {
     final inputSizeValue = json['input_size'];
@@ -94,15 +98,22 @@ class MobileClip2ModelContract {
   }
 
   void validateMetadata() {
-    if (inputSize <= 0) {
-      throw StateError('MobileCLIP2 metadata input_size must be positive.');
+    if (inputSize != expectedInputSize) {
+      throw StateError(
+        'MobileCLIP2 metadata input_size must be '
+        '[$expectedInputSize, $expectedInputSize], got [$inputSize, $inputSize].',
+      );
     }
-    if (mean.length != 3 || mean.any((value) => !value.isFinite)) {
-      throw StateError('MobileCLIP2 metadata normalization.mean must contain 3 finite values.');
-    }
-    if (std.length != 3 || std.any((value) => !value.isFinite || value <= 0)) {
-      throw StateError('MobileCLIP2 metadata normalization.std must contain 3 finite positive values.');
-    }
+    _validateExactDoubleArray(
+      fieldName: 'normalization.mean',
+      actual: mean,
+      expected: expectedMean,
+    );
+    _validateExactDoubleArray(
+      fieldName: 'normalization.std',
+      actual: std,
+      expected: expectedStd,
+    );
     if (embeddingDimensions != expectedEmbeddingDimensions) {
       throw StateError(
         'MobileCLIP2 metadata embedding_dimension must be '
@@ -146,6 +157,26 @@ class MobileClip2ModelContract {
       return true;
     }
     return false;
+  }
+
+  static void _validateExactDoubleArray({
+    required String fieldName,
+    required List<double> actual,
+    required List<double> expected,
+  }) {
+    if (actual.length != expected.length) {
+      throw StateError(
+        'MobileCLIP2 metadata $fieldName must be $expected, got $actual.',
+      );
+    }
+    for (var i = 0; i < expected.length; i++) {
+      final value = actual[i];
+      if (!value.isFinite || (value - expected[i]).abs() > _metadataEpsilon) {
+        throw StateError(
+          'MobileCLIP2 metadata $fieldName must be $expected, got $actual.',
+        );
+      }
+    }
   }
 
   static int _positiveInt(Object? value, String fieldName) {
@@ -197,6 +228,7 @@ class MobileVisionEmbeddingService implements VisualEmbeddingService {
   Object? _initializationError;
   Object? _lastInferenceError;
   Future<void> _inferenceQueue = Future<void>.value();
+  bool _disposed = false;
   MobileClip2ModelContract? _contract;
   String? _inputName;
   String? _outputName;
@@ -210,6 +242,7 @@ class MobileVisionEmbeddingService implements VisualEmbeddingService {
 
   Future<void> initialize() async {
     _initializationError = null;
+    _disposed = false;
     try {
       await _loadMetadata();
       await _assertAssetReadable(assetPath);
@@ -432,6 +465,10 @@ class MobileVisionEmbeddingService implements VisualEmbeddingService {
   }
 
   Future<Uint8List?> _runInference(Float32List inputTensor) {
+    if (_disposed) {
+      _lastInferenceError = StateError('MobileCLIP2 ONNX session unavailable.');
+      return Future.value(null);
+    }
     final completer = Completer<Uint8List?>();
     _inferenceQueue = _inferenceQueue.then((_) async {
       try {
@@ -511,8 +548,12 @@ class MobileVisionEmbeddingService implements VisualEmbeddingService {
 
   @override
   Future<void> dispose() async {
-    await _session?.close();
-    _session = null;
+    _disposed = true;
+    _inferenceQueue = _inferenceQueue.then((_) async {
+      await _session?.close();
+      _session = null;
+    });
+    await _inferenceQueue;
     // flutter_onnxruntime 1.8.3 exposes OrtSession.close() and
     // OrtValue.dispose(); OnnxRuntime itself has no public dispose API.
   }
