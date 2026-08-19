@@ -616,7 +616,7 @@ class VisualEmbeddingProvider implements VisualEmbeddingService {
   }
 }
 
-class AHashEmbeddingService implements VisualEmbeddingService {
+class AHashEmbeddingService extends VisualEmbeddingService {
   AHashEmbeddingService({int gridSize = 16}) : _n = gridSize, _preprocessor = FramePreprocessor(gridSize: gridSize);
   final int _n;
   final FramePreprocessor _preprocessor;

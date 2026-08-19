@@ -47,7 +47,7 @@ Uint8List _makeEmbedding(int seed, {int size = 32}) {
 }
 
 /// Stub embedding service: paths act as keys mapping to pre-registered hashes.
-class _StubEmbeddingService implements VisualEmbeddingService {
+class _StubEmbeddingService extends VisualEmbeddingService {
   _StubEmbeddingService(this._map);
   final Map<String, Uint8List> _map;
 
