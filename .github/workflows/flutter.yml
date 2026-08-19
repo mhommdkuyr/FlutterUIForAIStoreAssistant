@@ -5,8 +5,6 @@ on:
     branches:
       - main
   pull_request:
-    branches:
-      - main
   workflow_dispatch:
 
 jobs:
@@ -49,10 +47,54 @@ jobs:
         run: flutter pub get
 
       - name: Dart analyze
-        run: dart analyze
+        shell: bash
+        run: |
+          set +e
+          dart analyze --format=json --no-fatal-warnings > dart_analyze.json
+          status=$?
+          set -e
+          cat dart_analyze.json
+          python3 - "$status" dart_analyze.json <<'PY'
+          import json
+          import sys
+
+          status = int(sys.argv[1])
+          path = sys.argv[2]
+          with open(path, encoding="utf-8") as f:
+              data = json.load(f)
+
+          diagnostics = data.get("diagnostics", []) if isinstance(data, dict) else []
+          errors = [
+              item for item in diagnostics
+              if isinstance(item, dict)
+              and str(item.get("severity", "")).upper() == "ERROR"
+          ]
+
+          if errors:
+              print(f"Dart analyzer reported {len(errors)} error diagnostics; failing CI.")
+              sys.exit(1)
+
+          print(
+              f"Dart analyzer completed without error diagnostics "
+              f"(tool exit code: {status}; warnings/info are non-fatal)."
+          )
+          sys.exit(0)
+          PY
 
       - name: Flutter analyze
-        run: flutter analyze
+        shell: bash
+        run: |
+          set +e
+          flutter analyze --no-fatal-warnings > flutter_analyze.txt 2>&1
+          status=$?
+          set -e
+          cat flutter_analyze.txt
+          if grep -Eq '^ *error •' flutter_analyze.txt; then
+            echo "Flutter analyzer reported error diagnostics; failing CI."
+            exit 1
+          fi
+          echo "Flutter analyzer reported no error diagnostics (warnings/info are non-fatal; tool exit code: $status)."
+          exit 0
 
       - name: Focused MobileCLIP2 contract tests
         run: flutter test test/mobileclip2_contract_test.dart

@@ -21,7 +21,7 @@ ProductModel _product(String id, String imagePath) => ProductModel(
 
 Uint8List _e(int a, [int b = 0, int c = 0]) => Uint8List.fromList([a, b, c]);
 
-class _StubEmbeddingService implements VisualEmbeddingService {
+class _StubEmbeddingService extends VisualEmbeddingService {
   _StubEmbeddingService(this._files, {this.version = 'stub_v1'});
 
   final Map<String, Uint8List> _files;
