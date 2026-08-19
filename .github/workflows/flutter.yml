@@ -116,10 +116,25 @@ jobs:
           set -o pipefail
           flutter build apk --debug 2>&1 | tee build_output.log
 
+      - name: Build release APK
+        run: |
+          set -o pipefail
+          flutter build apk --release 2>&1 | tee release_build_output.log
+
+      - name: Upload final APK artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-store-assistant-final-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
+          retention-days: 30
+
       - name: Upload build log on failure
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: flutter-verification-build-log
-          path: build_output.log
+          path: |
+            build_output.log
+            release_build_output.log
           retention-days: 7
