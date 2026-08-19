@@ -8,3 +8,5 @@
 -dontwarn io.flutter.embedding.**
 -keep class io.sqlite3.** { *; }
 -keep class io.flutter.plugins.sqlite3.** { *; }
+
+-keep class ai.onnxruntime.** { *; }

@@ -150,16 +150,16 @@ class RecognitionPipeline {
     _minConfidence = _config.minConfidence ?? _embedding.recommendedMinConfidence;
   }
 
-  bool get isTfLiteActive =>
+  bool get isOnnxActive =>
       _embedding is VisualEmbeddingProvider &&
-      (_embedding as VisualEmbeddingProvider).isTfLiteActive;
+      (_embedding as VisualEmbeddingProvider).isOnnxActive;
 
   bool get isFallbackActive =>
-      _embedding is VisualEmbeddingProvider && !isTfLiteActive;
+      _embedding is VisualEmbeddingProvider && !isOnnxActive;
 
   String get backendName {
     if (_embedding is VisualEmbeddingProvider) {
-      return isTfLiteActive ? 'TFLite' : 'aHash fallback';
+      return isOnnxActive ? 'ONNX Runtime' : 'visual engine unavailable';
     }
     return _embedding.runtimeType.toString();
   }
@@ -208,7 +208,7 @@ class RecognitionPipeline {
     _processing = false;
   }
 
-  RecognitionFrameReport processFrame(CameraImage image) {
+  Future<RecognitionFrameReport> processFrame(CameraImage image) async {
     final baseDiagnostics = _diagnostics();
     if (!_active || _processing || !isIndexReady) {
       return RecognitionFrameReport.skipped(baseDiagnostics);
@@ -242,7 +242,7 @@ class RecognitionPipeline {
       }
 
       final inference = Stopwatch()..start();
-      final embedding = _embedding.embedFrame(image);
+      final embedding = await _embedding.embedFrame(image);
       inference.stop();
       final report = embedding == null
           ? _noMatchReport(

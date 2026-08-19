@@ -26,7 +26,7 @@ class LocalProductIndexService {
   LocalProductIndexService({
     VisualEmbeddingService? embeddingService,
     EmbeddingPersistenceService? persistenceService,
-  })  : _embedding = embeddingService ?? AHashEmbeddingService(),
+  })  : _embedding = embeddingService ?? VisualEmbeddingProvider(),
         _persistence = persistenceService;
 
   final VisualEmbeddingService _embedding;
@@ -139,8 +139,7 @@ class LocalProductIndexService {
   /// Return the top-K best-matching products for [queryEmbedding].
   ///
   /// Similarity is computed via [VisualEmbeddingService.similarity], which
-  /// dispatches to cosine distance (TFLite) or normalised Hamming (aHash)
-  /// depending on the active backend.
+  /// dispatches to cosine similarity for MobileCLIP2 ONNX embeddings. aHash is diagnostics-only.
   ///
   /// Only candidates with [confidence] ≥ [minConfidence] are included.
   List<RecognitionCandidate> search(

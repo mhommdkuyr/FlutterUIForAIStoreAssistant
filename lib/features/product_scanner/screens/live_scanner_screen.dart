@@ -192,7 +192,7 @@ class _LiveScannerScreenState extends State<LiveScannerScreen>
       while (mounted && _latestFrame != null) {
         final frame = _latestFrame!;
         _latestFrame = null;
-        final report = _pipeline.processFrame(frame);
+        final report = await _pipeline.processFrame(frame);
         if (!report.processed) continue;
         await Future<void>.delayed(Duration.zero);
       }
