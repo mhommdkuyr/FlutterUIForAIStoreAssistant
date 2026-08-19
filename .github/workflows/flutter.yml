@@ -64,12 +64,32 @@ jobs:
           status = int(sys.argv[1])
           path = sys.argv[2]
           with open(path, encoding="utf-8") as f:
-              data = json.load(f)
+              raw = f.read()
 
-          issues = data.get("diagnostics", data.get("issues", []))
+          try:
+              data = json.loads(raw)
+          except json.JSONDecodeError as exc:
+              print(f"Dart analyzer did not produce valid JSON: {exc}")
+              sys.exit(1)
+
+          def diagnostics(value):
+              if isinstance(value, dict):
+                  if "severity" in value and any(k in value for k in ("code", "problemMessage", "problem")):
+                      yield value
+                  for child in value.values():
+                      yield from diagnostics(child)
+              elif isinstance(value, list):
+                  for child in value:
+                      yield from diagnostics(child)
+
           fatal = []
-          for issue in issues:
-              severity = str(issue.get("severity", "")).lower()
+          seen = set()
+          for issue in diagnostics(data):
+              key = json.dumps(issue, sort_keys=True, ensure_ascii=False)
+              if key in seen:
+                  continue
+              seen.add(key)
+              severity = str(issue.get("severity", "")).strip().lower()
               if severity in {"error", "warning"}:
                   fatal.append(issue)
 
@@ -78,9 +98,9 @@ jobs:
               sys.exit(1)
 
           if status != 0:
-              print(f"Dart analyzer returned exit code {status}, but all diagnostics are info-level; treating as non-fatal.")
+              print(f"Dart analyzer returned exit code {status}, but produced no error/warning diagnostics; treating info-only diagnostics as non-fatal.")
           else:
-              print("Dart analyzer completed successfully with no error/warning diagnostics.")
+              print("Dart analyzer completed with no error/warning diagnostics.")
           sys.exit(0)
           PY
 
@@ -100,12 +120,32 @@ jobs:
           status = int(sys.argv[1])
           path = sys.argv[2]
           with open(path, encoding="utf-8") as f:
-              data = json.load(f)
+              raw = f.read()
 
-          issues = data.get("diagnostics", data.get("issues", []))
+          try:
+              data = json.loads(raw)
+          except json.JSONDecodeError as exc:
+              print(f"Flutter analyzer did not produce valid JSON: {exc}")
+              sys.exit(1)
+
+          def diagnostics(value):
+              if isinstance(value, dict):
+                  if "severity" in value and any(k in value for k in ("code", "problemMessage", "problem")):
+                      yield value
+                  for child in value.values():
+                      yield from diagnostics(child)
+              elif isinstance(value, list):
+                  for child in value:
+                      yield from diagnostics(child)
+
           fatal = []
-          for issue in issues:
-              severity = str(issue.get("severity", "")).lower()
+          seen = set()
+          for issue in diagnostics(data):
+              key = json.dumps(issue, sort_keys=True, ensure_ascii=False)
+              if key in seen:
+                  continue
+              seen.add(key)
+              severity = str(issue.get("severity", "")).strip().lower()
               if severity in {"error", "warning"}:
                   fatal.append(issue)
 
@@ -114,9 +154,9 @@ jobs:
               sys.exit(1)
 
           if status != 0:
-              print(f"Flutter analyzer returned exit code {status}, but all diagnostics are info-level; treating as non-fatal.")
+              print(f"Flutter analyzer returned exit code {status}, but produced no error/warning diagnostics; treating info-only diagnostics as non-fatal.")
           else:
-              print("Flutter analyzer completed successfully with no error/warning diagnostics.")
+              print("Flutter analyzer completed with no error/warning diagnostics.")
           sys.exit(0)
           PY
 
