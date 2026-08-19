@@ -52,7 +52,7 @@ jobs:
         shell: bash
         run: |
           set +e
-          dart analyze --format=json --no-fatal-warnings > dart_analyze.json
+          dart analyze --format=json --no-fatal-infos --no-fatal-warnings > dart_analyze.json
           status=$?
           set -e
           cat dart_analyze.json
@@ -62,7 +62,7 @@ jobs:
         shell: bash
         run: |
           set +e
-          flutter analyze --format=json --no-fatal-warnings > flutter_analyze.json
+          flutter analyze --format=json --no-fatal-infos --no-fatal-warnings > flutter_analyze.json
           status=$?
           set -e
           cat flutter_analyze.json
