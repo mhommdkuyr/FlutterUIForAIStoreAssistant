@@ -84,7 +84,17 @@ jobs:
       - name: Flutter analyze
         shell: bash
         run: |
-          flutter analyze --no-fatal-warnings
+          set +e
+          flutter analyze --no-fatal-warnings > flutter_analyze.txt 2>&1
+          status=$?
+          set -e
+          cat flutter_analyze.txt
+          if grep -Eq '^ *error •' flutter_analyze.txt; then
+            echo "Flutter analyzer reported error diagnostics; failing CI."
+            exit 1
+          fi
+          echo "Flutter analyzer reported no error diagnostics (warnings/info are non-fatal; tool exit code: $status)."
+          exit 0
 
       - name: Focused MobileCLIP2 contract tests
         run: flutter test test/mobileclip2_contract_test.dart
