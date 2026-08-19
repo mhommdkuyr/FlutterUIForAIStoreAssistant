@@ -49,10 +49,10 @@ jobs:
         run: flutter pub get
 
       - name: Dart analyze
-        run: dart analyze --no-fatal-infos --no-fatal-warnings
+        run: dart analyze --no-fatal-warnings
 
       - name: Flutter analyze
-        run: flutter analyze --no-fatal-infos --no-fatal-warnings
+        run: flutter analyze --no-fatal-warnings
 
       - name: Focused MobileCLIP2 contract tests
         run: flutter test test/mobileclip2_contract_test.dart
