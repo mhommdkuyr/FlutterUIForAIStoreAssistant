@@ -41,7 +41,9 @@ void validateMetadata(Map<String, dynamic> metadata) {
   }
   final width = positiveInt(inputSize[0], 'input_size[0]');
   final height = positiveInt(inputSize[1], 'input_size[1]');
-  if (width != height) fail('model_metadata.json input_size must be square.');
+  if (width != 224 || height != 224) {
+    fail('model_metadata.json input_size must be [224, 224], got [$width, $height].');
+  }
 
   final normalization = metadata['normalization'];
   if (normalization is! Map<String, dynamic>) {
@@ -51,6 +53,16 @@ void validateMetadata(Map<String, dynamic> metadata) {
   final std = doubleArray(normalization, 'std', positive: true);
   if (mean.length != 3) fail('normalization.mean must contain exactly 3 values.');
   if (std.length != 3) fail('normalization.std must contain exactly 3 values.');
+  expectDoubles(
+    mean,
+    const [0.48145466, 0.4578275, 0.40821073],
+    'normalization.mean',
+  );
+  expectDoubles(
+    std,
+    const [0.26862954, 0.26130258, 0.27577711],
+    'normalization.std',
+  );
 
   final embeddingDimension = positiveInt(
     metadata['embedding_dimension'],
@@ -66,6 +78,15 @@ void validateMetadata(Map<String, dynamic> metadata) {
 
   final opset = positiveInt(metadata['onnx_opset'], 'onnx_opset');
   if (opset != 18) fail('onnx_opset must be 18, got $opset.');
+}
+
+void expectDoubles(List<double> actual, List<double> expected, String fieldName) {
+  const epsilon = 1e-8;
+  for (var i = 0; i < expected.length; i++) {
+    if ((actual[i] - expected[i]).abs() > epsilon) {
+      fail('$fieldName must match the verified MobileCLIP2 contract, got $actual.');
+    }
+  }
 }
 
 int positiveInt(Object? value, String fieldName) {
