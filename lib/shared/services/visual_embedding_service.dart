@@ -261,15 +261,29 @@ class MobileVisionEmbeddingService implements VisualEmbeddingService {
     if (name == null) {
       throw StateError('MobileCLIP2 ${isInput ? 'input' : 'output'} name was not discovered.');
     }
-    final tensorInfo = infoByName[name];
+    Map<String, dynamic>? tensorInfo;
+    for (final info in infoByName) {
+      if (info['name'] == name) {
+        tensorInfo = info;
+        break;
+      }
+    }
+    tensorInfo ??= infoByName.length == 1 ? infoByName.single : null;
     if (tensorInfo == null) {
       throw StateError('MobileCLIP2 ${isInput ? 'input' : 'output'} info missing for $name.');
     }
-    final shape = tensorInfo.shape;
-    if (shape.isEmpty) {
+    final shape = tensorInfo['shape'];
+    if (shape is! List || shape.isEmpty) {
       throw StateError('MobileCLIP2 ${isInput ? 'input' : 'output'} shape is empty.');
     }
-    return shape.map((value) => value.toInt()).toList(growable: false);
+    return shape.map((value) {
+      if (value is! num) {
+        throw StateError(
+          'MobileCLIP2 ${isInput ? 'input' : 'output'} shape contains a non-numeric dimension: $shape.',
+        );
+      }
+      return value.toInt();
+    }).toList(growable: false);
   }
 
   void _validateOutputShape(List<int> shape, int embeddingDimensions) {
@@ -470,13 +484,6 @@ class MobileVisionEmbeddingService implements VisualEmbeddingService {
   Future<void> dispose() async {
     await _session?.close();
     _session = null;
-    try {
-      final dynamic runtime = _runtime;
-      final dispose = runtime.dispose;
-      if (dispose is Function) dispose();
-    } on NoSuchMethodError {
-      // flutter_onnxruntime 1.8.3 does not require runtime disposal.
-    }
   }
 
   static void _l2Normalize(Float32List v) {
