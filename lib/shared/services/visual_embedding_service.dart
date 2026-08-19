@@ -1,403 +1,664 @@
+import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:camera/camera.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_onnxruntime/flutter_onnxruntime.dart';
 import 'package:image/image.dart' as img;
-import 'package:tflite_flutter/tflite_flutter.dart';
 
 import 'frame_preprocessor.dart';
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Abstract interface
-// ─────────────────────────────────────────────────────────────────────────────
-
-/// Computes visual feature vectors ("embeddings") from images.
-///
-/// Two production implementations are provided:
-///   • [TfLiteEmbeddingService]  — MobileNetV3-Small on-device model (primary)
-///   • [AHashEmbeddingService]   — 16×16 average hash (fallback / fast path)
-///
-/// Use [VisualEmbeddingProvider] to get automatic primary/fallback dispatch
-/// without knowing which backend is active.
 abstract class VisualEmbeddingService {
-  /// Compute an embedding for a local image file (I/O-bound, async).
   Future<Uint8List?> embedFile(String path);
-
-  /// Compute an embedding for a live camera frame (synchronous, ~frame budget).
-  Uint8List? embedFrame(CameraImage image);
-
-  /// Similarity score: 1.0 = identical, 0.0 = completely unrelated.
+  Future<Uint8List?> embedFrame(CameraImage image);
   double similarity(Uint8List a, Uint8List b);
-
-  /// Length of each embedding in bytes.
+  Future<void> dispose() async {}
   int get embeddingLength;
-
-  /// Identifies the model so persisted embeddings can be invalidated on upgrade.
   String get modelVersion;
-
-  /// Recommended minimum similarity threshold for this embedding type.
   double get recommendedMinConfidence;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// TfLiteEmbeddingService  —  MobileNetV3-Small local inference (primary)
-// ─────────────────────────────────────────────────────────────────────────────
+class MobileClip2ModelContract {
+  const MobileClip2ModelContract({
+    required this.inputSize,
+    required this.mean,
+    required this.std,
+    required this.embeddingDimensions,
+    required this.l2NormalizedRequired,
+    required this.onnxOpset,
+    this.layout,
+  });
 
-/// Real on-device visual embedding using a bundled MobileNetV3-Small model.
-///
-/// **Model**: `assets/models/mobilenet_v3_small_embedder.tflite`
-///   Input  : [1, 224, 224, 3] float32, values normalised to [0.0, 1.0]
-///   Output : [1, N] float32 feature vector (N discovered at load time, ~1024)
-///
-/// The model is packaged inside the APK/IPA — no internet required.
-/// Call [initialize] once before use; the service is safe to share.
-class TfLiteEmbeddingService implements VisualEmbeddingService {
-  static const String assetPath =
-      'assets/models/mobilenet_v3_small_embedder.tflite';
+  final int inputSize;
+  final List<double> mean;
+  final List<double> std;
+  final int embeddingDimensions;
+  final bool l2NormalizedRequired;
+  final int onnxOpset;
+  final String? layout;
 
-  static const int _inputSize = 224;
+  static const expectedInputSize = 224;
+  static const expectedMean = [0.48145466, 0.4578275, 0.40821073];
+  static const expectedStd = [0.26862954, 0.26130258, 0.27577711];
+  static const expectedEmbeddingDimensions = 512;
+  static const expectedOnnxOpset = 18;
+  static const _metadataEpsilon = 1e-8;
 
-  Interpreter? _interpreter;
-  int _outputDims = 1024; // updated after model load
+  factory MobileClip2ModelContract.fromJson(Map<String, dynamic> json) {
+    final inputSizeValue = json['input_size'];
+    if (inputSizeValue is! List || inputSizeValue.length != 2) {
+      throw StateError('MobileCLIP2 metadata input_size must be [width, height].');
+    }
+    final width = _positiveInt(inputSizeValue[0], 'input_size[0]');
+    final height = _positiveInt(inputSizeValue[1], 'input_size[1]');
+    if (width != height) {
+      throw StateError('MobileCLIP2 metadata input_size must be square, got [$width, $height].');
+    }
 
-  bool get isInitialized => _interpreter != null;
+    final normalization = json['normalization'];
+    if (normalization is! Map<String, dynamic>) {
+      throw StateError('MobileCLIP2 metadata normalization object is required.');
+    }
 
-  /// Load the bundled TFLite model. Throws on failure.
-  Future<void> initialize() async {
-    final data = await rootBundle.load(assetPath);
-    final bytes =
-        data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
-    final interpreter = Interpreter.fromBuffer(bytes);
-    // Discover actual output dimension from the model graph.
-    final outShape = interpreter.getOutputTensor(0).shape;
-    _outputDims = outShape.last; // [1, N] → N
-    _interpreter = interpreter;
+    final contract = MobileClip2ModelContract(
+      inputSize: width,
+      mean: _readDoubleArray(normalization, 'mean', positive: false),
+      std: _readDoubleArray(normalization, 'std', positive: true),
+      embeddingDimensions: _positiveInt(
+        json['embedding_dimension'],
+        'embedding_dimension',
+      ),
+      l2NormalizedRequired: _requiredTrue(
+        json['l2_normalized_required'],
+        'l2_normalized_required',
+      ),
+      onnxOpset: _positiveInt(json['onnx_opset'], 'onnx_opset'),
+    );
+    contract.validateMetadata();
+    return contract;
   }
 
-  // ── VisualEmbeddingService ─────────────────────────────────────────────────
+  MobileClip2ModelContract withGraphLayout(String graphLayout) {
+    final normalizedLayout = graphLayout.toUpperCase();
+    if (normalizedLayout != 'NCHW' && normalizedLayout != 'NHWC') {
+      throw StateError('MobileCLIP2 graph layout must be NCHW or NHWC.');
+    }
+    return MobileClip2ModelContract(
+      inputSize: inputSize,
+      mean: mean,
+      std: std,
+      embeddingDimensions: embeddingDimensions,
+      l2NormalizedRequired: l2NormalizedRequired,
+      onnxOpset: onnxOpset,
+      layout: normalizedLayout,
+    );
+  }
+
+  void validateMetadata() {
+    if (inputSize != expectedInputSize) {
+      throw StateError(
+        'MobileCLIP2 metadata input_size must be '
+        '[$expectedInputSize, $expectedInputSize], got [$inputSize, $inputSize].',
+      );
+    }
+    _validateExactDoubleArray(
+      fieldName: 'normalization.mean',
+      actual: mean,
+      expected: expectedMean,
+    );
+    _validateExactDoubleArray(
+      fieldName: 'normalization.std',
+      actual: std,
+      expected: expectedStd,
+    );
+    if (embeddingDimensions != expectedEmbeddingDimensions) {
+      throw StateError(
+        'MobileCLIP2 metadata embedding_dimension must be '
+        '$expectedEmbeddingDimensions, got $embeddingDimensions.',
+      );
+    }
+    if (!l2NormalizedRequired) {
+      throw StateError('MobileCLIP2 metadata l2_normalized_required must be true.');
+    }
+    if (onnxOpset != expectedOnnxOpset) {
+      throw StateError(
+        'MobileCLIP2 metadata onnx_opset must be '
+        '$expectedOnnxOpset, got $onnxOpset.',
+      );
+    }
+  }
+
+  static String detectGraphLayout(List<int> inputShape, int inputSize) {
+    if (inputShape.length != 4) {
+      throw StateError('MobileCLIP2 input must be rank 4, got $inputShape.');
+    }
+    if (inputShape[0] != 1) {
+      throw StateError('MobileCLIP2 input batch must be 1, got $inputShape.');
+    }
+    final nchw = inputShape[1] == 3 &&
+        inputShape[2] == inputSize &&
+        inputShape[3] == inputSize;
+    if (nchw) return 'NCHW';
+    final nhwc = inputShape[1] == inputSize &&
+        inputShape[2] == inputSize &&
+        inputShape[3] == 3;
+    if (nhwc) return 'NHWC';
+    throw StateError(
+      'MobileCLIP2 input shape must be [1,3,$inputSize,$inputSize] '
+      'or [1,$inputSize,$inputSize,3], got $inputShape.',
+    );
+  }
+
+  static bool isSingleEmbeddingShape(List<int> shape, int dimension) {
+    if (shape.length == 2 && shape[0] == 1 && shape[1] == dimension) {
+      return true;
+    }
+    return false;
+  }
+
+  static void _validateExactDoubleArray({
+    required String fieldName,
+    required List<double> actual,
+    required List<double> expected,
+  }) {
+    if (actual.length != expected.length) {
+      throw StateError(
+        'MobileCLIP2 metadata $fieldName must be $expected, got $actual.',
+      );
+    }
+    for (var i = 0; i < expected.length; i++) {
+      final value = actual[i];
+      if (!value.isFinite || (value - expected[i]).abs() > _metadataEpsilon) {
+        throw StateError(
+          'MobileCLIP2 metadata $fieldName must be $expected, got $actual.',
+        );
+      }
+    }
+  }
+
+  static int _positiveInt(Object? value, String fieldName) {
+    if (value is int && value > 0) return value;
+    throw StateError('MobileCLIP2 metadata $fieldName must be a positive integer.');
+  }
+
+  static bool _requiredTrue(Object? value, String fieldName) {
+    if (value == true) return true;
+    throw StateError('MobileCLIP2 metadata $fieldName must be true.');
+  }
+
+  static List<double> _readDoubleArray(
+    Map<String, dynamic> source,
+    String key, {
+    required bool positive,
+  }) {
+    final value = source[key];
+    if (value is! List || value.length != 3) {
+      throw StateError('MobileCLIP2 metadata normalization.$key must contain exactly 3 values.');
+    }
+    final parsed = value.map((item) {
+      if (item is! num) {
+        throw StateError('MobileCLIP2 metadata normalization.$key contains a non-numeric value.');
+      }
+      return item.toDouble();
+    }).toList(growable: false);
+    final invalid = positive
+        ? parsed.any((item) => !item.isFinite || item <= 0)
+        : parsed.any((item) => !item.isFinite);
+    if (invalid) {
+      throw StateError(
+        positive
+            ? 'MobileCLIP2 metadata normalization.$key must contain finite positive values.'
+            : 'MobileCLIP2 metadata normalization.$key must contain finite values.',
+      );
+    }
+    return parsed;
+  }
+}
+
+class MobileVisionEmbeddingService implements VisualEmbeddingService {
+  static const String assetPath = 'assets/models/mobileclip2/mobileclip2_s0_vision.onnx';
+  static const String externalDataAssetPath = 'assets/models/mobileclip2/mobileclip2_s0_vision.onnx.data';
+  static const String metadataAssetPath = 'assets/models/mobileclip2/model_metadata.json';
+
+  final OnnxRuntime _runtime = OnnxRuntime();
+  OrtSession? _session;
+  Object? _initializationError;
+  Object? _lastInferenceError;
+  Future<void> _inferenceQueue = Future<void>.value();
+  bool _disposed = false;
+  MobileClip2ModelContract? _contract;
+  String? _inputName;
+  String? _outputName;
+
+  bool get isInitialized => _session != null;
+  Object? get initializationError => _initializationError;
+  Object? get lastInferenceError => _lastInferenceError;
+  String get inputName => _inputName ?? '';
+  String get outputName => _outputName ?? '';
+  MobileClip2ModelContract? get contract => _contract;
+
+  Future<void> initialize() async {
+    _initializationError = null;
+    _disposed = false;
+    try {
+      await _loadMetadata();
+      await _assertAssetReadable(assetPath);
+      await _assertAssetReadable(externalDataAssetPath);
+      final session = await _runtime.createSessionFromAsset(assetPath);
+      try {
+        _contract = await _validateSessionContract(session);
+        _session = session;
+      } catch (_) {
+        await session.close();
+        rethrow;
+      }
+    } catch (error) {
+      _initializationError = error;
+      _session = null;
+      rethrow;
+    }
+  }
+
+  Future<MobileClip2ModelContract> _validateSessionContract(OrtSession session) async {
+    final inputNames = session.inputNames;
+    final outputNames = session.outputNames;
+    if (inputNames.length != 1) {
+      throw StateError('MobileCLIP2 ONNX must expose exactly one input, got ${inputNames.length}.');
+    }
+    if (outputNames.length != 1) {
+      throw StateError('MobileCLIP2 ONNX must expose exactly one output, got ${outputNames.length}.');
+    }
+    _inputName = inputNames.single;
+    _outputName = outputNames.single;
+    final metadataContract = _requireContract();
+    final inputShape = await _readShape(session, isInput: true);
+    final layout = MobileClip2ModelContract.detectGraphLayout(
+      inputShape,
+      metadataContract.inputSize,
+    );
+    final outputShape = await _readShape(session, isInput: false);
+    _validateOutputShape(outputShape, metadataContract.embeddingDimensions);
+    return metadataContract.withGraphLayout(layout);
+  }
+
+  Future<List<int>> _readShape(OrtSession session, {required bool isInput}) async {
+    final infoByName = isInput
+        ? await session.getInputInfo()
+        : await session.getOutputInfo();
+    final name = isInput ? _inputName : _outputName;
+    if (name == null) {
+      throw StateError('MobileCLIP2 ${isInput ? 'input' : 'output'} name was not discovered.');
+    }
+    Map<String, dynamic>? tensorInfo;
+    for (final info in infoByName) {
+      if (info['name'] == name) {
+        tensorInfo = info;
+        break;
+      }
+    }
+    tensorInfo ??= infoByName.length == 1 ? infoByName.single : null;
+    if (tensorInfo == null) {
+      throw StateError('MobileCLIP2 ${isInput ? 'input' : 'output'} info missing for $name.');
+    }
+    final shape = tensorInfo['shape'];
+    if (shape is! List || shape.isEmpty) {
+      throw StateError('MobileCLIP2 ${isInput ? 'input' : 'output'} shape is empty.');
+    }
+    return shape.map((value) {
+      if (value is! num) {
+        throw StateError(
+          'MobileCLIP2 ${isInput ? 'input' : 'output'} shape contains a non-numeric dimension: $shape.',
+        );
+      }
+      return value.toInt();
+    }).toList(growable: false);
+  }
+
+  void _validateOutputShape(List<int> shape, int embeddingDimensions) {
+    if (!MobileClip2ModelContract.isSingleEmbeddingShape(shape, embeddingDimensions)) {
+      throw StateError(
+        'MobileCLIP2 output shape $shape must represent exactly one '
+        '$embeddingDimensions-dimensional embedding.',
+      );
+    }
+  }
+
+  MobileClip2ModelContract _requireContract() {
+    final contract = _contract;
+    if (contract == null) {
+      throw StateError('MobileCLIP2 metadata has not been loaded.');
+    }
+    return contract;
+  }
+
+  Future<void> _loadMetadata() async {
+    final raw = await rootBundle.loadString(metadataAssetPath);
+    _contract = MobileClip2ModelContract.fromJson(jsonDecode(raw) as Map<String, dynamic>);
+  }
+
+  static Future<void> _assertAssetReadable(String path) async {
+    final data = await rootBundle.load(path);
+    if (data.lengthInBytes == 0) throw StateError('Required model asset is empty: $path');
+  }
 
   @override
-  String get modelVersion => 'mv3_small_224_float32_v1';
-
+  String get modelVersion => 'mobileclip2_s0_vision_onnx_v1';
   @override
   double get recommendedMinConfidence => 0.45;
-
   @override
-  int get embeddingLength => _outputDims * 4; // float32 = 4 bytes each
+  int get embeddingLength => isInitialized ? _requireContract().embeddingDimensions * 4 : 0;
 
   @override
   Future<Uint8List?> embedFile(String path) async {
-    if (_interpreter == null) return null;
+    if (_session == null) {
+      _lastInferenceError = StateError('MobileCLIP2 ONNX session unavailable.');
+      return null;
+    }
     try {
       final file = File(path);
       if (!file.existsSync()) return null;
-      final raw = await file.readAsBytes();
-      final decoded = img.decodeImage(raw);
+      final decoded = img.decodeImage(await file.readAsBytes());
       if (decoded == null) return null;
-      return _runInference(_prepareImageTensor(decoded));
-    } catch (_) {
+      return await _runInference(_prepareImageTensor(decoded));
+    } catch (error) {
+      _lastInferenceError = error;
       return null;
     }
   }
 
   @override
-  Uint8List? embedFrame(CameraImage image) {
-    if (_interpreter == null) return null;
+  Future<Uint8List?> embedFrame(CameraImage image) async {
+    if (_session == null) {
+      _lastInferenceError = StateError('MobileCLIP2 ONNX session unavailable.');
+      return null;
+    }
     try {
       final input = _prepareFrameTensor(image);
       if (input == null) return null;
-      return _runInference(input);
-    } catch (_) {
+      return await _runInference(input);
+    } catch (error) {
+      _lastInferenceError = error;
       return null;
     }
   }
 
-  @override
-  double similarity(Uint8List a, Uint8List b) => _cosineSimilarity(a, b);
-
-  // ── Tensor preparation ─────────────────────────────────────────────────────
-
-  /// Decode and resize an image to [_inputSize]×[_inputSize], return as
-  /// flat Float32List [H×W×3] with values normalised to [0.0, 1.0].
   Float32List _prepareImageTensor(img.Image decoded) {
-    final resized =
-        img.copyResize(decoded, width: _inputSize, height: _inputSize);
-    final input = Float32List(_inputSize * _inputSize * 3);
-    var i = 0;
-    for (var y = 0; y < _inputSize; y++) {
-      for (var x = 0; x < _inputSize; x++) {
+    final size = _requireContract().inputSize;
+    final resized = img.copyResize(decoded, width: size, height: size);
+    final input = Float32List(size * size * 3);
+    for (var y = 0; y < size; y++) {
+      for (var x = 0; x < size; x++) {
         final p = resized.getPixel(x, y);
-        input[i++] = p.r / 255.0;
-        input[i++] = p.g / 255.0;
-        input[i++] = p.b / 255.0;
+        _writePixel(input, y, x, p.r.toDouble(), p.g.toDouble(), p.b.toDouble());
       }
     }
     return input;
   }
 
-  /// Convert a live camera frame directly into a 224×224×3 Float32List,
-  /// sampling at [_inputSize]×[_inputSize] grid points for efficiency
-  /// (avoids creating a full-resolution intermediate image).
   Float32List? _prepareFrameTensor(CameraImage image) {
-    try {
-      switch (image.format.group) {
-        case ImageFormatGroup.yuv420:
-          return _fromYuv420(image);
-        case ImageFormatGroup.bgra8888:
-          return _fromBgra8888(image);
-        default:
-          // Fallback: full decode (slow path — usually not reached)
-          final decoded = img.decodeImage(image.planes[0].bytes);
-          if (decoded == null) return null;
-          return _prepareImageTensor(decoded);
-      }
-    } catch (_) {
-      return null;
+    switch (image.format.group) {
+      case ImageFormatGroup.yuv420:
+        return _fromYuv420(image);
+      case ImageFormatGroup.bgra8888:
+        return _fromBgra8888(image);
+      default:
+        final decoded = img.decodeImage(image.planes[0].bytes);
+        return decoded == null ? null : _prepareImageTensor(decoded);
+    }
+  }
+
+  void _writePixel(Float32List input, int row, int col, double r, double g, double b) {
+    final contract = _requireContract();
+    final size = contract.inputSize;
+    final values = [(r / 255.0 - contract.mean[0]) / contract.std[0], (g / 255.0 - contract.mean[1]) / contract.std[1], (b / 255.0 - contract.mean[2]) / contract.std[2]];
+    if (contract.layout == 'NHWC') {
+      final base = (row * size + col) * 3;
+      input[base] = values[0]; input[base + 1] = values[1]; input[base + 2] = values[2];
+    } else {
+      final plane = size * size;
+      final offset = row * size + col;
+      input[offset] = values[0]; input[plane + offset] = values[1]; input[2 * plane + offset] = values[2];
     }
   }
 
   Float32List _fromYuv420(CameraImage image) {
-    final w = image.width;
-    final h = image.height;
-    final yPlane = image.planes[0];
-    final uPlane = image.planes[1];
-    final vPlane = image.planes[2];
+    final size = _requireContract().inputSize, w = image.width, h = image.height;
+    final yPlane = image.planes[0], uPlane = image.planes[1], vPlane = image.planes[2];
     final uvStep = uPlane.bytesPerPixel ?? 1;
-
-    final input = Float32List(_inputSize * _inputSize * 3);
-    var idx = 0;
-
-    for (var row = 0; row < _inputSize; row++) {
-      for (var col = 0; col < _inputSize; col++) {
-        final sx = (col * w / _inputSize).toInt().clamp(0, w - 1);
-        final sy = (row * h / _inputSize).toInt().clamp(0, h - 1);
-
-        final yIdx = sy * yPlane.bytesPerRow + sx;
-        final uvRow = sy >> 1;
-        final uvCol = sx >> 1;
-        final uIdx = uvRow * uPlane.bytesPerRow + uvCol * uvStep;
-        final vIdx = uvRow * vPlane.bytesPerRow + uvCol * uvStep;
-
-        if (yIdx >= yPlane.bytes.length) {
-          input[idx++] = 0;
-          input[idx++] = 0;
-          input[idx++] = 0;
-          continue;
-        }
-
-        final yv = yPlane.bytes[yIdx];
+    final input = Float32List(size * size * 3);
+    for (var row = 0; row < size; row++) {
+      for (var col = 0; col < size; col++) {
+        final sx = (col * w / size).toInt().clamp(0, w - 1), sy = (row * h / size).toInt().clamp(0, h - 1);
+        final yIdx = sy * yPlane.bytesPerRow + sx, uvRow = sy >> 1, uvCol = sx >> 1;
+        final uIdx = uvRow * uPlane.bytesPerRow + uvCol * uvStep, vIdx = uvRow * vPlane.bytesPerRow + uvCol * uvStep;
+        final yv = yIdx < yPlane.bytes.length ? yPlane.bytes[yIdx] : 0;
         final uv = uIdx < uPlane.bytes.length ? uPlane.bytes[uIdx] - 128 : 0;
         final vv = vIdx < vPlane.bytes.length ? vPlane.bytes[vIdx] - 128 : 0;
-
-        final r = (yv + 1.402 * vv).clamp(0, 255).toInt();
-        final g = (yv - 0.344136 * uv - 0.714136 * vv).clamp(0, 255).toInt();
-        final b = (yv + 1.772 * uv).clamp(0, 255).toInt();
-
-        input[idx++] = r / 255.0;
-        input[idx++] = g / 255.0;
-        input[idx++] = b / 255.0;
+        _writePixel(input, row, col, (yv + 1.402 * vv).clamp(0, 255).toDouble(), (yv - 0.344136 * uv - 0.714136 * vv).clamp(0, 255).toDouble(), (yv + 1.772 * uv).clamp(0, 255).toDouble());
       }
     }
     return input;
   }
 
   Float32List _fromBgra8888(CameraImage image) {
-    final w = image.width;
-    final h = image.height;
-    final bytes = image.planes[0].bytes;
-    final stride = image.planes[0].bytesPerRow;
-
-    final input = Float32List(_inputSize * _inputSize * 3);
-    var idx = 0;
-
-    for (var row = 0; row < _inputSize; row++) {
-      for (var col = 0; col < _inputSize; col++) {
-        final sx = (col * w / _inputSize).toInt().clamp(0, w - 1);
-        final sy = (row * h / _inputSize).toInt().clamp(0, h - 1);
+    final size = _requireContract().inputSize, w = image.width, h = image.height;
+    final bytes = image.planes[0].bytes, stride = image.planes[0].bytesPerRow;
+    final input = Float32List(size * size * 3);
+    for (var row = 0; row < size; row++) {
+      for (var col = 0; col < size; col++) {
+        final sx = (col * w / size).toInt().clamp(0, w - 1), sy = (row * h / size).toInt().clamp(0, h - 1);
         final base = sy * stride + sx * 4;
-
-        if (base + 2 >= bytes.length) {
-          input[idx++] = 0;
-          input[idx++] = 0;
-          input[idx++] = 0;
+        if (base < 0 || base + 3 >= bytes.length) {
+          _writePixel(input, row, col, 0, 0, 0);
           continue;
         }
-        input[idx++] = bytes[base + 2] / 255.0; // R
-        input[idx++] = bytes[base + 1] / 255.0; // G
-        input[idx++] = bytes[base + 0] / 255.0; // B (BGRA → B at base+0)
+        final b = bytes[base].toDouble();
+        final g = bytes[base + 1].toDouble();
+        final r = bytes[base + 2].toDouble();
+        _writePixel(input, row, col, r, g, b);
       }
     }
     return input;
   }
 
-  // ── Inference ──────────────────────────────────────────────────────────────
+  Future<Uint8List?> _runInference(Float32List inputTensor) {
+    if (_disposed) {
+      _lastInferenceError = StateError('MobileCLIP2 ONNX session unavailable.');
+      return Future.value(null);
+    }
+    final completer = Completer<Uint8List?>();
+    _inferenceQueue = _inferenceQueue.then((_) async {
+      try {
+        completer.complete(await _runInferenceLocked(inputTensor));
+      } catch (error, stackTrace) {
+        _lastInferenceError = error;
+        completer.completeError(error, stackTrace);
+      }
+    });
+    return completer.future.catchError((_) => null);
+  }
 
-  Uint8List? _runInference(Float32List inputTensor) {
-    final interpreter = _interpreter;
-    if (interpreter == null) return null;
+  Future<Uint8List?> _runInferenceLocked(Float32List inputTensor) async {
+    final session = _session;
+    final inputName = _inputName;
+    final outputName = _outputName;
+    if (session == null || inputName == null || outputName == null) {
+      _lastInferenceError = StateError('MobileCLIP2 ONNX session unavailable.');
+      return null;
+    }
+    final contract = _requireContract();
+    final shape = contract.layout == 'NHWC'
+        ? [1, contract.inputSize, contract.inputSize, 3]
+        : [1, 3, contract.inputSize, contract.inputSize];
+    late final OrtValue input;
+    try {
+      input = await OrtValue.fromList(inputTensor, shape);
+    } catch (error) {
+      _lastInferenceError = StateError('MobileCLIP2 tensor creation failed: $error');
+      return null;
+    }
+    Map<String, OrtValue>? outputs;
+    try {
+      try {
+        outputs = await session.run({inputName: input});
+      } catch (error) {
+        throw StateError('MobileCLIP2 session.run failed: $error');
+      }
+      final output = outputs[outputName];
+      if (output == null) {
+        throw StateError('MobileCLIP2 ONNX output $outputName was not returned.');
+      }
+      final values = (await output.asFlattenedList())
+          .cast<num>()
+          .map((value) => value.toDouble())
+          .toList(growable: false);
+      if (values.length != contract.embeddingDimensions) {
+        throw StateError(
+          'MobileCLIP2 output length must be ${contract.embeddingDimensions}, got ${values.length}.',
+        );
+      }
+      final embedding = Float32List.fromList(values);
+      if (embedding.any((value) => value.isNaN)) {
+        throw StateError('MobileCLIP2 output contains NaN.');
+      }
+      if (embedding.any((value) => value.isInfinite)) {
+        throw StateError('MobileCLIP2 output contains Infinity.');
+      }
+      _l2Normalize(embedding);
+      _lastInferenceError = null;
+      return embedding.buffer.asUint8List();
+    } catch (error) {
+      _lastInferenceError = error;
+      return null;
+    } finally {
+      await input.dispose();
+      if (outputs != null) {
+        for (final tensor in outputs.values) {
+          await tensor.dispose();
+        }
+      }
+    }
+  }
 
-    final output = Float32List(_outputDims);
-    interpreter.run(inputTensor, output);
+  @override
+  double similarity(Uint8List a, Uint8List b) => _cosineSimilarity(a, b);
 
-    // L2-normalise so cosine similarity == dot product
-    _l2Normalize(output);
-    return output.buffer.asUint8List();
+  @override
+  Future<void> dispose() async {
+    _disposed = true;
+    _inferenceQueue = _inferenceQueue.then((_) async {
+      await _session?.close();
+      _session = null;
+    });
+    await _inferenceQueue;
+    // flutter_onnxruntime 1.8.3 exposes OrtSession.close() and
+    // OrtValue.dispose(); OnnxRuntime itself has no public dispose API.
   }
 
   static void _l2Normalize(Float32List v) {
     var norm = 0.0;
-    for (final x in v) {
-      norm += x * x;
-    }
+    for (final x in v) { norm += x * x; }
     norm = sqrt(norm);
-    if (norm < 1e-10) return;
-    for (var i = 0; i < v.length; i++) {
-      v[i] /= norm;
-    }
+    if (norm < 1e-10) throw StateError('Cannot normalize zero embedding.');
+    for (var i = 0; i < v.length; i++) { v[i] /= norm; }
   }
 
-  // ── Cosine similarity ──────────────────────────────────────────────────────
-
   static double _cosineSimilarity(Uint8List a, Uint8List b) {
-    if (a.length != b.length) return 0.0;
+    if (a.length != b.length || a.lengthInBytes % 4 != 0) return 0.0;
     final fa = a.buffer.asFloat32List(a.offsetInBytes, a.lengthInBytes ~/ 4);
     final fb = b.buffer.asFloat32List(b.offsetInBytes, b.lengthInBytes ~/ 4);
-    // Both vectors are L2-normalised → cosine sim == dot product
     var dot = 0.0;
-    for (var i = 0; i < fa.length; i++) {
-      dot += fa[i] * fb[i];
-    }
+    for (var i = 0; i < fa.length; i++) { dot += fa[i] * fb[i]; }
     return dot.clamp(0.0, 1.0);
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// VisualEmbeddingProvider  —  primary/fallback dispatch
-// ─────────────────────────────────────────────────────────────────────────────
-
-/// Wraps [TfLiteEmbeddingService] (primary) with [AHashEmbeddingService]
-/// (fallback) so the rest of the stack never has to deal with init failures.
-///
-/// Call [initialize] once before using the provider. If TFLite fails to load
-/// (model missing, platform unsupported, etc.) the provider transparently
-/// falls back to aHash — the scanner keeps working, just with lower accuracy.
 class VisualEmbeddingProvider implements VisualEmbeddingService {
-  final TfLiteEmbeddingService _tflite = TfLiteEmbeddingService();
-  final AHashEmbeddingService _ahash = AHashEmbeddingService();
+  final MobileVisionEmbeddingService _mobileClip = MobileVisionEmbeddingService();
+  final AHashEmbeddingService diagnosticsAHash = AHashEmbeddingService();
+  bool _onnxReady = false;
 
-  bool _tfliteReady = false;
-
-  bool get isTfLiteActive => _tfliteReady;
+  bool get isOnnxActive => _onnxReady;
+  Object? get initializationError => _mobileClip.initializationError;
+  Object? get lastInferenceError => _mobileClip.lastInferenceError;
 
   Future<void> initialize() async {
     try {
-      await _tflite.initialize();
-      _tfliteReady = true;
-    } catch (_) {
-      // TFLite unavailable (e.g. unit-test host without native libs) → aHash.
-      _tfliteReady = false;
+      await _mobileClip.initialize();
+      _onnxReady = true;
+    } catch (error) {
+      _onnxReady = false;
     }
   }
 
-  VisualEmbeddingService get _active => _tfliteReady ? _tflite : _ahash;
+  VisualEmbeddingService? get _active => _onnxReady ? _mobileClip : null;
 
   @override
-  String get modelVersion => _active.modelVersion;
+  String get modelVersion => _active?.modelVersion ?? 'visual_engine_unavailable';
   @override
-  double get recommendedMinConfidence => _active.recommendedMinConfidence;
+  double get recommendedMinConfidence => _active?.recommendedMinConfidence ?? 1.0;
   @override
-  int get embeddingLength => _active.embeddingLength;
+  int get embeddingLength => _active?.embeddingLength ?? 0;
   @override
-  Future<Uint8List?> embedFile(String path) => _active.embedFile(path);
+  Future<Uint8List?> embedFile(String path) => _active?.embedFile(path) ?? Future.value(null);
   @override
-  Uint8List? embedFrame(CameraImage image) => _active.embedFrame(image);
+  Future<Uint8List?> embedFrame(CameraImage image) => _active?.embedFrame(image) ?? Future.value(null);
   @override
-  double similarity(Uint8List a, Uint8List b) => _active.similarity(a, b);
+  double similarity(Uint8List a, Uint8List b) => _active?.similarity(a, b) ?? 0.0;
+
+  @override
+  Future<void> dispose() async {
+    await _mobileClip.dispose();
+    _onnxReady = false;
+  }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// AHashEmbeddingService  —  16×16 average hash (fallback)
-// ─────────────────────────────────────────────────────────────────────────────
-
-/// Average-hash (aHash) visual embedding — 256-bit hash stored in 32 bytes.
-///
-/// Used as the fallback when TFLite is unavailable (e.g. in unit tests running
-/// on the host machine, or on devices without TFLite native libraries).
-class AHashEmbeddingService implements VisualEmbeddingService {
-  AHashEmbeddingService({int gridSize = 16})
-      : _n = gridSize,
-        _preprocessor = FramePreprocessor(gridSize: gridSize);
-
+class AHashEmbeddingService extends VisualEmbeddingService {
+  AHashEmbeddingService({int gridSize = 16}) : _n = gridSize, _preprocessor = FramePreprocessor(gridSize: gridSize);
   final int _n;
   final FramePreprocessor _preprocessor;
-
   @override
-  String get modelVersion => 'ahash_${_n}x${_n}';
+  String get modelVersion => 'ahash_${_n}x$_n';
   @override
   double get recommendedMinConfidence => 0.70;
   @override
-  int get embeddingLength => (_n * _n) >> 3; // 256 bits → 32 bytes
-
+  int get embeddingLength => (_n * _n) >> 3;
   @override
   Future<Uint8List?> embedFile(String path) async {
     try {
       final file = File(path);
       if (!file.existsSync()) return null;
-      final rawBytes = await file.readAsBytes();
-      final decoded = img.decodeImage(rawBytes);
+      final decoded = img.decodeImage(await file.readAsBytes());
       if (decoded == null) return null;
       final gray = img.grayscale(decoded);
       final small = img.copyResize(gray, width: _n, height: _n);
       final pix = List<int>.filled(_n * _n, 0);
-      for (var y = 0; y < _n; y++) {
-        for (var x = 0; x < _n; x++) {
-          pix[y * _n + x] = small.getPixel(x, y).r.toInt();
-        }
-      }
+      for (var y = 0; y < _n; y++) { for (var x = 0; x < _n; x++) { pix[y * _n + x] = small.getPixel(x, y).r.toInt(); } }
       return _averageHash(pix);
-    } catch (_) {
-      return null;
-    }
+    } catch (_) { return null; }
   }
-
   @override
-  Uint8List? embedFrame(CameraImage image) {
-    try {
-      final pix = _preprocessor.extractLuminanceGrid(image);
-      if (pix == null) return null;
-      return _averageHash(pix);
-    } catch (_) {
-      return null;
-    }
+  Future<Uint8List?> embedFrame(CameraImage image) async {
+    try { final pix = _preprocessor.extractLuminanceGrid(image); return pix == null ? null : _averageHash(pix); } catch (_) { return null; }
   }
-
   @override
   double similarity(Uint8List a, Uint8List b) {
-    final dist = hammingDistance(a, b);
-    return 1.0 - (dist / (_n * _n));
+    if (a.length != b.length) return 0.0;
+    return 1.0 - (hammingDistance(a, b) / (_n * _n));
   }
-
   int hammingDistance(Uint8List a, Uint8List b) {
     if (a.length != b.length) return _n * _n;
     var dist = 0;
-    for (var i = 0; i < a.length; i++) {
-      var x = a[i] ^ b[i];
-      while (x != 0) {
-        dist += x & 1;
-        x >>= 1;
-      }
-    }
+    for (var i = 0; i < a.length; i++) { var x = a[i] ^ b[i]; while (x != 0) { dist += x & 1; x >>= 1; } }
     return dist;
   }
-
   static Uint8List _averageHash(List<int> pix) {
     final mean = pix.fold(0, (s, v) => s + v) ~/ pix.length;
     final hash = Uint8List(pix.length >> 3);
-    for (var i = 0; i < pix.length; i++) {
-      if (pix[i] >= mean) hash[i >> 3] |= 1 << (i & 7);
-    }
+    for (var i = 0; i < pix.length; i++) { if (pix[i] >= mean) hash[i >> 3] |= 1 << (i & 7); }
     return hash;
   }
 }

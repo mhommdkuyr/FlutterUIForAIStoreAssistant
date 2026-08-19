@@ -17,28 +17,126 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
+          flutter-version: '3.32.0'
           channel: stable
           cache: true
 
-      - name: Flutter version
+      - name: Flutter and Dart versions
         run: |
           flutter --version
           dart --version
 
+      - name: Install Android NDK 27.0.12077973
+        run: |
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager \
+            --licenses > /dev/null 2>&1 || true
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager \
+            "ndk;27.0.12077973" --channel=0
+
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Generate Dart code
+      - name: Dart analyze
+        shell: bash
         run: |
-          dart run build_runner build --delete-conflicting-outputs
+          set +e
+          dart analyze --format=json --no-fatal-warnings > dart_analyze.json
+          status=$?
+          set -e
+          cat dart_analyze.json
+          python3 - "$status" dart_analyze.json <<'PY'
+          import json
+          import sys
 
-      - name: Analyze
-        run: flutter analyze
-        continue-on-error: true
+          status = int(sys.argv[1])
+          path = sys.argv[2]
+          with open(path, encoding="utf-8") as f:
+              data = json.load(f)
 
-      - name: Test
+          diagnostics = data.get("diagnostics", []) if isinstance(data, dict) else []
+          errors = [
+              item for item in diagnostics
+              if isinstance(item, dict)
+              and str(item.get("severity", "")).upper() == "ERROR"
+          ]
+
+          if errors:
+              print(f"Dart analyzer reported {len(errors)} error diagnostics; failing CI.")
+              sys.exit(1)
+
+          print(
+              f"Dart analyzer completed without error diagnostics "
+              f"(tool exit code: {status}; warnings/info are non-fatal)."
+          )
+          sys.exit(0)
+          PY
+
+      - name: Flutter analyze
+        shell: bash
+        run: |
+          set +e
+          flutter analyze --no-fatal-warnings > flutter_analyze.txt 2>&1
+          status=$?
+          set -e
+          cat flutter_analyze.txt
+          if grep -Eq '^ *error •' flutter_analyze.txt; then
+            echo "Flutter analyzer reported error diagnostics; failing CI."
+            exit 1
+          fi
+          echo "Flutter analyzer reported no error diagnostics (warnings/info are non-fatal; tool exit code: $status)."
+          exit 0
+
+      - name: Focused MobileCLIP2 contract tests
+        run: flutter test test/mobileclip2_contract_test.dart
+
+      - name: Focused recognition pipeline tests
+        run: flutter test test/recognition_pipeline_test.dart
+
+      - name: Focused visual recognition integration tests
+        run: flutter test test/visual_recognition_integration_test.dart
+
+      - name: Full Flutter tests
         run: flutter test
+
+      - name: Verify MobileCLIP2 asset
+        run: dart run tools/verify_mobileclip2_asset.dart
+
+      - name: Build debug APK
+        run: |
+          set -o pipefail
+          flutter build apk --debug 2>&1 | tee build_output.log
+
+      - name: Build release APK
+        run: |
+          set -o pipefail
+          flutter build apk --release 2>&1 | tee release_build_output.log
+
+      - name: Upload final APK artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-store-assistant-final-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
+          retention-days: 30
+
+      - name: Upload build log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: flutter-verification-build-log
+          path: |
+            build_output.log
+            release_build_output.log
+          retention-days: 7

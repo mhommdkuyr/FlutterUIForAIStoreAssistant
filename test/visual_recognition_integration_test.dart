@@ -1,15 +1,14 @@
 /// Integration-style tests for the visual recognition stack.
 ///
-/// These tests run on the host machine — TFLite native libraries are NOT
-/// available there. Tests are therefore designed around:
-///   1. The VisualEmbeddingProvider fallback behaviour (always aHash on host).
+/// These tests run on the host machine — ONNX Runtime native libraries and model assets may be unavailable there.
+/// Tests are therefore designed around:
+///   1. The VisualEmbeddingProvider fail-closed behaviour on host.
 ///   2. The LocalProductIndexService using the correct similarity dispatch.
 ///   3. The RecognitionPipeline architecture (temporal tracker, scan lock).
 ///   4. Deterministic embedding round-trips (same image → same embedding).
 ///   5. Boundary and false-positive guards.
 ///
-/// On a real Android device (debug APK), TfLiteEmbeddingService is used
-/// instead of aHash — the architecture is identical; only the backend differs.
+/// On a real Android device (debug APK), MobileVisionEmbeddingService uses MobileCLIP2 ONNX Runtime.
 library;
 
 import 'dart:typed_data';
@@ -48,7 +47,7 @@ Uint8List _makeEmbedding(int seed, {int size = 32}) {
 }
 
 /// Stub embedding service: paths act as keys mapping to pre-registered hashes.
-class _StubEmbeddingService implements VisualEmbeddingService {
+class _StubEmbeddingService extends VisualEmbeddingService {
   _StubEmbeddingService(this._map);
   final Map<String, Uint8List> _map;
 
@@ -63,7 +62,7 @@ class _StubEmbeddingService implements VisualEmbeddingService {
   Future<Uint8List?> embedFile(String path) async => _map[path];
 
   @override
-  Uint8List? embedFrame(camera) => null;
+  Future<Uint8List?> embedFrame(camera) async => null;
 
   @override
   double similarity(Uint8List a, Uint8List b) {
@@ -132,32 +131,37 @@ void main() {
 
   // ── 2. VisualEmbeddingProvider — fallback ─────────────────────────────────
 
-  group('VisualEmbeddingProvider — fallback to aHash when TFLite unavailable',
+  group('VisualEmbeddingProvider — fail closed when ONNX unavailable',
       () {
-    test('initialize does not throw even when TFLite libs missing', () async {
+    test('initialize does not throw even when ONNX assets/libs are missing', () async {
       final provider = VisualEmbeddingProvider();
       await expectLater(provider.initialize(), completes);
     });
 
-    test('isTfLiteActive is false on host (no native TFLite libs)', () async {
+    test('isOnnxActive reports backend availability', () async {
       final provider = VisualEmbeddingProvider();
       await provider.initialize();
-      // On the CI host, native libs are absent → aHash fallback.
-      // On Android device, this may be true — test still passes either way.
-      expect(provider.isTfLiteActive, isA<bool>());
+      expect(provider.isOnnxActive, isA<bool>());
     });
 
-    test('provider embeddingLength is > 0 after init', () async {
+    test('provider embeddingLength is either unavailable or the 512-float ONNX embedding length', () async {
       final provider = VisualEmbeddingProvider();
       await provider.initialize();
-      expect(provider.embeddingLength, greaterThan(0));
+      expect(provider.embeddingLength == 0 || provider.embeddingLength == 512 * 4, isTrue);
     });
 
-    test('provider similarity(x,x)==1.0 regardless of backend', () async {
+    test('provider similarity distinguishes unavailable backend from valid embeddings', () async {
       final provider = VisualEmbeddingProvider();
       await provider.initialize();
-      final h = Uint8List(provider.embeddingLength)..fillRange(0, provider.embeddingLength, 0x55);
-      expect(provider.similarity(h, h), closeTo(1.0, 0.001));
+      if (!provider.isOnnxActive) {
+        expect(provider.embeddingLength, 0);
+        expect(provider.similarity(Uint8List(0), Uint8List(0)), 0.0);
+        expect(await provider.embedFile('/nonexistent/path.jpg'), isNull);
+      } else {
+        final h = Uint8List(provider.embeddingLength)
+          ..fillRange(0, provider.embeddingLength, 0x55);
+        expect(provider.similarity(h, h), closeTo(1.0, 0.001));
+      }
     });
   });
 
