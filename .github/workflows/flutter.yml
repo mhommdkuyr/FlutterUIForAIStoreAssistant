@@ -52,33 +52,67 @@ jobs:
         shell: bash
         run: |
           set +e
-          dart analyze --no-fatal-warnings 2>&1 | tee dart_analyze.log
-          status=${PIPESTATUS[0]}
+          dart analyze --format=json --no-fatal-warnings > dart_analyze.json
+          status=$?
           set -e
+          cat dart_analyze.json
 
-          if [ "$status" -ne 0 ]; then
-            if grep -Eq '^(error|warning) - ' dart_analyze.log; then
-              echo "Dart analyzer reported at least one error or warning; failing CI."
-              exit "$status"
-            fi
-            echo "Dart analyzer returned $status but reported only info-level diagnostics; treating infos as non-fatal."
-          fi
+          python3 - "$status" dart_analyze.json <<'PY'
+          import json
+          import sys
+
+          status = int(sys.argv[1])
+          path = sys.argv[2]
+          with open(path, encoding="utf-8") as f:
+              data = json.load(f)
+
+          issues = data.get("diagnostics", data.get("issues", []))
+          fatal = []
+          for issue in issues:
+              severity = str(issue.get("severity", "")).lower()
+              if severity in {"error", "warning"}:
+                  fatal.append(issue)
+
+          if fatal:
+              print(f"Dart analyzer reported {len(fatal)} error/warning diagnostics; failing CI.")
+              sys.exit(status if status != 0 else 1)
+
+          print(f"Dart analyzer returned exit code {status} with no error/warning diagnostics; infos are non-fatal.")
+          sys.exit(0)
+          PY
 
       - name: Flutter analyze
         shell: bash
         run: |
           set +e
-          flutter analyze --no-fatal-warnings 2>&1 | tee flutter_analyze.log
-          status=${PIPESTATUS[0]}
+          flutter analyze --format=json --no-fatal-warnings > flutter_analyze.json
+          status=$?
           set -e
+          cat flutter_analyze.json
 
-          if [ "$status" -ne 0 ]; then
-            if grep -Eq '^(error|warning) - ' flutter_analyze.log; then
-              echo "Flutter analyzer reported at least one error or warning; failing CI."
-              exit "$status"
-            fi
-            echo "Flutter analyzer returned $status but reported only info-level diagnostics; treating infos as non-fatal."
-          fi
+          python3 - "$status" flutter_analyze.json <<'PY'
+          import json
+          import sys
+
+          status = int(sys.argv[1])
+          path = sys.argv[2]
+          with open(path, encoding="utf-8") as f:
+              data = json.load(f)
+
+          issues = data.get("diagnostics", data.get("issues", []))
+          fatal = []
+          for issue in issues:
+              severity = str(issue.get("severity", "")).lower()
+              if severity in {"error", "warning"}:
+                  fatal.append(issue)
+
+          if fatal:
+              print(f"Flutter analyzer reported {len(fatal)} error/warning diagnostics; failing CI.")
+              sys.exit(status if status != 0 else 1)
+
+          print(f"Flutter analyzer returned exit code {status} with no error/warning diagnostics; infos are non-fatal.")
+          sys.exit(0)
+          PY
 
       - name: Focused MobileCLIP2 contract tests
         run: flutter test test/mobileclip2_contract_test.dart
