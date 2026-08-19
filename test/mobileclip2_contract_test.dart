@@ -34,6 +34,48 @@ void main() {
       expect(contract.onnxOpset, 18);
     });
 
+    test('verified metadata passes', () {
+      expect(
+        () => MobileClip2ModelContract.fromJson(_actualMetadata()),
+        returnsNormally,
+      );
+    });
+
+    test('[256,256] input_size fails closed', () {
+      expect(
+        () => MobileClip2ModelContract.fromJson(
+          _actualMetadata()..['input_size'] = [256, 256],
+        ),
+        throwsStateError,
+      );
+    });
+
+    test('modified mean fails closed', () {
+      final invalidMean = _actualMetadata();
+      invalidMean['normalization'] = {
+        'mean': [0.48145467, 0.4578275, 0.40821073],
+        'std': [0.26862954, 0.26130258, 0.27577711],
+      };
+
+      expect(
+        () => MobileClip2ModelContract.fromJson(invalidMean),
+        throwsStateError,
+      );
+    });
+
+    test('modified std fails closed', () {
+      final invalidStd = _actualMetadata();
+      invalidStd['normalization'] = {
+        'mean': [0.48145466, 0.4578275, 0.40821073],
+        'std': [0.26862954, 0.26130259, 0.27577711],
+      };
+
+      expect(
+        () => MobileClip2ModelContract.fromJson(invalidStd),
+        throwsStateError,
+      );
+    });
+
     test('invalid input_size fails closed', () {
       expect(
         () => MobileClip2ModelContract.fromJson(
