@@ -136,8 +136,12 @@ class MobileClip2ModelContract {
     if (inputShape.length != 4) {
       throw StateError('MobileCLIP2 input must be rank 4, got $inputShape.');
     }
-    if (inputShape[0] != 1) {
-      throw StateError('MobileCLIP2 input batch must be 1, got $inputShape.');
+    // ONNX uses -1 for a dynamic batch dimension. The runtime sends a
+    // concrete batch of 1, so both static 1 and dynamic -1 are valid.
+    if (inputShape[0] != 1 && inputShape[0] != -1) {
+      throw StateError(
+        'MobileCLIP2 input batch dimension must be 1 or dynamic (-1), got $inputShape.',
+      );
     }
     final nchw = inputShape[1] == 3 &&
         inputShape[2] == inputSize &&
@@ -149,7 +153,7 @@ class MobileClip2ModelContract {
     if (nhwc) return 'NHWC';
     throw StateError(
       'MobileCLIP2 input shape must be [1,3,$inputSize,$inputSize] '
-      'or [1,$inputSize,$inputSize,3], got $inputShape.',
+      'or [1,$inputSize,$inputSize,3] with batch 1 or dynamic (-1), got $inputShape.',
     );
   }
 
