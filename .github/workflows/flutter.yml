@@ -9,6 +9,9 @@ on:
       - main
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   verify:
     name: Verify Flutter Project
@@ -40,13 +43,13 @@ jobs:
           PY
           if git diff --quiet; then
             echo 'Dynamic batch patch already applied.'
-            exit 0
+          else
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git add lib/shared/services/visual_embedding_service.dart test/mobileclip2_contract_test.dart
+            git commit -m 'Fix MobileCLIP2 dynamic batch validation'
+            git push origin HEAD:hotfix/mobileclip2-device-runtime
           fi
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add lib/shared/services/visual_embedding_service.dart test/mobileclip2_contract_test.dart
-          git commit -m 'Fix MobileCLIP2 dynamic batch validation'
-          git push origin HEAD:hotfix/mobileclip2-device-runtime
 
       - name: Set up Java 17
         uses: actions/setup-java@v4
