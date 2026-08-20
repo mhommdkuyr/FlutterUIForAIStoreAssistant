@@ -156,6 +156,13 @@ void main() {
       );
     });
 
+    test('dynamic batch [-1,3,224,224] is valid NCHW', () {
+      expect(
+        MobileClip2ModelContract.detectGraphLayout([-1, 3, 224, 224], 224),
+        'NCHW',
+      );
+    });
+
     test('invalid input graph shape fails closed', () {
       expect(
         () => MobileClip2ModelContract.detectGraphLayout([1, 3, 256, 256], 224),
