@@ -500,35 +500,577 @@ class _LiveScannerScreenState extends State<LiveScannerScreen>
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     if (_cart.isNotEmpty) ...[
-                      _CartSummary(cart: _cart, tr: tr),
+                      _CartSummaryBar(cart: _cart, tr: tr),
                       const SizedBox(height: 10),
                     ],
                     SizedBox(
                       width: double.infinity,
-                      height: 52,
                       child: ElevatedButton.icon(
                         onPressed: _cart.isEmpty ? null : _goToInvoice,
                         icon: const Icon(Icons.receipt_long_rounded),
                         label: Text(
                           _cart.isEmpty
-                              ? tr.scanProductsToContinue
-                              : '${tr.completeSale} ($_totalItems)',
+                              ? tr.aimCameraAtProduct
+                              : '${tr.doneScanning}  ·  $_totalItems ${tr.items}',
                         ),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.primary,
+                          backgroundColor:
+                              _cart.isEmpty ? Colors.white24 : AppColors.success,
                           foregroundColor: Colors.white,
-                          disabledBackgroundColor: Colors.white12,
+                          disabledBackgroundColor: Colors.white24,
                           disabledForegroundColor: Colors.white54,
-                          shape: RoundedRectangleBorder(
-                            borderRadius:
-                                BorderRadius.circular(AppConstants.radiusLarge),
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          textStyle: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
                           ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(
+                              AppConstants.radiusMedium,
+                            ),
+                          ),
+                          elevation: 0,
                         ),
                       ),
                     ),
                   ],
                 ),
               ),
+            ),
+          ),
+
+          if (_isLoading)
+            Container(
+              color: Colors.black54,
+              child: const Center(
+                child: CircularProgressIndicator(color: AppColors.primary),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CameraBackground extends StatelessWidget {
+  const _CameraBackground();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: RadialGradient(
+          center: Alignment.center,
+          radius: 1.2,
+          colors: [Color(0xFF1A1A2E), Color(0xFF000000)],
+        ),
+      ),
+      child: CustomPaint(
+        painter: _DotGridPainter(),
+        size: Size.infinite,
+      ),
+    );
+  }
+}
+
+class _DotGridPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.white.withOpacity(0.06)
+      ..style = PaintingStyle.fill;
+    const step = 22.0;
+    for (double x = 0; x < size.width; x += step) {
+      for (double y = 0; y < size.height; y += step) {
+        canvas.drawCircle(Offset(x, y), 1.2, paint);
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(_DotGridPainter _) => false;
+}
+
+class _ScanFrame extends StatelessWidget {
+  const _ScanFrame({
+    required this.size,
+    required this.color,
+    required this.isRecognizing,
+  });
+  final double size;
+  final Color color;
+  final bool isRecognizing;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: size,
+      height: size,
+      child: Stack(
+        children: [
+          Container(
+            decoration: BoxDecoration(
+              border: Border.all(color: color, width: 1.5),
+              borderRadius: BorderRadius.circular(12),
+              color: color.withOpacity(0.05),
+            ),
+          ),
+          ..._corners(color),
+          if (isRecognizing)
+            ClipRRect(
+              borderRadius: BorderRadius.circular(11),
+              child: _ScanLine(color: color),
+            ),
+        ],
+      ),
+    );
+  }
+
+  static List<Widget> _corners(Color color) {
+    const len = 28.0;
+    const thick = 3.5;
+    Widget corner({
+      required Alignment alignment,
+      required BorderRadius radius,
+      required EdgeInsets padding,
+    }) =>
+        Positioned.fill(
+          child: Align(
+            alignment: alignment,
+            child: Padding(
+              padding: padding,
+              child: SizedBox(
+                width: len,
+                height: len,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    border: Border(
+                      top: alignment.y < 0
+                          ? BorderSide(color: color, width: thick)
+                          : BorderSide.none,
+                      bottom: alignment.y > 0
+                          ? BorderSide(color: color, width: thick)
+                          : BorderSide.none,
+                      left: alignment.x < 0
+                          ? BorderSide(color: color, width: thick)
+                          : BorderSide.none,
+                      right: alignment.x > 0
+                          ? BorderSide(color: color, width: thick)
+                          : BorderSide.none,
+                    ),
+                    borderRadius: radius,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+
+    const p8 = EdgeInsets.all(8);
+    return [
+      corner(
+        alignment: Alignment.topLeft,
+        radius: const BorderRadius.only(topLeft: Radius.circular(10)),
+        padding: p8,
+      ),
+      corner(
+        alignment: Alignment.topRight,
+        radius: const BorderRadius.only(topRight: Radius.circular(10)),
+        padding: p8,
+      ),
+      corner(
+        alignment: Alignment.bottomLeft,
+        radius: const BorderRadius.only(bottomLeft: Radius.circular(10)),
+        padding: p8,
+      ),
+      corner(
+        alignment: Alignment.bottomRight,
+        radius: const BorderRadius.only(bottomRight: Radius.circular(10)),
+        padding: p8,
+      ),
+    ];
+  }
+}
+
+class _ScanLine extends StatefulWidget {
+  const _ScanLine({required this.color});
+  final Color color;
+
+  @override
+  State<_ScanLine> createState() => _ScanLineState();
+}
+
+class _ScanLineState extends State<_ScanLine>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+  late final Animation<double> _anim;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    )..repeat(reverse: true);
+    _anim = CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut);
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _anim,
+      builder: (context, _) => Align(
+        alignment: Alignment(0, (_anim.value * 2) - 1),
+        child: Container(
+          height: 2,
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                Colors.transparent,
+                widget.color.withOpacity(0.9),
+                Colors.transparent,
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _StatusChip extends StatelessWidget {
+  const _StatusChip({required this.status, required this.tr});
+  final _ScanStatus status;
+  final AppTranslations tr;
+
+  @override
+  Widget build(BuildContext context) {
+    final (text, color, icon) = switch (status) {
+      _ScanStatus.initializing => (
+          'Initializing visual model...',
+          AppColors.warning,
+          Icons.hourglass_top_rounded,
+        ),
+      _ScanStatus.ready => (
+          tr.aimCameraAtProduct,
+          Colors.white.withOpacity(0.85),
+          Icons.center_focus_strong_rounded,
+        ),
+      _ScanStatus.processing => (
+          tr.recognizing,
+          AppColors.warning,
+          Icons.radar_rounded,
+        ),
+      _ScanStatus.uncertain => (
+          'Verifying match...',
+          AppColors.warning,
+          Icons.youtube_searched_for_rounded,
+        ),
+      _ScanStatus.confirmed => (
+          tr.productFoundLabel,
+          AppColors.success,
+          Icons.check_circle_rounded,
+        ),
+      _ScanStatus.noMatch => (
+          'No visual match',
+          AppColors.error,
+          Icons.highlight_off_rounded,
+        ),
+      _ScanStatus.error => (
+          'Visual recognition error',
+          AppColors.error,
+          Icons.error_outline_rounded,
+        ),
+    };
+
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 250),
+      child: Container(
+        key: ValueKey(status),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
+        decoration: BoxDecoration(
+          color: Colors.black.withOpacity(0.55),
+          borderRadius: BorderRadius.circular(AppConstants.radiusFull),
+          border: Border.all(color: color.withOpacity(0.4)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (status == _ScanStatus.processing || status == _ScanStatus.uncertain)
+              Padding(
+                padding: const EdgeInsets.only(right: 6),
+                child: SizedBox(
+                  width: 14,
+                  height: 14,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation(color),
+                  ),
+                ),
+              )
+            else
+              Padding(
+                padding: const EdgeInsets.only(right: 6),
+                child: Icon(icon, color: color, size: 16),
+              ),
+            Text(
+              text,
+              style: TextStyle(
+                color: color,
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _VisualDebugPanel extends StatelessWidget {
+  const _VisualDebugPanel({
+    required this.status,
+    required this.candidate,
+    required this.lastConfirmed,
+    required this.result,
+    required this.diagnostics,
+    required this.cameraFps,
+    required this.fallbackActive,
+    required this.minConfidence,
+    required this.minMargin,
+    required this.errorMessage,
+  });
+
+  final _ScanStatus status;
+  final ProductModel? candidate;
+  final ProductModel? lastConfirmed;
+  final ProductRecognitionResult? result;
+  final RecognitionDiagnostics? diagnostics;
+  final int cameraFps;
+  final bool fallbackActive;
+  final double minConfidence;
+  final double minMargin;
+  final String? errorMessage;
+
+  @override
+  Widget build(BuildContext context) {
+    final d = diagnostics;
+    String pct(double value) => '${(value * 100).toStringAsFixed(1)}%';
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.symmetric(horizontal: 18),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: Colors.black.withOpacity(0.58),
+        borderRadius: BorderRadius.circular(AppConstants.radiusMedium),
+        border: Border.all(color: Colors.white.withOpacity(0.18)),
+      ),
+      child: DefaultTextStyle(
+        style: const TextStyle(color: Colors.white, fontSize: 12, height: 1.35),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('State: ${status.name}${fallbackActive ? ' · fallback active' : ''}'),
+            if (errorMessage != null) Text('Error: $errorMessage'),
+            Text('Candidate: ${candidate?.name ?? '—'}'),
+            Text('Last confirmed: ${lastConfirmed?.name ?? '—'}'),
+            Text('Product ID: ${result?.productId ?? '—'}'),
+            Text(
+              'Best: ${pct(d?.bestScore ?? result?.confidence ?? 0)} · '
+              'Second: ${pct(d?.secondBestScore ?? result?.secondBestConfidence ?? 0)} · '
+              'Margin: ${pct(d?.margin ?? result?.margin ?? 0)}',
+            ),
+            Text('Threshold: ${pct(minConfidence)} · Min margin: ${pct(minMargin)}'),
+            Text(
+              'Indexed: ${d?.indexedProducts ?? 0} products / '
+              '${d?.indexedEmbeddings ?? 0} embeddings',
+            ),
+            Text('Backend: ${d?.backend ?? 'initializing'}'),
+            Text(
+              'FPS: $cameraFps · prep ${d?.preprocessingMs ?? 0}ms · '
+              'infer ${d?.inferenceMs ?? 0}ms · search ${d?.searchMs ?? 0}ms · '
+              'total ${d?.totalMs ?? 0}ms',
+            ),
+            Text(
+              'Frame: brightness ${d?.meanBrightness?.toStringAsFixed(1) ?? '—'} · '
+              'texture ${d?.lumaStdDev?.toStringAsFixed(1) ?? '—'}',
+            ),
+            if (result?.reason != null) Text('Reason: ${result!.reason}'),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CartBadge extends StatelessWidget {
+  const _CartBadge({required this.count});
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 200),
+      child: count == 0
+          ? const SizedBox(width: 48)
+          : Container(
+              key: ValueKey(count),
+              margin: const EdgeInsets.only(right: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: AppColors.success,
+                borderRadius:
+                    BorderRadius.circular(AppConstants.radiusFull),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.shopping_cart_rounded,
+                      color: Colors.white, size: 14),
+                  const SizedBox(width: 4),
+                  Text(
+                    '$count',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+    );
+  }
+}
+
+class _ProductFoundCard extends StatelessWidget {
+  const _ProductFoundCard({
+    required this.product,
+    required this.quantity,
+    required this.tr,
+  });
+  final ProductModel product;
+  final int quantity;
+  final AppTranslations tr;
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+      decoration: BoxDecoration(
+        color: AppColors.success.withOpacity(0.95),
+        borderRadius: BorderRadius.circular(AppConstants.radiusLarge),
+        boxShadow: const [
+          BoxShadow(
+            color: Colors.black38,
+            blurRadius: 16,
+            offset: Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(Icons.check_rounded,
+                color: Colors.white, size: 24),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  product.name,
+                  style: textTheme.titleSmall?.copyWith(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  tr.formatCurrency(product.sellingPrice),
+                  style: textTheme.bodySmall?.copyWith(
+                    color: Colors.white.withOpacity(0.88),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (quantity > 1)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.2),
+                borderRadius:
+                    BorderRadius.circular(AppConstants.radiusFull),
+              ),
+              child: Text(
+                '${tr.timesScanned}$quantity',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CartSummaryBar extends StatelessWidget {
+  const _CartSummaryBar({required this.cart, required this.tr});
+  final List<ScanCartItem> cart;
+  final AppTranslations tr;
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(AppConstants.radiusMedium),
+        border:
+            Border.all(color: Colors.white.withOpacity(0.18)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.inventory_2_outlined,
+              color: Colors.white70, size: 16),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              cart.map((c) => c.quantity > 1 ? '${c.name} ×${c.quantity}' : c.name).join('  ·  '),
+              style: textTheme.bodySmall?.copyWith(color: Colors.white70),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            tr.formatCurrency(
+                cart.fold(0.0, (s, c) => s + c.totalPrice)),
+            style: textTheme.labelMedium?.copyWith(
+              color: Colors.white,
+              fontWeight: FontWeight.w700,
             ),
           ),
         ],
