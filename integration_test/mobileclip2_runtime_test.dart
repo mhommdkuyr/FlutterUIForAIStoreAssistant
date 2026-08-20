@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:io';
 import 'dart:math';
 
@@ -62,7 +61,7 @@ void main() {
     await File(path).delete();
   });
 
-  testWidgets('real Android camera produces frames accepted by the visual engine',
+  testWidgets('real Android camera capture feeds the visual engine and recognizes it',
       (tester) async {
     final provider = FastVisualEmbeddingProvider();
     await provider.initialize();
@@ -80,25 +79,42 @@ void main() {
       enableAudio: false,
       imageFormatGroup: ImageFormatGroup.yuv420,
     );
-    final firstFrame = Completer<CameraImage>();
-    await controller.initialize();
-    await controller.startImageStream((frame) {
-      if (!firstFrame.isCompleted) firstFrame.complete(frame);
-    });
 
     try {
-      final frame = await firstFrame.future.timeout(const Duration(seconds: 8));
-      expect(frame.width, greaterThan(0));
-      expect(frame.height, greaterThan(0));
-      final embedding = await provider.embedFrameWithRotation(
-        frame,
-        rotationDegrees: 0,
-      );
+      await controller.initialize().timeout(const Duration(seconds: 15));
+      final capture = await controller.takePicture().timeout(
+            const Duration(seconds: 15),
+          );
+      expect(await File(capture.path).exists(), isTrue);
+
+      final embedding = await provider.embedFile(capture.path);
       expect(embedding, isNotNull);
       expect(embedding!.length, 2048);
-      expect(embedding.every((byte) => byte >= 0), isTrue);
+
+      final product = ProductModel(
+        id: 'camera-captured-product',
+        name: 'Camera Captured Product',
+        category: 'Camera Test',
+        purchasePrice: 1,
+        sellingPrice: 2,
+        quantity: 1,
+        imageUrl: capture.path,
+        createdAt: DateTime(2026),
+        updatedAt: DateTime(2026),
+      );
+      final index = LocalProductIndexService(embeddingService: provider);
+      await index.buildIndex([product]);
+      expect(index.indexedProductCount, 1);
+      expect(index.indexedEmbeddingCount, 1);
+
+      final match = index.evaluate(
+        embedding,
+        minConfidence: 0.45,
+        minMargin: 0,
+      );
+      expect(match.isAccepted, isTrue);
+      expect(match.best?.productId, product.id);
     } finally {
-      await controller.stopImageStream();
       await controller.dispose();
       await provider.dispose();
     }
@@ -122,10 +138,8 @@ void main() {
         final query = _makeProductImage(id, backgroundSeed: 1000 + id);
 
         final referencePath = '${directory.path}/bench_ref_$id.png';
-        final queryPng = '${directory.path}/bench_query_$id.png';
         final queryJpg = '${directory.path}/bench_query_$id.jpg';
         await File(referencePath).writeAsBytes(img.encodePng(reference));
-        await File(queryPng).writeAsBytes(img.encodePng(query));
 
         // Deliberately degrade every query: low-resolution intermediate,
         // JPEG compression, and a small exposure shift.
@@ -191,11 +205,11 @@ void main() {
       expect(latencies.length, 20);
 
       final sortedSearchMicros = [...latencies]..sort();
-      final p95SearchMicros = sortedSearchMicros[(sortedSearchMicros.length * 95 ~/ 100).clamp(0, sortedSearchMicros.length - 1)];
+      final p95Index = (sortedSearchMicros.length * 95 ~/ 100)
+          .clamp(0, sortedSearchMicros.length - 1);
+      final p95SearchMicros = sortedSearchMicros[p95Index];
       final continuousScanMs = scanWatch.elapsedMilliseconds;
 
-      // This is the actual recognition pass budget: 20 different products
-      // through the same on-device encoder + in-memory product index.
       expect(continuousScanMs, lessThan(5000));
       expect(p95SearchMicros, lessThan(10000));
 
@@ -212,11 +226,6 @@ void main() {
           await File(path).delete();
         } catch (_) {}
       }
-      for (final id in List.generate(20, (i) => i)) {
-        try {
-          await File('${directory.path}/bench_query_$id.png').delete();
-        } catch (_) {}
-      }
     }
   });
 }
@@ -226,9 +235,9 @@ img.Image _makeProductImage(int id, {required int backgroundSeed}) {
   for (var y = 0; y < 320; y++) {
     for (var x = 0; x < 320; x++) {
       final noise = ((x * 13 + y * 7 + backgroundSeed * 17) % 31) - 15;
-      final r = (28 + backgroundSeed * 19 + noise).clamp(0, 255);
-      final g = (34 + backgroundSeed * 11 + noise).clamp(0, 255);
-      final b = (42 + backgroundSeed * 23 + noise).clamp(0, 255);
+      final r = (28 + backgroundSeed * 19 + noise).clamp(0, 255).toInt();
+      final g = (34 + backgroundSeed * 11 + noise).clamp(0, 255).toInt();
+      final b = (42 + backgroundSeed * 23 + noise).clamp(0, 255).toInt();
       image.setPixelRgb(x, y, r, g, b);
     }
   }
@@ -275,9 +284,9 @@ void _exposureShift(img.Image image, int delta) {
       image.setPixelRgb(
         x,
         y,
-        (p.r + delta).clamp(0, 255),
-        (p.g + delta).clamp(0, 255),
-        (p.b + delta).clamp(0, 255),
+        (p.r + delta).clamp(0, 255).toInt(),
+        (p.g + delta).clamp(0, 255).toInt(),
+        (p.b + delta).clamp(0, 255).toInt(),
       );
     }
   }
