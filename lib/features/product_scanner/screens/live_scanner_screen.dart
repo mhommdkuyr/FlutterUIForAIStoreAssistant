@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
@@ -62,6 +63,7 @@ class _LiveScannerScreenState extends State<LiveScannerScreen>
   final ProductImageService _imageService = ProductImageService();
   late final RecognitionPipeline _pipeline;
   CameraController? _cameraController;
+  CameraDescription? _cameraDescription;
 
   List<ProductModel> _products = [];
   final List<ScanCartItem> _cart = [];
@@ -128,6 +130,7 @@ class _LiveScannerScreenState extends State<LiveScannerScreen>
   @override
   void dispose() {
     _statusResetTimer?.cancel();
+    unawaited(_pipeline.dispose());
     _cameraController?.dispose();
     _frameAnimCtrl.dispose();
     _overlayAnimCtrl.dispose();
@@ -145,6 +148,15 @@ class _LiveScannerScreenState extends State<LiveScannerScreen>
 
       if (mounted) setState(() => _products = products);
 
+      // Show the actual camera before ONNX/index initialization finishes.
+      await _startVisualCamera(startStream: false);
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _status = _ScanStatus.initializing;
+        });
+      }
+
       await _pipeline.initialize();
       if (!_pipeline.isOnnxActive) {
         throw StateError(
@@ -158,7 +170,7 @@ class _LiveScannerScreenState extends State<LiveScannerScreen>
           'MobileCLIP2 index contains no usable product embeddings. Verify product image paths and runtime initialization.',
         );
       }
-      await _startVisualCamera();
+      await _cameraController?.startImageStream(_onCameraFrame);
 
       if (!mounted) return;
       setState(() {
@@ -172,7 +184,7 @@ class _LiveScannerScreenState extends State<LiveScannerScreen>
     }
   }
 
-  Future<void> _startVisualCamera() async {
+  Future<void> _startVisualCamera({bool startStream = true}) async {
     final cameras = await availableCameras();
     if (cameras.isEmpty) throw StateError('No camera available');
     final camera = cameras.firstWhere(
@@ -186,8 +198,16 @@ class _LiveScannerScreenState extends State<LiveScannerScreen>
       imageFormatGroup: ImageFormatGroup.yuv420,
     );
     await controller.initialize();
+    _cameraDescription = camera;
     _cameraController = controller;
-    await controller.startImageStream(_onCameraFrame);
+    try {
+      await controller.setFocusMode(FocusMode.auto);
+    } catch (_) {
+      // Some devices do not expose programmable autofocus.
+    }
+    if (startStream) {
+      await controller.startImageStream(_onCameraFrame);
+    }
   }
 
   void _onCameraFrame(CameraImage image) {
@@ -203,7 +223,10 @@ class _LiveScannerScreenState extends State<LiveScannerScreen>
       while (mounted && _latestFrame != null) {
         final frame = _latestFrame!;
         _latestFrame = null;
-        final report = await _pipeline.processFrame(frame);
+        final report = await _pipeline.processFrame(
+          frame,
+          rotationDegrees: _frameRotationDegrees(),
+        );
         if (!report.processed) continue;
         await Future<void>.delayed(Duration.zero);
       }
@@ -213,6 +236,24 @@ class _LiveScannerScreenState extends State<LiveScannerScreen>
         _onCameraFrame(_latestFrame!);
       }
     }
+  }
+
+  int _frameRotationDegrees() {
+    final description = _cameraDescription;
+    final controller = _cameraController;
+    if (!Platform.isAndroid || description == null || controller == null) {
+      return 0;
+    }
+    final deviceRotation = switch (controller.value.deviceOrientation) {
+      DeviceOrientation.portraitUp => 0,
+      DeviceOrientation.landscapeLeft => 90,
+      DeviceOrientation.portraitDown => 180,
+      DeviceOrientation.landscapeRight => 270,
+    };
+    if (description.lensDirection == CameraLensDirection.front) {
+      return (description.sensorOrientation + deviceRotation) % 360;
+    }
+    return (description.sensorOrientation - deviceRotation + 360) % 360;
   }
 
   void _trackCameraFps() {

@@ -255,7 +255,14 @@ class RecognitionPipeline {
       final prep = Stopwatch()..start();
       final quality = _FrameQuality.fromCameraImage(image);
       prep.stop();
-      if (!quality.isAcceptable(_config)) {
+      final qualityConfig = _fastMode
+          ? const RecognitionConfig(
+              minFrameBrightness: 8,
+              maxFrameBrightness: 247,
+              minFrameLumaStdDev: 2,
+            )
+          : _config;
+      if (!quality.isAcceptable(qualityConfig)) {
         final diagnostics = _diagnostics(
           preprocessingMs: prep.elapsedMilliseconds,
           totalMs: total.elapsedMilliseconds,
