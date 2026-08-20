@@ -6,6 +6,7 @@ import 'dart:typed_data';
 
 import 'package:camera/camera.dart';
 import 'package:flutter/services.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:flutter_onnxruntime/flutter_onnxruntime.dart';
 import 'package:image/image.dart' as img;
 
@@ -135,8 +136,12 @@ class MobileClip2ModelContract {
     if (inputShape.length != 4) {
       throw StateError('MobileCLIP2 input must be rank 4, got $inputShape.');
     }
-    if (inputShape[0] != 1) {
-      throw StateError('MobileCLIP2 input batch must be 1, got $inputShape.');
+    // ONNX uses -1 for a dynamic batch dimension. The runtime sends a
+    // concrete batch of 1, so both static 1 and dynamic -1 are valid.
+    if (inputShape[0] != 1 && inputShape[0] != -1) {
+      throw StateError(
+        'MobileCLIP2 input batch dimension must be 1 or dynamic (-1), got $inputShape.',
+      );
     }
     final nchw = inputShape[1] == 3 &&
         inputShape[2] == inputSize &&
@@ -148,7 +153,7 @@ class MobileClip2ModelContract {
     if (nhwc) return 'NHWC';
     throw StateError(
       'MobileCLIP2 input shape must be [1,3,$inputSize,$inputSize] '
-      'or [1,$inputSize,$inputSize,3], got $inputShape.',
+      'or [1,$inputSize,$inputSize,3] with batch 1 or dynamic (-1), got $inputShape.',
     );
   }
 
@@ -232,6 +237,8 @@ class MobileVisionEmbeddingService implements VisualEmbeddingService {
   MobileClip2ModelContract? _contract;
   String? _inputName;
   String? _outputName;
+  String? _runtimeModelPath;
+  String? _runtimeExternalDataPath;
 
   bool get isInitialized => _session != null;
   Object? get initializationError => _initializationError;
@@ -247,9 +254,16 @@ class MobileVisionEmbeddingService implements VisualEmbeddingService {
       await _loadMetadata();
       await _assertAssetReadable(assetPath);
       await _assertAssetReadable(externalDataAssetPath);
-      final session = await _runtime.createSessionFromAsset(assetPath);
+      await _materializeRuntimeAssets();
+      final modelPath = _runtimeModelPath;
+      if (modelPath == null) {
+        throw StateError('MobileCLIP2 runtime model was not materialized.');
+      }
+      final session = await _runtime.createSession(modelPath);
       try {
-        _contract = await _validateSessionContract(session);
+        final validatedContract = await _validateSessionContract(session);
+        await _smokeTestSession(session, validatedContract);
+        _contract = validatedContract;
         _session = session;
       } catch (_) {
         await session.close();
@@ -259,6 +273,94 @@ class MobileVisionEmbeddingService implements VisualEmbeddingService {
       _initializationError = error;
       _session = null;
       rethrow;
+    }
+  }
+
+  Future<void> _materializeRuntimeAssets() async {
+    final baseDir = await getTemporaryDirectory();
+    final runtimeDir = Directory(
+      '${baseDir.path}${Platform.pathSeparator}mobileclip2_runtime',
+    );
+    if (!runtimeDir.existsSync()) {
+      await runtimeDir.create(recursive: true);
+    }
+
+    final modelFile = File(
+      '${runtimeDir.path}${Platform.pathSeparator}mobileclip2_s0_vision.onnx',
+    );
+    final dataFile = File(
+      '${runtimeDir.path}${Platform.pathSeparator}mobileclip2_s0_vision.onnx.data',
+    );
+
+    final modelAsset = await rootBundle.load(assetPath);
+    await modelFile.writeAsBytes(
+      modelAsset.buffer.asUint8List(
+        modelAsset.offsetInBytes,
+        modelAsset.lengthInBytes,
+      ),
+      flush: true,
+    );
+
+    final externalDataAsset = await rootBundle.load(externalDataAssetPath);
+    await dataFile.writeAsBytes(
+      externalDataAsset.buffer.asUint8List(
+        externalDataAsset.offsetInBytes,
+        externalDataAsset.lengthInBytes,
+      ),
+      flush: true,
+    );
+
+    if (await modelFile.length() == 0 || await dataFile.length() == 0) {
+      throw StateError('MobileCLIP2 runtime assets were materialized empty.');
+    }
+
+    _runtimeModelPath = modelFile.path;
+    _runtimeExternalDataPath = dataFile.path;
+  }
+
+  Future<void> _smokeTestSession(
+    OrtSession session,
+    MobileClip2ModelContract contract,
+  ) async {
+    final inputName = _inputName;
+    final outputName = _outputName;
+    if (inputName == null || outputName == null) {
+      throw StateError('MobileCLIP2 smoke test missing input/output names.');
+    }
+
+    final shape = contract.layout == 'NHWC'
+        ? [1, contract.inputSize, contract.inputSize, 3]
+        : [1, 3, contract.inputSize, contract.inputSize];
+    final inputTensor = await OrtValue.fromList(
+      Float32List(contract.inputSize * contract.inputSize * 3),
+      shape,
+    );
+    Map<String, OrtValue>? outputs;
+    try {
+      outputs = await session.run({inputName: inputTensor});
+      final output = outputs[outputName];
+      if (output == null) {
+        throw StateError('MobileCLIP2 smoke test returned no output.');
+      }
+      final values = (await output.asFlattenedList()).cast<num>();
+      if (values.length != contract.embeddingDimensions) {
+        throw StateError(
+          'MobileCLIP2 smoke test returned ${values.length} values; expected ${contract.embeddingDimensions}.',
+        );
+      }
+      for (final value in values) {
+        final number = value.toDouble();
+        if (!number.isFinite) {
+          throw StateError('MobileCLIP2 smoke test produced non-finite output.');
+        }
+      }
+    } finally {
+      await inputTensor.dispose();
+      if (outputs != null) {
+        for (final output in outputs.values) {
+          await output.dispose();
+        }
+      }
     }
   }
 
@@ -554,6 +656,20 @@ class MobileVisionEmbeddingService implements VisualEmbeddingService {
       _session = null;
     });
     await _inferenceQueue;
+    final runtimePaths = <String>[
+      if (_runtimeModelPath != null) _runtimeModelPath!,
+      if (_runtimeExternalDataPath != null) _runtimeExternalDataPath!,
+    ];
+    for (final filePath in runtimePaths) {
+      try {
+        final file = File(filePath);
+        if (await file.exists()) {
+          await file.delete();
+        }
+      } catch (_) {}
+    }
+    _runtimeModelPath = null;
+    _runtimeExternalDataPath = null;
     // flutter_onnxruntime 1.8.3 exposes OrtSession.close() and
     // OrtValue.dispose(); OnnxRuntime itself has no public dispose API.
   }

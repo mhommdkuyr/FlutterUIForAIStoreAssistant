@@ -59,27 +59,16 @@ jobs:
           python3 - "$status" dart_analyze.json <<'PY'
           import json
           import sys
-
           status = int(sys.argv[1])
           path = sys.argv[2]
           with open(path, encoding="utf-8") as f:
               data = json.load(f)
-
           diagnostics = data.get("diagnostics", []) if isinstance(data, dict) else []
-          errors = [
-              item for item in diagnostics
-              if isinstance(item, dict)
-              and str(item.get("severity", "")).upper() == "ERROR"
-          ]
-
+          errors = [item for item in diagnostics if isinstance(item, dict) and str(item.get("severity", "")).upper() == "ERROR"]
           if errors:
               print(f"Dart analyzer reported {len(errors)} error diagnostics; failing CI.")
               sys.exit(1)
-
-          print(
-              f"Dart analyzer completed without error diagnostics "
-              f"(tool exit code: {status}; warnings/info are non-fatal)."
-          )
+          print(f"Dart analyzer completed without error diagnostics (tool exit code: {status}; warnings/info are non-fatal).")
           sys.exit(0)
           PY
 

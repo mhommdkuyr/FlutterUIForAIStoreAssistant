@@ -146,7 +146,18 @@ class _LiveScannerScreenState extends State<LiveScannerScreen>
       if (mounted) setState(() => _products = products);
 
       await _pipeline.initialize();
+      if (!_pipeline.isOnnxActive) {
+        throw StateError(
+          _pipeline.initializationError?.toString() ??
+              'MobileCLIP2 ONNX visual engine is unavailable.',
+        );
+      }
       await _pipeline.buildIndex(products, extraImagePaths: extraPaths);
+      if (!_pipeline.isIndexReady || _pipeline.indexedEmbeddingCount == 0) {
+        throw StateError(
+          'MobileCLIP2 index contains no usable product embeddings. Verify product image paths and runtime initialization.',
+        );
+      }
       await _startVisualCamera();
 
       if (!mounted) return;

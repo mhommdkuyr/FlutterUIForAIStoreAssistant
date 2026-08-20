@@ -164,6 +164,16 @@ class RecognitionPipeline {
     return _embedding.runtimeType.toString();
   }
 
+  Object? get initializationError =>
+      _embedding is VisualEmbeddingProvider
+          ? (_embedding as VisualEmbeddingProvider).initializationError
+          : null;
+
+  Object? get lastInferenceError =>
+      _embedding is VisualEmbeddingProvider
+          ? (_embedding as VisualEmbeddingProvider).lastInferenceError
+          : null;
+
   Future<void> buildIndex(
     List<ProductModel> products, {
     Map<String, List<String>> extraImagePaths = const {},
@@ -474,21 +484,30 @@ class _FrameQuality {
   });
 
   factory _FrameQuality.fromCameraImage(CameraImage image) {
-    final yPlane = image.planes.first.bytes;
-    if (yPlane.isEmpty) {
+    final plane = image.planes.first;
+    final yPlane = plane.bytes;
+    if (yPlane.isEmpty || image.width <= 0 || image.height <= 0) {
       return const _FrameQuality(meanBrightness: 0, lumaStdDev: 0);
     }
 
     const maxSamples = 1200;
-    final step = (yPlane.length / maxSamples).ceil().clamp(1, 1 << 30);
+    final pixelCount = image.width * image.height;
+    final pixelStep = (pixelCount / maxSamples).ceil().clamp(1, 1 << 30);
     var count = 0;
     var sum = 0.0;
     var sumSq = 0.0;
-    for (var i = 0; i < yPlane.length; i += step) {
-      final v = yPlane[i].toDouble();
+    for (var index = 0; index < pixelCount; index += pixelStep) {
+      final row = index ~/ image.width;
+      final col = index % image.width;
+      final offset = row * plane.bytesPerRow + col;
+      if (offset >= yPlane.length) continue;
+      final v = yPlane[offset].toDouble();
       sum += v;
       sumSq += v * v;
       count++;
+    }
+    if (count == 0) {
+      return const _FrameQuality(meanBrightness: 0, lumaStdDev: 0);
     }
     final mean = sum / count;
     final variance = (sumSq / count) - (mean * mean);
