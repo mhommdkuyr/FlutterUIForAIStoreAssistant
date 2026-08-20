@@ -1,3 +1,4 @@
+
 import 'dart:typed_data';
 
 import 'package:ai_store_assistant/shared/models/product_model.dart';
@@ -19,7 +20,8 @@ ProductModel _product(String id, String imagePath) => ProductModel(
       updatedAt: DateTime(2024),
     );
 
-Uint8List _e(int a, [int b = 0, int c = 0]) => Uint8List.fromList([a, b, c]);
+Uint8List _e(int a, [int b = 0, int c = 0]) =>
+    Uint8List.fromList([a, b, c]);
 
 class _StubEmbeddingService implements VisualEmbeddingService {
   _StubEmbeddingService(this._files, {this.version = 'stub_v1'});
@@ -79,11 +81,14 @@ void main() {
       });
       final index = LocalProductIndexService(embeddingService: embedding);
 
-      await index.buildIndex([
-        _product('A', 'a-front'),
-      ], extraImagePaths: {
-        'A': ['a-side'],
-      });
+      await index.buildIndex(
+        [
+          _product('A', 'a-front'),
+        ],
+        extraImagePaths: {
+          'A': ['a-side'],
+        },
+      );
 
       final result = index.evaluate(_e(219, 11), minConfidence: 0.80);
 
@@ -100,6 +105,7 @@ void main() {
         'c': _e(20),
       });
       final index = LocalProductIndexService(embeddingService: embedding);
+
       await index.buildIndex([
         _product('A', 'a'),
         _product('B', 'b'),
@@ -119,13 +125,18 @@ void main() {
       expect(result.isAccepted, isTrue);
     });
 
-    test('ambiguous best and second-best becomes NoMatch candidate state', () async {
+    test('ambiguous best and second-best becomes NoMatch candidate state',
+        () async {
       final embedding = _StubEmbeddingService({
         'a': _e(220),
         'b': _e(216),
       });
       final index = LocalProductIndexService(embeddingService: embedding);
-      await index.buildIndex([_product('A', 'a'), _product('B', 'b')]);
+
+      await index.buildIndex([
+        _product('A', 'a'),
+        _product('B', 'b'),
+      ]);
 
       final result = index.evaluate(
         _e(218),
@@ -139,7 +150,8 @@ void main() {
       expect(result.rejectionReason, 'ambiguous_margin');
     });
 
-    test('unknown product is NoMatch and does not return the last indexed product',
+    test(
+        'unknown product is NoMatch and does not return the last indexed product',
         () async {
       final embedding = _StubEmbeddingService({
         'a': _e(230, 0, 0),
@@ -147,6 +159,7 @@ void main() {
         'c': _e(0, 0, 230),
       });
       final index = LocalProductIndexService(embeddingService: embedding);
+
       await index.buildIndex([
         _product('A', 'a'),
         _product('B', 'b'),
@@ -173,36 +186,83 @@ void main() {
         'c1': _e(0, 0, 230),
       });
       final index = LocalProductIndexService(embeddingService: embedding);
-      await index.buildIndex([
-        _product('A', 'a1'),
-        _product('B', 'b1'),
-        _product('C', 'c1'),
-      ], extraImagePaths: {
-        'A': ['a2'],
-      });
 
-      expect(index.evaluate(_e(229, 1, 0), minConfidence: 0.80).best?.productId,
-          'A');
+      await index.buildIndex(
+        [
+          _product('A', 'a1'),
+          _product('B', 'b1'),
+          _product('C', 'c1'),
+        ],
+        extraImagePaths: {
+          'A': ['a2'],
+        },
+      );
+
+      expect(
+        index
+            .evaluate(
+              _e(229, 1, 0),
+              minConfidence: 0.80,
+            )
+            .best
+            ?.productId,
+        'A',
+      );
+
       index.removeProduct('C');
-      expect(index.evaluate(_e(229, 1, 0), minConfidence: 0.80).best?.productId,
-          'A');
+
+      expect(
+        index
+            .evaluate(
+              _e(229, 1, 0),
+              minConfidence: 0.80,
+            )
+            .best
+            ?.productId,
+        'A',
+      );
+
       await index.refreshProduct(_product('C', 'c1'));
-      expect(index.evaluate(_e(229, 1, 0), minConfidence: 0.80).best?.productId,
-          'A');
+
+      expect(
+        index
+            .evaluate(
+              _e(229, 1, 0),
+              minConfidence: 0.80,
+            )
+            .best
+            ?.productId,
+        'A',
+      );
     });
 
-    test('refreshProduct updates changed image and adds new reference', () async {
+    test('refreshProduct updates changed image and adds new reference',
+        () async {
       final embedding = _StubEmbeddingService({
         'old': _e(10),
         'new': _e(220),
         'new-side': _e(218),
       });
       final index = LocalProductIndexService(embeddingService: embedding);
-      await index.buildIndex([_product('A', 'old')]);
-      await index.refreshProduct(_product('A', 'new'), extraPaths: ['new-side']);
 
-      final newResult = index.evaluate(_e(219), minConfidence: 0.80);
-      final oldResult = index.evaluate(_e(10), minConfidence: 0.95);
+      await index.buildIndex([
+        _product('A', 'old'),
+      ]);
+
+      await index.refreshProduct(
+        _product('A', 'new'),
+        extraPaths: ['new-side'],
+      );
+
+      final newResult = index.evaluate(
+        _e(219),
+        minConfidence: 0.80,
+      );
+
+      final oldResult = index.evaluate(
+        _e(10),
+        minConfidence: 0.95,
+      );
 
       expect(newResult.best?.productId, 'A');
       expect(newResult.best?.referenceCount, 2);
@@ -210,27 +270,71 @@ void main() {
     });
 
     test('different modelVersion can rebuild a clean index', () async {
-      final v1 = _StubEmbeddingService({'a': _e(220)}, version: 'v1');
-      final v2 = _StubEmbeddingService({'a': _e(40)}, version: 'v2');
+      final v1 = _StubEmbeddingService(
+        {'a': _e(220)},
+        version: 'v1',
+      );
+
+      final v2 = _StubEmbeddingService(
+        {'a': _e(40)},
+        version: 'v2',
+      );
+
       final indexV1 = LocalProductIndexService(embeddingService: v1);
       final indexV2 = LocalProductIndexService(embeddingService: v2);
 
-      await indexV1.buildIndex([_product('A', 'a')]);
-      await indexV2.buildIndex([_product('A', 'a')]);
+      await indexV1.buildIndex([
+        _product('A', 'a'),
+      ]);
 
-      expect(indexV1.evaluate(_e(220), minConfidence: 0.95).isAccepted, isTrue);
-      expect(indexV2.evaluate(_e(40), minConfidence: 0.95).isAccepted, isTrue);
+      await indexV2.buildIndex([
+        _product('A', 'a'),
+      ]);
+
+      expect(
+        indexV1
+            .evaluate(
+              _e(220),
+              minConfidence: 0.95,
+            )
+            .isAccepted,
+        isTrue,
+      );
+
+      expect(
+        indexV2
+            .evaluate(
+              _e(40),
+              minConfidence: 0.95,
+            )
+            .isAccepted,
+        isTrue,
+      );
+
       expect(v1.modelVersion, isNot(v2.modelVersion));
     });
   });
 
   group('RecognitionPipeline temporal confirmation and cart safety', () {
-    test('repeated correct result confirms after configured frame count',
+    test(
+        'repeated correct result confirms after configured frame count',
         () async {
-      final embedding = _StubEmbeddingService({'a': _e(220), 'b': _e(20)});
-      final pipeline = _pipeline(embedding, confirmationFrames: 3);
+      final embedding = _StubEmbeddingService({
+        'a': _e(220),
+        'b': _e(20),
+      });
+
+      final pipeline = _pipeline(
+        embedding,
+        confirmationFrames: 3,
+      );
+
       await pipeline.initialize();
-      await pipeline.buildIndex([_product('A', 'a'), _product('B', 'b')]);
+
+      await pipeline.buildIndex([
+        _product('A', 'a'),
+        _product('B', 'b'),
+      ]);
 
       final r1 = pipeline.evaluateEmbedding(_e(220)).result;
       final r2 = pipeline.evaluateEmbedding(_e(220)).result;
@@ -243,10 +347,22 @@ void main() {
     });
 
     test('temporal conflict A-B-A does not confirm incorrectly', () async {
-      final embedding = _StubEmbeddingService({'a': _e(220), 'b': _e(20)});
-      final pipeline = _pipeline(embedding, confirmationFrames: 3);
+      final embedding = _StubEmbeddingService({
+        'a': _e(220),
+        'b': _e(20),
+      });
+
+      final pipeline = _pipeline(
+        embedding,
+        confirmationFrames: 3,
+      );
+
       await pipeline.initialize();
-      await pipeline.buildIndex([_product('A', 'a'), _product('B', 'b')]);
+
+      await pipeline.buildIndex([
+        _product('A', 'a'),
+        _product('B', 'b'),
+      ]);
 
       final r1 = pipeline.evaluateEmbedding(_e(220)).result;
       final r2 = pipeline.evaluateEmbedding(_e(20)).result;
@@ -257,14 +373,22 @@ void main() {
       expect(r3.status, RecognitionStatus.uncertain);
     });
 
-    test('last product scenario: A, unknown, B returns A, NoMatch, B', () async {
+    test(
+        'last product scenario: A, unknown, B returns A, NoMatch, B',
+        () async {
       final embedding = _StubEmbeddingService({
         'a': _e(230, 0, 0),
         'b': _e(0, 230, 0),
         'c': _e(0, 0, 230),
       });
-      final pipeline = _pipeline(embedding, confirmationFrames: 1);
+
+      final pipeline = _pipeline(
+        embedding,
+        confirmationFrames: 1,
+      );
+
       await pipeline.initialize();
+
       await pipeline.buildIndex([
         _product('A', 'a'),
         _product('B', 'b'),
@@ -277,20 +401,37 @@ void main() {
 
       expect(a.productId, 'A');
       expect(a.status, RecognitionStatus.confirmed);
+
       expect(unknown.status, RecognitionStatus.noMatch);
       expect(unknown.productId, isNull);
+
       expect(b.productId, 'B');
       expect(b.status, RecognitionStatus.confirmed);
     });
 
-    test('low confidence and uncertain results are not sent to cart callback',
+    test(
+        'low confidence and uncertain results are not sent to cart callback',
         () async {
-      final embedding = _StubEmbeddingService({'a': _e(220), 'b': _e(20)});
-      final pipeline = _pipeline(embedding, confirmationFrames: 2);
+      final embedding = _StubEmbeddingService({
+        'a': _e(220),
+        'b': _e(20),
+      });
+
+      final pipeline = _pipeline(
+        embedding,
+        confirmationFrames: 2,
+      );
+
       var addCount = 0;
+
       pipeline.onConfirmed = (_) => addCount++;
+
       await pipeline.initialize();
-      await pipeline.buildIndex([_product('A', 'a'), _product('B', 'b')]);
+
+      await pipeline.buildIndex([
+        _product('A', 'a'),
+        _product('B', 'b'),
+      ]);
 
       pipeline.evaluateEmbedding(_e(80)).result;
       pipeline.evaluateEmbedding(_e(220)).result;
@@ -298,14 +439,27 @@ void main() {
       expect(addCount, 0);
     });
 
-    test('confirmed product callback is locked against continuous duplicates',
+    test(
+        'confirmed product callback is locked against continuous duplicates',
         () async {
-      final embedding = _StubEmbeddingService({'a': _e(220)});
-      final pipeline = _pipeline(embedding, confirmationFrames: 1);
+      final embedding = _StubEmbeddingService({
+        'a': _e(220),
+      });
+
+      final pipeline = _pipeline(
+        embedding,
+        confirmationFrames: 1,
+      );
+
       var addCount = 0;
+
       pipeline.onConfirmed = (_) => addCount++;
+
       await pipeline.initialize();
-      await pipeline.buildIndex([_product('A', 'a')]);
+
+      await pipeline.buildIndex([
+        _product('A', 'a'),
+      ]);
 
       for (var i = 0; i < 5; i++) {
         pipeline.evaluateEmbedding(_e(220));
@@ -315,3 +469,61 @@ void main() {
     });
   });
 }
+
+
+
+
+
+
+        
+        
+        
+      
+
+
+        
+      
+
+      
+   
+      
+
+      
+      
+      
+      
+      
+      
+    
+
+    
+        
+      
+      
+      
+      
+      
+      
+
+      
+      
+
+      
+    
+
+        
+      
+      
+      
+      
+      
+      
+
+      
+        
+      
+      
+
+      
+
+  
