@@ -8,6 +8,7 @@ jobs:
   build:
     name: Build Debug APK
     runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     steps:
       - name: Checkout repository
@@ -59,7 +60,18 @@ jobs:
             -noaudio
             -no-boot-anim
           disable-animations: true
-          script: flutter test integration_test/mobileclip2_runtime_test.dart
+          script: |
+            set -o pipefail
+            timeout 600s flutter test integration_test/mobileclip2_runtime_test.dart 2>&1 | tee android_runtime_test.log
+
+      - name: Upload Android runtime test log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-runtime-test-log
+          path: android_runtime_test.log
+          retention-days: 7
+          if-no-files-found: warn
 
       - name: Build debug APK
         run: |
