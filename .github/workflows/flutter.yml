@@ -31,6 +31,10 @@ jobs:
           TARGET_BRANCH: ${{ github.event.pull_request.head.ref }}
         run: |
           set -euo pipefail
+          if [ -f .fast_scan_sync_done ]; then
+            echo 'Fast-scan source synchronization already completed.'
+            exit 0
+          fi
           git fetch origin "$TARGET_BRANCH"
           git checkout -B "$TARGET_BRANCH" "origin/$TARGET_BRANCH"
           python3 <<'PY'
@@ -46,64 +50,37 @@ jobs:
           screen = 'lib/features/product_scanner/screens/live_scanner_screen.dart'
           replace(screen, "import 'dart:async';\n", "import 'dart:async';\nimport 'dart:io';\n")
           replace(screen, '  CameraController? _cameraController;\n', '  CameraController? _cameraController;\n  CameraDescription? _cameraDescription;\n')
-          replace(
-              screen,
+          replace(screen,
               '    _statusResetTimer?.cancel();\n    _cameraController?.dispose();\n',
-              '    _statusResetTimer?.cancel();\n    unawaited(_pipeline.dispose());\n    _cameraController?.dispose();\n',
-          )
-          replace(
-              screen,
+              '    _statusResetTimer?.cancel();\n    unawaited(_pipeline.dispose());\n    _cameraController?.dispose();\n')
+          replace(screen,
               '      if (mounted) setState(() => _products = products);\n\n      await _pipeline.initialize();\n',
-              '''      if (mounted) setState(() => _products = products);\n\n      // Start the real camera preview before model/index initialization.\n      // This prevents a model/index failure from looking like a dead camera.\n      await _startVisualCamera(startStream: false);\n      if (mounted) {\n        setState(() {\n          _isLoading = false;\n          _status = _ScanStatus.initializing;\n        });\n      }\n\n      await _pipeline.initialize();\n''',
-          )
-          replace(
-              screen,
+              '''      if (mounted) setState(() => _products = products);\n\n      // Show the actual camera before ONNX/index initialization finishes.\n      await _startVisualCamera(startStream: false);\n      if (mounted) {\n        setState(() {\n          _isLoading = false;\n          _status = _ScanStatus.initializing;\n        });\n      }\n\n      await _pipeline.initialize();\n''')
+          replace(screen,
               '      await _startVisualCamera();\n\n      if (!mounted) return;\n',
-              '      await _cameraController?.startImageStream(_onCameraFrame);\n\n      if (!mounted) return;\n',
-          )
-          replace(
-              screen,
+              '      await _cameraController?.startImageStream(_onCameraFrame);\n\n      if (!mounted) return;\n')
+          replace(screen,
               '  Future<void> _startVisualCamera() async {\n',
-              '  Future<void> _startVisualCamera({bool startStream = true}) async {\n',
-          )
-          replace(
-              screen,
+              '  Future<void> _startVisualCamera({bool startStream = true}) async {\n')
+          replace(screen,
               '    await controller.initialize();\n    _cameraController = controller;\n    await controller.startImageStream(_onCameraFrame);\n',
-              '''    await controller.initialize();\n    _cameraDescription = camera;\n    _cameraController = controller;\n    try {\n      await controller.setFocusMode(FocusMode.auto);\n    } catch (_) {\n      // Some devices do not expose programmable autofocus.\n    }\n    if (startStream) {\n      await controller.startImageStream(_onCameraFrame);\n    }\n''',
-          )
-          replace(
-              screen,
+              '''    await controller.initialize();\n    _cameraDescription = camera;\n    _cameraController = controller;\n    try {\n      await controller.setFocusMode(FocusMode.auto);\n    } catch (_) {\n      // Some devices do not expose programmable autofocus.\n    }\n    if (startStream) {\n      await controller.startImageStream(_onCameraFrame);\n    }\n''')
+          replace(screen,
               '        final report = await _pipeline.processFrame(frame);\n',
-              '''        final report = await _pipeline.processFrame(\n          frame,\n          rotationDegrees: _frameRotationDegrees(),\n        );\n''',
-          )
+              '''        final report = await _pipeline.processFrame(\n          frame,\n          rotationDegrees: _frameRotationDegrees(),\n        );\n''')
           anchor = '  void _trackCameraFps() {\n'
           helper = '''  int _frameRotationDegrees() {\n    final description = _cameraDescription;\n    final controller = _cameraController;\n    if (!Platform.isAndroid || description == null || controller == null) {\n      return 0;\n    }\n    final deviceRotation = switch (controller.value.deviceOrientation) {\n      DeviceOrientation.portraitUp => 0,\n      DeviceOrientation.landscapeLeft => 90,\n      DeviceOrientation.portraitDown => 180,\n      DeviceOrientation.landscapeRight => 270,\n    };\n    if (description.lensDirection == CameraLensDirection.front) {\n      return (description.sensorOrientation + deviceRotation) % 360;\n    }\n    return (description.sensorOrientation - deviceRotation + 360) % 360;\n  }\n\n'''
           replace(screen, anchor, helper + anchor)
 
-          # Relax the pre-inference quality gate only for the fast engine so a
-          # distant/brief product is still attempted instead of being discarded.
           pipeline = 'lib/shared/services/recognition_pipeline.dart'
-          replace(
-              pipeline,
+          replace(pipeline,
               '      if (!quality.isAcceptable(_config)) {\n',
-              '''      final qualityConfig = _fastMode\n          ? const RecognitionConfig(\n              minFrameBrightness: 8,\n              maxFrameBrightness: 247,\n              minFrameLumaStdDev: 2,\n            )\n          : _config;\n      if (!quality.isAcceptable(qualityConfig)) {\n''',
-          )
+              '''      final qualityConfig = _fastMode\n          ? const RecognitionConfig(\n              minFrameBrightness: 8,\n              maxFrameBrightness: 247,\n              minFrameLumaStdDev: 2,\n            )\n          : _config;\n      if (!quality.isAcceptable(qualityConfig)) {\n''')
 
-          # Add a compile-only contract test for the fast service and dynamic batch.
           test_path = Path('test/fast_scan_engine_contract_test.dart')
-          test_path.write_text('''import 'package:flutter_test/flutter_test.dart';\n\nimport 'package:ai_store_assistant/shared/services/fast_visual_embedding_service.dart';\nimport 'package:ai_store_assistant/shared/services/visual_embedding_service.dart';\n\nvoid main() {\n  test('dynamic MobileCLIP2 batch is accepted', () {\n    expect(\n      MobileClip2ModelContract.detectGraphLayout([-1, 3, 224, 224], 224),\n      'NCHW',\n    );\n  });\n\n  test('fast provider starts unavailable and reports the new contract version', () {\n    final provider = FastVisualEmbeddingProvider();\n    expect(provider.isOnnxActive, isFalse);\n    expect(provider.embeddingLength, 0);\n    expect(provider.modelVersion, 'mobileclip2_s0_vision_onnx_v2_fastscan');\n    expect(provider.similarity(Uint8List(0), Uint8List(0)), 0.0);\n  });\n}\n''')
+          test_path.write_text('''import 'dart:typed_data';\n\nimport 'package:flutter_test/flutter_test.dart';\n\nimport 'package:ai_store_assistant/shared/services/fast_visual_embedding_service.dart';\nimport 'package:ai_store_assistant/shared/services/visual_embedding_service.dart';\n\nvoid main() {\n  test('dynamic MobileCLIP2 batch is accepted', () {\n    expect(\n      MobileClip2ModelContract.detectGraphLayout([-1, 3, 224, 224], 224),\n      'NCHW',\n    );\n  });\n\n  test('fast provider starts unavailable and exposes the new version', () {\n    final provider = FastVisualEmbeddingProvider();\n    expect(provider.isOnnxActive, isFalse);\n    expect(provider.embeddingLength, 0);\n    expect(provider.modelVersion, 'mobileclip2_s0_vision_onnx_v2_fastscan');\n    expect(provider.similarity(Uint8List(0), Uint8List(0)), 0.0);\n  });\n}\n''')
 
-          # Remove this one-time patch step and write permission from the workflow
-          # in the SAME commit as the source changes. This keeps the final workflow
-          # clean and prevents future PRs from running a special-case mutator.
-          workflow = Path('.github/workflows/flutter.yml').read_text()
-          start = workflow.index('      # FAST_SCAN_ONE_TIME_PATCH_START')
-          end_marker = '      # FAST_SCAN_ONE_TIME_PATCH_END'
-          end = workflow.index(end_marker)
-          end = workflow.index('\n', end) + 1
-          workflow = workflow[:start] + workflow[end:]
-          workflow = workflow.replace('permissions:\n  contents: write\n\n', '', 1)
-          Path('.github/workflows/flutter.yml').write_text(workflow)
+          Path('.fast_scan_sync_done').write_text('applied\n')
           PY
 
           git config user.name 'github-actions[bot]'
@@ -111,7 +88,7 @@ jobs:
           git add lib/features/product_scanner/screens/live_scanner_screen.dart \
                   lib/shared/services/recognition_pipeline.dart \
                   test/fast_scan_engine_contract_test.dart \
-                  .github/workflows/flutter.yml
+                  .fast_scan_sync_done
           git commit -m 'Harden fast camera scanning lifecycle and quality gate'
           git push origin HEAD:"$TARGET_BRANCH"
       # FAST_SCAN_ONE_TIME_PATCH_END
@@ -227,4 +204,3 @@ jobs:
           path: |
             build_output.log
             release_build_output.log
-          retention-days: 7
