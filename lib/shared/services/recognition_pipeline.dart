@@ -5,6 +5,7 @@ import 'package:camera/camera.dart';
 
 import '../models/product_model.dart';
 import 'embedding_persistence_service.dart';
+import 'fast_visual_embedding_service.dart';
 import 'local_product_index_service.dart';
 import 'product_recognition_result.dart';
 import 'scan_lock_manager.dart';
@@ -24,32 +25,17 @@ class RecognitionConfig {
     this.minFrameLumaStdDev = 8,
   });
 
-  /// Process 1 out of every [frameSkip] frames from the camera stream.
   final int frameSkip;
-
-  /// Minimum similarity score to consider a candidate.
   final double? minConfidence;
-
-  /// Required gap between best and second-best candidate.
   final double minMargin;
-
-  /// Minimum number of product references that must support the best match.
   final int minSupportingReferences;
-
-  /// Consecutive processed frames the same product must appear in before
-  /// it is declared [RecognitionStatus.confirmed].
   final int confirmationFrames;
-
-  /// Frames without detection before a cart-lock is released.
   final int absentTicksToUnlock;
-
-  /// Cheap frame-quality gates applied before inference.
   final double minFrameBrightness;
   final double maxFrameBrightness;
   final double minFrameLumaStdDev;
 }
 
-/// Timing and matching telemetry for one recognition attempt.
 class RecognitionDiagnostics {
   const RecognitionDiagnostics({
     this.preprocessingMs = 0,
@@ -103,7 +89,6 @@ class RecognitionFrameReport {
   final RecognitionDiagnostics diagnostics;
 }
 
-/// Orchestrates the local visual recognition flow:
 /// CameraImage → embedding → local index → threshold + margin → temporal
 /// confirmation → duplicate lock.
 class RecognitionPipeline {
@@ -114,16 +99,21 @@ class RecognitionPipeline {
     ScanLockManager? lockManager,
     EmbeddingPersistenceService? persistenceService,
   }) : _config = config ?? const RecognitionConfig() {
-    _embedding = embeddingService ?? VisualEmbeddingProvider();
+    _embedding = embeddingService ?? FastVisualEmbeddingProvider();
     _persistence = persistenceService;
     _index = indexService ??
         LocalProductIndexService(
           embeddingService: _embedding,
           persistenceService: _persistence,
         );
+    final fast = _embedding is FastVisualEmbeddingProvider;
     _locks = lockManager ??
-        ScanLockManager(unlockAfterTicks: _config.absentTicksToUnlock);
-    _tracker = _TemporalTracker(requiredFrames: _config.confirmationFrames);
+        ScanLockManager(
+          unlockAfterTicks: fast ? 2 : _config.absentTicksToUnlock,
+        );
+    _tracker = _TemporalTracker(
+      requiredFrames: fast ? 2 : _config.confirmationFrames,
+    );
   }
 
   final RecognitionConfig _config;
@@ -136,7 +126,11 @@ class RecognitionPipeline {
   int _frameCount = 0;
   bool _processing = false;
   bool _active = true;
+  bool _disposed = false;
   double _minConfidence = 0.45;
+
+  bool get _fastMode => _embedding is FastVisualEmbeddingProvider;
+  int get _effectiveFrameSkip => _fastMode ? 1 : _config.frameSkip;
 
   void Function(ProductRecognitionResult result)? onConfirmed;
   void Function(ProductRecognitionResult result)? onUncertain;
@@ -147,7 +141,9 @@ class RecognitionPipeline {
     if (_embedding is VisualEmbeddingProvider) {
       await (_embedding as VisualEmbeddingProvider).initialize();
     }
-    _minConfidence = _config.minConfidence ?? _embedding.recommendedMinConfidence;
+    _minConfidence =
+        _config.minConfidence ?? _embedding.recommendedMinConfidence;
+    _disposed = false;
   }
 
   bool get isOnnxActive =>
@@ -158,6 +154,11 @@ class RecognitionPipeline {
       _embedding is VisualEmbeddingProvider && !isOnnxActive;
 
   String get backendName {
+    if (_embedding is FastVisualEmbeddingProvider) {
+      return isOnnxActive
+          ? 'ONNX Runtime XNNPACK/CPU fast-scan'
+          : 'fast visual engine unavailable';
+    }
     if (_embedding is VisualEmbeddingProvider) {
       return isOnnxActive ? 'ONNX Runtime' : 'visual engine unavailable';
     }
@@ -178,8 +179,12 @@ class RecognitionPipeline {
     List<ProductModel> products, {
     Map<String, List<String>> extraImagePaths = const {},
   }) {
-    _minConfidence = _config.minConfidence ?? _embedding.recommendedMinConfidence;
-    return _index.buildIndex(products, extraImagePaths: extraImagePaths);
+    _minConfidence =
+        _config.minConfidence ?? _embedding.recommendedMinConfidence;
+    return _index.buildIndex(
+      products,
+      extraImagePaths: extraImagePaths,
+    );
   }
 
   Future<void> refreshProduct(
@@ -200,8 +205,13 @@ class RecognitionPipeline {
   double get minMargin => _config.minMargin;
 
   void pause() {
-    _active = false;
     _tracker.reset();
+    if (_fastMode) {
+      // Continuous scanning deliberately does not impose a global cooldown.
+      // ScanLockManager suppresses duplicate additions per product.
+      return;
+    }
+    _active = false;
   }
 
   void resume() {
@@ -218,12 +228,24 @@ class RecognitionPipeline {
     _processing = false;
   }
 
-  Future<RecognitionFrameReport> processFrame(CameraImage image) async {
+  Future<void> dispose() async {
+    _disposed = true;
+    _active = false;
+    _processing = false;
+    _tracker.reset();
+    _locks.reset();
+    await _embedding.dispose();
+  }
+
+  Future<RecognitionFrameReport> processFrame(
+    CameraImage image, {
+    int rotationDegrees = 0,
+  }) async {
     final baseDiagnostics = _diagnostics();
-    if (!_active || _processing || !isIndexReady) {
+    if (_disposed || !_active || _processing || !isIndexReady) {
       return RecognitionFrameReport.skipped(baseDiagnostics);
     }
-    if (++_frameCount % _config.frameSkip != 0) {
+    if (++_frameCount % _effectiveFrameSkip != 0) {
       return RecognitionFrameReport.skipped(baseDiagnostics);
     }
 
@@ -252,8 +274,17 @@ class RecognitionPipeline {
       }
 
       final inference = Stopwatch()..start();
-      final embedding = await _embedding.embedFrame(image);
+      final embedding = _fastMode
+          ? await (_embedding as FastVisualEmbeddingProvider)
+              .embedFrameWithRotation(
+              image,
+              rotationDegrees: rotationDegrees == 0
+                  ? _defaultRotation(image)
+                  : rotationDegrees,
+            )
+          : await _embedding.embedFrame(image);
       inference.stop();
+
       final report = embedding == null
           ? _noMatchReport(
               reason: 'embedding_failed',
@@ -272,11 +303,11 @@ class RecognitionPipeline {
               lumaStdDev: quality.lumaStdDev,
             );
       return report;
-    } catch (e) {
+    } catch (error) {
       final diagnostics = _diagnostics(totalMs: total.elapsedMilliseconds);
       final report = RecognitionFrameReport(
         processed: true,
-        result: ProductRecognitionResult.error(e.toString()),
+        result: ProductRecognitionResult.error(error.toString()),
         diagnostics: diagnostics,
       );
       onReport?.call(report);
@@ -285,6 +316,9 @@ class RecognitionPipeline {
       _processing = false;
     }
   }
+
+  int _defaultRotation(CameraImage image) =>
+      image.width > image.height ? 90 : 0;
 
   RecognitionFrameReport evaluateEmbedding(
     Uint8List embedding, {
@@ -432,7 +466,6 @@ class _TemporalTracker {
   _TemporalTracker({this.requiredFrames = 3});
 
   final int requiredFrames;
-
   String? _currentId;
   int _streak = 0;
 
@@ -501,9 +534,9 @@ class _FrameQuality {
       final col = index % image.width;
       final offset = row * plane.bytesPerRow + col;
       if (offset >= yPlane.length) continue;
-      final v = yPlane[offset].toDouble();
-      sum += v;
-      sumSq += v * v;
+      final value = yPlane[offset].toDouble();
+      sum += value;
+      sumSq += value * value;
       count++;
     }
     if (count == 0) {
