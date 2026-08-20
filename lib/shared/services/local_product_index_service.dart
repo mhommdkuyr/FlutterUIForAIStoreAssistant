@@ -33,8 +33,14 @@ class LocalProductIndexService {
     _index.clear();
     _built = false;
 
-    final cached = await _persistence?.loadAll(_embedding.modelVersion) ?? {};
     final expectedLength = _embedding.embeddingLength;
+    if (expectedLength <= 0) {
+      throw StateError(
+        'Cannot build visual index while the embedding backend is unavailable.',
+      );
+    }
+
+    final cached = await _persistence?.loadAll(_embedding.modelVersion) ?? {};
 
     for (final product in products) {
       final paths = _pathsFor(
@@ -45,15 +51,13 @@ class LocalProductIndexService {
 
       for (final path in paths) {
         final fromCache = cached[product.id]?[path];
-        if (fromCache != null &&
-            (expectedLength == 0 || fromCache.length == expectedLength)) {
+        if (fromCache != null && fromCache.length == expectedLength) {
           embeddings.add(fromCache);
           continue;
         }
 
         final computed = await _embedding.embedFile(path);
-        if (computed == null) continue;
-        if (expectedLength != 0 && computed.length != expectedLength) continue;
+        if (computed == null || computed.length != expectedLength) continue;
 
         embeddings.add(computed);
         await _persistence?.save(
@@ -76,15 +80,21 @@ class LocalProductIndexService {
     ProductModel product, {
     List<String> extraPaths = const [],
   }) async {
-    final paths = _pathsFor(product, extraPaths).toSet().toList(growable: false);
-    final embeddings = <Uint8List>[];
     final expectedLength = _embedding.embeddingLength;
+    if (expectedLength <= 0) {
+      throw StateError(
+        'Cannot refresh visual index while the embedding backend is unavailable.',
+      );
+    }
+
+    final paths =
+        _pathsFor(product, extraPaths).toSet().toList(growable: false);
+    final embeddings = <Uint8List>[];
 
     await _persistence?.deleteProduct(product.id);
     for (final path in paths) {
       final computed = await _embedding.embedFile(path);
-      if (computed == null) continue;
-      if (expectedLength != 0 && computed.length != expectedLength) continue;
+      if (computed == null || computed.length != expectedLength) continue;
       embeddings.add(computed);
       await _persistence?.save(
         productId: product.id,
@@ -141,20 +151,19 @@ class LocalProductIndexService {
 
     final results = <RecognitionCandidate>[];
     for (final entry in _index.entries) {
+      final similarities = <double>[];
       var bestSim = 0.0;
       for (final stored in entry.value) {
         final similarity = _embedding.similarity(queryEmbedding, stored);
+        similarities.add(similarity);
         if (similarity > bestSim) bestSim = similarity;
       }
 
-      var support = 0;
       final supportThreshold = (bestSim - supportWindow).clamp(0.0, 1.0);
-      for (final stored in entry.value) {
-        final similarity = _embedding.similarity(queryEmbedding, stored);
-        if (similarity >= supportThreshold && similarity >= threshold) {
-          support++;
-        }
-      }
+      final support = similarities
+          .where((similarity) =>
+              similarity >= supportThreshold && similarity >= threshold)
+          .length;
 
       results.add(
         RecognitionCandidate(
