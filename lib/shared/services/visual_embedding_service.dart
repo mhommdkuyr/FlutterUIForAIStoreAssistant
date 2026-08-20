@@ -136,8 +136,6 @@ class MobileClip2ModelContract {
     if (inputShape.length != 4) {
       throw StateError('MobileCLIP2 input must be rank 4, got $inputShape.');
     }
-    // ONNX uses -1 for a dynamic batch dimension. The runtime sends a
-    // concrete batch of 1, so both static 1 and dynamic -1 are valid.
     if (inputShape[0] != 1 && inputShape[0] != -1) {
       throw StateError(
         'MobileCLIP2 input batch dimension must be 1 or dynamic (-1), got $inputShape.',
@@ -158,10 +156,9 @@ class MobileClip2ModelContract {
   }
 
   static bool isSingleEmbeddingShape(List<int> shape, int dimension) {
-    if (shape.length == 2 && shape[0] == 1 && shape[1] == dimension) {
-      return true;
-    }
-    return false;
+    return shape.length == 2 &&
+        (shape[0] == 1 || shape[0] == -1) &&
+        shape[1] == dimension;
   }
 
   static void _validateExactDoubleArray({
@@ -670,8 +667,6 @@ class MobileVisionEmbeddingService implements VisualEmbeddingService {
     }
     _runtimeModelPath = null;
     _runtimeExternalDataPath = null;
-    // flutter_onnxruntime 1.8.3 exposes OrtSession.close() and
-    // OrtValue.dispose(); OnnxRuntime itself has no public dispose API.
   }
 
   static void _l2Normalize(Float32List v) {
