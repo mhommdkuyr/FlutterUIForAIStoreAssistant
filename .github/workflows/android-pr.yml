@@ -54,11 +54,26 @@ jobs:
           arch: x86_64
           profile: pixel_5
           force-avd-creation: false
+          pre-emulator-launch-script: |
+            set -e
+            if ! command -v convert >/dev/null 2>&1; then
+              sudo apt-get update
+              sudo apt-get install -y imagemagick
+            fi
+            convert -size 640x480 xc:'#f0f2f5' \
+              -fill '#cd322d' -draw 'roundrectangle 170,75 470,405 45,45' \
+              -fill '#1e232a' -draw 'rectangle 245,40 395,95' \
+              -fill white -draw 'roundrectangle 205,180 435,265 12,12' \
+              /tmp/mobileclip2_camera_scene.png
+            test -s /tmp/mobileclip2_camera_scene.png
           emulator-options: >-
             -no-window
             -gpu swiftshader_indirect
             -noaudio
             -no-boot-anim
+            -no-snapshot-load
+            -no-snapshot-save
+            -camera-back imagefile:/tmp/mobileclip2_camera_scene.png
           disable-animations: true
           script: |
             bash -lc 'set -o pipefail; timeout 900s flutter test integration_test/mobileclip2_full_single_fixed_test.dart 2>&1 | tee android_runtime_test.log'
@@ -77,6 +92,28 @@ jobs:
           set -o pipefail
           flutter build apk --debug 2>&1 | tee build_output.log
 
+      - name: Validate debug APK structure, assets, manifest, install and launch
+        run: |
+          set -euo pipefail
+          APK_PATH="build/app/outputs/flutter-apk/app-debug.apk"
+          test -s "$APK_PATH"
+          unzip -t "$APK_PATH" >/dev/null
+          echo "APK size: $(du -h "$APK_PATH" | cut -f1)"
+          echo "Checking Flutter MobileCLIP2 assets..."
+          unzip -l "$APK_PATH" | grep -F 'flutter_assets/assets/models/mobileclip2/mobileclip2_s0_vision.onnx' >/dev/null
+          unzip -l "$APK_PATH" | grep -F 'flutter_assets/assets/models/mobileclip2/mobileclip2_s0_vision.onnx.data' >/dev/null
+          unzip -l "$APK_PATH" | grep -F 'flutter_assets/assets/models/mobileclip2/model_metadata.json' >/dev/null
+          echo "Checking package metadata..."
+          "$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)/aapt" dump badging "$APK_PATH" | grep -F "package: name='com.aistoreassistant.ai_store_assistant'" >/dev/null
+          "$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)/aapt" dump permissions "$APK_PATH" | grep -F 'android.permission.CAMERA' >/dev/null
+          echo "Installing APK into the same validated emulator..."
+          adb install -r "$APK_PATH"
+          adb shell pm path com.aistoreassistant.ai_store_assistant
+          adb shell am force-stop com.aistoreassistant.ai_store_assistant
+          adb shell monkey -p com.aistoreassistant.ai_store_assistant 1 >/dev/null
+          sleep 5
+          adb shell pidof com.aistoreassistant.ai_store_assistant
+
       - name: Upload build log on failure
         if: failure()
         uses: actions/upload-artifact@v4
@@ -84,6 +121,7 @@ jobs:
           name: android-pr-build-log
           path: build_output.log
           retention-days: 7
+          if-no-files-found: warn
 
       - name: Verify APK exists
         run: |
