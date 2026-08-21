@@ -61,7 +61,7 @@ jobs:
             -no-boot-anim
           disable-animations: true
           script: |
-            bash -lc 'set -o pipefail; timeout 900s flutter test integration_test/mobileclip2_full_android_test.dart 2>&1 | tee android_runtime_test.log'
+            bash -lc 'set -o pipefail; timeout 900s flutter test integration_test/mobileclip2_full_single_fixed_test.dart 2>&1 | tee android_runtime_test.log'
 
       - name: Upload Android runtime test log
         if: always()
