@@ -30,7 +30,7 @@ jobs:
 
       - name: Build expanded catalog and MobileCLIP2 embeddings
         run: |
-          python tools/build_yemen_food_embeddings.py \
+          python tools/build_yemen_food_embeddings_safe.py \
             --max-pages 40 \
             --max-products 4000 \
             --augments 10 \
