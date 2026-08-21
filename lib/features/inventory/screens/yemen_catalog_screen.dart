@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../shared/repositories/product_repository.dart';
+import '../../../shared/services/yemen_catalog_image_hydration_service.dart';
 import '../../../shared/services/yemen_catalog_service.dart';
 
 class YemenCatalogScreen extends StatefulWidget {
@@ -14,6 +15,7 @@ class YemenCatalogScreen extends StatefulWidget {
 class _YemenCatalogScreenState extends State<YemenCatalogScreen> {
   final _catalogService = YemenCatalogService();
   final _repository = ProductRepository();
+  final _imageHydrator = YemenCatalogImageHydrationService();
   final _searchController = TextEditingController();
 
   List<YemenCatalogItem> _items = const [];
@@ -61,7 +63,12 @@ class _YemenCatalogScreenState extends State<YemenCatalogScreen> {
       );
 
   List<String> get _categories {
-    final values = _items.map((e) => e.category).where((e) => e.isNotEmpty).toSet().toList()..sort();
+    final values = _items
+        .map((e) => e.category)
+        .where((e) => e.isNotEmpty)
+        .toSet()
+        .toList()
+      ..sort();
     return values;
   }
 
@@ -74,6 +81,17 @@ class _YemenCatalogScreenState extends State<YemenCatalogScreen> {
     if (result == null) return;
 
     try {
+      String? localReferencePath;
+      if (item.hasReferenceImage) {
+        localReferencePath = await _imageHydrator.hydrate(
+          catalogId: item.id,
+          imageUrls: item.imageUrls,
+        );
+        if (localReferencePath == null) {
+          throw StateError('تعذر تنزيل الصورة المرجعية للمنتج من الكتالوج.');
+        }
+      }
+
       await _repository.createProduct(
         name: item.nameAr,
         category: item.category.isEmpty ? 'مواد غذائية' : item.category,
@@ -81,12 +99,19 @@ class _YemenCatalogScreenState extends State<YemenCatalogScreen> {
         sellingPrice: result.sellingPrice,
         quantity: result.quantity,
         barcode: item.barcode,
+        imageUrl: localReferencePath,
         description:
-            'catalogId=${item.id}; brand=${item.brand}; packSize=${item.packSize}; source=${item.source}; sourceUrl=${item.sourceUrl}',
+            'catalogId=${item.id}; brand=${item.brand}; packSize=${item.packSize}; source=${item.source}; sourceUrl=${item.sourceUrl}; referenceHydrated=${localReferencePath != null}',
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('تمت إضافة ${item.nameAr} إلى منتجات المتجر')),
+        SnackBar(
+          content: Text(
+            item.hasReferenceImage
+                ? 'تمت إضافة ${item.nameAr} وأصبح مرجعه البصري جاهزًا للمسح.'
+                : 'تمت إضافة ${item.nameAr} إلى منتجات المتجر. هذا المنتج غير مدرب بصريًا بعد.',
+          ),
+        ),
       );
       Navigator.pop(context, true);
     } catch (error) {
@@ -167,7 +192,7 @@ class _YemenCatalogScreenState extends State<YemenCatalogScreen> {
                                   borderRadius: BorderRadius.circular(AppConstants.radiusMedium),
                                 ),
                                 child: const Text(
-                                  'اختر المنتج ثم أدخل سعر الشراء والبيع والكمية. لا نطلب منك تصوير المنتج. جاهزية التعرف البصري تعتمد على توفر صورة مرجعية مرخصة وEmbedding مسبق للمنتج.',
+                                  'اختر المنتج ثم أدخل سعر الشراء والبيع والكمية. للمنتجات التي لها مرجع بصري في الكتالوج يتم تنزيل المرجع تلقائيًا إلى الهاتف؛ لا نطلب منك تصوير المنتج.',
                                   textDirection: TextDirection.rtl,
                                 ),
                               ),
@@ -200,7 +225,7 @@ class _YemenCatalogScreenState extends State<YemenCatalogScreen> {
                                   crossAxisAlignment: CrossAxisAlignment.end,
                                   children: [
                                     Text(
-                                      item.hasReferenceImage ? 'صورة متاحة' : 'بانتظار صورة مرجعية',
+                                      item.hasReferenceImage ? 'جاهز بمرجع بصري' : 'إضافة يدوية جديدة',
                                       style: TextStyle(
                                         color: item.hasReferenceImage ? AppColors.success : AppColors.warning,
                                         fontSize: 11,
@@ -338,7 +363,7 @@ class _ErrorView extends StatelessWidget {
           children: [
             const Icon(Icons.error_outline_rounded, size: 48),
             const SizedBox(height: 12),
-            Text('تعذر تحميل كتالوج المنتجات', textAlign: TextAlign.center),
+            const Text('تعذر تحميل كتالوج المنتجات', textAlign: TextAlign.center),
             const SizedBox(height: 6),
             Text('$error', textAlign: TextAlign.center),
             const SizedBox(height: 16),
