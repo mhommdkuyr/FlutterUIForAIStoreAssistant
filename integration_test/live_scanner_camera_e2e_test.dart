@@ -88,8 +88,17 @@ void main() {
           reason:
               'The real LiveScannerScreen never confirmed the product from the emulator camera stream.',
         );
+
+        // Explicitly unmount the real scanner so its camera stream, pipeline,
+        // timers, animation controllers and native ONNX resources are disposed
+        // before the integration-test harness tries to shut down.
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.pumpAndSettle();
+
         passed = true;
-        stdout.writeln('✅ REAL APP CAMERA E2E PASS: camera stream -> MobileCLIP2 -> product confirmation');
+        stdout.writeln(
+          '✅ REAL APP CAMERA E2E PASS: camera stream -> MobileCLIP2 -> product confirmation',
+        );
       } finally {
         await referenceController?.dispose();
         if (productId != null) {
@@ -102,15 +111,9 @@ void main() {
             await File(referencePath!).delete();
           } catch (_) {}
         }
-        // LiveScannerScreen owns a long-lived camera stream and native inference
-        // resources. Flutter's integration-test harness can otherwise remain
-        // alive after the assertion succeeds. Exit explicitly after recording
-        // the verdict so CI measures the real E2E assertion rather than teardown.
-        if (passed) {
-          exit(0);
-        }
-        exit(1);
       }
+
+      expect(passed, isTrue);
     },
   );
 }
