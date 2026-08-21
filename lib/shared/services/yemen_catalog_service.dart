@@ -13,6 +13,7 @@ class YemenCatalogItem {
     required this.sourceUrl,
     required this.imageUrls,
     this.barcode,
+    this.recognitionReady = false,
   });
 
   final String id;
@@ -24,6 +25,7 @@ class YemenCatalogItem {
   final String sourceUrl;
   final List<String> imageUrls;
   final String? barcode;
+  final bool recognitionReady;
 
   bool get hasReferenceImage => imageUrls.any((url) => url.trim().isNotEmpty);
 
@@ -42,16 +44,34 @@ class YemenCatalogItem {
       sourceUrl: (json['sourceUrl'] as String? ?? '').trim(),
       imageUrls: images,
       barcode: (json['barcode'] as String?)?.trim(),
+      recognitionReady: json['recognitionReady'] == true,
     );
   }
 }
 
 class YemenCatalogService {
+  static const generatedAssetPath =
+      'assets/generated/yemen_food_catalog_3000.json';
   static const assetPath = 'data/yemen_food_catalog_seed.json';
   static const trainedAdditionsAssetPath =
       'data/yemen_food_catalog_trained_additions.json';
 
   Future<List<YemenCatalogItem>> load() async {
+    try {
+      final raw = await rootBundle.loadString(generatedAssetPath);
+      final decoded = jsonDecode(raw);
+      if (decoded is Map<String, dynamic> && decoded['products'] is List) {
+        return (decoded['products'] as List)
+            .whereType<Map<String, dynamic>>()
+            .map(YemenCatalogItem.fromJson)
+            .where((p) => p.nameAr.isNotEmpty)
+            .toList(growable: false);
+      }
+    } catch (_) {
+      // The generated 3000-SKU asset is produced in CI/release builds.
+      // Local development falls back to the deterministic seed catalog.
+    }
+
     final docs = await Future.wait([
       rootBundle.loadString(assetPath),
       rootBundle.loadString(trainedAdditionsAssetPath),
