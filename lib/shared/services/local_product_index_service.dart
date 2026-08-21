@@ -7,21 +7,8 @@ import 'visual_embedding_service.dart';
 
 /// In-memory product recognition index.
 ///
-/// Preloads visual embeddings for all enrolled products at session start and
-/// answers [search] queries in microseconds — pure in-memory similarity
-/// comparisons, no disk I/O per frame.
-///
-/// **Multiple reference images per product** are supported.
-///
-/// **Embedding persistence** (optional): pass an [EmbeddingPersistenceService]
-/// to cache embeddings in SQLite. The first open computes and persists them;
-/// subsequent opens skip recomputation entirely.
-///
-/// Lifecycle:
-/// 1. Call [buildIndex] once when the live-scan session starts.
-/// 2. Call [refreshProduct] after any create/update operation.
-/// 3. Call [removeProduct] after a deletion.
-/// 4. Call [search] per camera frame.
+/// All reference images are embedded once when the scan session starts. After
+/// that, search is pure in-memory cosine similarity with no disk I/O per frame.
 class LocalProductIndexService {
   LocalProductIndexService({
     VisualEmbeddingService? embeddingService,
@@ -31,10 +18,7 @@ class LocalProductIndexService {
 
   final VisualEmbeddingService _embedding;
   final EmbeddingPersistenceService? _persistence;
-
-  /// productId → list of precomputed embeddings (one per reference image).
   final Map<String, List<Uint8List>> _index = {};
-
   bool _built = false;
 
   bool get isBuilt => _built;
@@ -42,16 +26,6 @@ class LocalProductIndexService {
   int get indexedEmbeddingCount =>
       _index.values.fold(0, (sum, embeddings) => sum + embeddings.length);
 
-  // ── Index management ───────────────────────────────────────────────────────
-
-  /// Build (or rebuild) the full recognition index.
-  ///
-  /// For each product, embeds:
-  ///   1. The primary [ProductModel.imageUrl].
-  ///   2. Any additional paths in [extraImagePaths].
-  ///
-  /// When [_persistence] is set, previously cached embeddings are loaded from
-  /// the DB first; only missing ones are recomputed and then saved.
   Future<void> buildIndex(
     List<ProductModel> products, {
     Map<String, List<String>> extraImagePaths = const {},
@@ -59,89 +33,89 @@ class LocalProductIndexService {
     _index.clear();
     _built = false;
 
-    // Load cached embeddings for the current model version (if available).
+    final expectedLength = _embedding.embeddingLength;
+    if (expectedLength <= 0) {
+      throw StateError(
+        'Cannot build visual index while the embedding backend is unavailable.',
+      );
+    }
+
     final cached = await _persistence?.loadAll(_embedding.modelVersion) ?? {};
 
     for (final product in products) {
-      final paths =
-          _pathsFor(product, extraImagePaths[product.id] ?? const []);
-      final hashes = <Uint8List>[];
+      final paths = _pathsFor(
+        product,
+        extraImagePaths[product.id] ?? const [],
+      ).toSet().toList(growable: false);
+      final embeddings = <Uint8List>[];
 
       for (final path in paths) {
-        // 1. Try the DB cache first.
         final fromCache = cached[product.id]?[path];
-        if (fromCache != null) {
-          hashes.add(fromCache);
+        if (fromCache != null && fromCache.length == expectedLength) {
+          embeddings.add(fromCache);
           continue;
         }
 
-        // 2. Compute from disk.
         final computed = await _embedding.embedFile(path);
-        if (computed != null) {
-          hashes.add(computed);
-          // 3. Persist so future builds are instant.
-          await _persistence?.save(
-            productId: product.id,
-            imagePath: path,
-            embedding: computed,
-            modelVersion: _embedding.modelVersion,
-          );
-        }
+        if (computed == null || computed.length != expectedLength) continue;
+
+        embeddings.add(computed);
+        await _persistence?.save(
+          productId: product.id,
+          imagePath: path,
+          embedding: computed,
+          modelVersion: _embedding.modelVersion,
+        );
       }
 
-      if (hashes.isNotEmpty) {
-        _index[product.id] = hashes;
+      if (embeddings.isNotEmpty) {
+        _index[product.id] = embeddings;
       }
     }
 
     _built = true;
   }
 
-  /// Refresh a single product entry (call after create / update / new image).
   Future<void> refreshProduct(
     ProductModel product, {
     List<String> extraPaths = const [],
   }) async {
-    final paths = _pathsFor(product, extraPaths);
-    final hashes = <Uint8List>[];
-
-    // Drop stale embeddings for images no longer attached to this product.
-    await _persistence?.deleteProduct(product.id);
-
-    for (final path in paths) {
-      final h = await _embedding.embedFile(path);
-      if (h != null) {
-        hashes.add(h);
-        await _persistence?.save(
-          productId: product.id,
-          imagePath: path,
-          embedding: h,
-          modelVersion: _embedding.modelVersion,
-        );
-      }
+    final expectedLength = _embedding.embeddingLength;
+    if (expectedLength <= 0) {
+      throw StateError(
+        'Cannot refresh visual index while the embedding backend is unavailable.',
+      );
     }
 
-    if (hashes.isNotEmpty) {
-      _index[product.id] = hashes;
-    } else {
+    final paths =
+        _pathsFor(product, extraPaths).toSet().toList(growable: false);
+    final embeddings = <Uint8List>[];
+
+    await _persistence?.deleteProduct(product.id);
+    for (final path in paths) {
+      final computed = await _embedding.embedFile(path);
+      if (computed == null || computed.length != expectedLength) continue;
+      embeddings.add(computed);
+      await _persistence?.save(
+        productId: product.id,
+        imagePath: path,
+        embedding: computed,
+        modelVersion: _embedding.modelVersion,
+      );
+    }
+
+    if (embeddings.isEmpty) {
       _index.remove(product.id);
+    } else {
+      _index[product.id] = embeddings;
     }
   }
 
-  /// Remove a product from the index (call after deletion).
   void removeProduct(String productId) {
     _index.remove(productId);
     _persistence?.deleteProduct(productId);
   }
 
-  // ── Search ─────────────────────────────────────────────────────────────────
-
-  /// Return the top-K best-matching products for [queryEmbedding].
-  ///
-  /// Similarity is computed via [VisualEmbeddingService.similarity], which
-  /// dispatches to cosine similarity for MobileCLIP2 ONNX embeddings. aHash is diagnostics-only.
-  ///
-  /// Only candidates with [confidence] ≥ [minConfidence] are included.
   List<RecognitionCandidate> search(
     Uint8List queryEmbedding, {
     int topK = 3,
@@ -156,11 +130,6 @@ class LocalProductIndexService {
     ).candidates.where((c) => c.confidence >= threshold).toList();
   }
 
-  /// Evaluate all products and keep best + second-best information.
-  ///
-  /// Unlike [search], this method does not drop below-threshold products before
-  /// computing ambiguity. That prevents the scanner from treating "A=0.81,
-  /// B=0.80" as a confident A match just because both are above threshold.
   RecognitionSearchResult evaluate(
     Uint8List queryEmbedding, {
     int topK = 3,
@@ -171,7 +140,7 @@ class LocalProductIndexService {
   }) {
     final threshold = minConfidence ?? _embedding.recommendedMinConfidence;
     final supportWindow = supportDelta ?? (1 - threshold) / 2;
-    if (_index.isEmpty) {
+    if (_index.isEmpty || queryEmbedding.length != _embedding.embeddingLength) {
       return RecognitionSearchResult(
         candidates: const [],
         minConfidence: threshold,
@@ -181,26 +150,30 @@ class LocalProductIndexService {
     }
 
     final results = <RecognitionCandidate>[];
-
     for (final entry in _index.entries) {
+      final similarities = <double>[];
       var bestSim = 0.0;
-      var support = 0;
       for (final stored in entry.value) {
-        final s = _embedding.similarity(queryEmbedding, stored);
-        if (s > bestSim) bestSim = s;
+        final similarity = _embedding.similarity(queryEmbedding, stored);
+        similarities.add(similarity);
+        if (similarity > bestSim) bestSim = similarity;
       }
+
       final supportThreshold = (bestSim - supportWindow).clamp(0.0, 1.0);
-      for (final stored in entry.value) {
-        final s = _embedding.similarity(queryEmbedding, stored);
-        if (s >= supportThreshold && s >= threshold) support++;
-      }
-      results.add(RecognitionCandidate(
-        productId: entry.key,
-        confidence: bestSim,
-        hammingDistance: 0,
-        referenceCount: entry.value.length,
-        supportingReferenceCount: support,
-      ));
+      final support = similarities
+          .where((similarity) =>
+              similarity >= supportThreshold && similarity >= threshold)
+          .length;
+
+      results.add(
+        RecognitionCandidate(
+          productId: entry.key,
+          confidence: bestSim,
+          hammingDistance: 0,
+          referenceCount: entry.value.length,
+          supportingReferenceCount: support,
+        ),
+      );
     }
 
     results.sort((a, b) => b.confidence.compareTo(a.confidence));
@@ -212,12 +185,10 @@ class LocalProductIndexService {
     );
   }
 
-  // ── Internal ────────────────────────────────────────────────────────────────
-
   static List<String> _pathsFor(ProductModel product, List<String> extras) {
     final paths = <String>[];
-    final url = product.imageUrl;
-    if (url != null && url.isNotEmpty) paths.add(url);
+    final primary = product.imageUrl;
+    if (primary != null && primary.isNotEmpty) paths.add(primary);
     paths.addAll(extras);
     return paths;
   }

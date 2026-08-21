@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/constants/app_constants.dart';
@@ -62,6 +64,7 @@ class _LiveScannerScreenState extends State<LiveScannerScreen>
   final ProductImageService _imageService = ProductImageService();
   late final RecognitionPipeline _pipeline;
   CameraController? _cameraController;
+  CameraDescription? _cameraDescription;
 
   List<ProductModel> _products = [];
   final List<ScanCartItem> _cart = [];
@@ -128,6 +131,7 @@ class _LiveScannerScreenState extends State<LiveScannerScreen>
   @override
   void dispose() {
     _statusResetTimer?.cancel();
+    unawaited(_pipeline.dispose());
     _cameraController?.dispose();
     _frameAnimCtrl.dispose();
     _overlayAnimCtrl.dispose();
@@ -145,9 +149,29 @@ class _LiveScannerScreenState extends State<LiveScannerScreen>
 
       if (mounted) setState(() => _products = products);
 
+      // Show the actual camera before ONNX/index initialization finishes.
+      await _startVisualCamera(startStream: false);
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _status = _ScanStatus.initializing;
+        });
+      }
+
       await _pipeline.initialize();
+      if (!_pipeline.isOnnxActive) {
+        throw StateError(
+          _pipeline.initializationError?.toString() ??
+              'MobileCLIP2 ONNX visual engine is unavailable.',
+        );
+      }
       await _pipeline.buildIndex(products, extraImagePaths: extraPaths);
-      await _startVisualCamera();
+      if (!_pipeline.isIndexReady || _pipeline.indexedEmbeddingCount == 0) {
+        throw StateError(
+          'MobileCLIP2 index contains no usable product embeddings. Verify product image paths and runtime initialization.',
+        );
+      }
+      await _cameraController?.startImageStream(_onCameraFrame);
 
       if (!mounted) return;
       setState(() {
@@ -161,7 +185,7 @@ class _LiveScannerScreenState extends State<LiveScannerScreen>
     }
   }
 
-  Future<void> _startVisualCamera() async {
+  Future<void> _startVisualCamera({bool startStream = true}) async {
     final cameras = await availableCameras();
     if (cameras.isEmpty) throw StateError('No camera available');
     final camera = cameras.firstWhere(
@@ -175,8 +199,16 @@ class _LiveScannerScreenState extends State<LiveScannerScreen>
       imageFormatGroup: ImageFormatGroup.yuv420,
     );
     await controller.initialize();
+    _cameraDescription = camera;
     _cameraController = controller;
-    await controller.startImageStream(_onCameraFrame);
+    try {
+      await controller.setFocusMode(FocusMode.auto);
+    } catch (_) {
+      // Some devices do not expose programmable autofocus.
+    }
+    if (startStream) {
+      await controller.startImageStream(_onCameraFrame);
+    }
   }
 
   void _onCameraFrame(CameraImage image) {
@@ -192,7 +224,10 @@ class _LiveScannerScreenState extends State<LiveScannerScreen>
       while (mounted && _latestFrame != null) {
         final frame = _latestFrame!;
         _latestFrame = null;
-        final report = await _pipeline.processFrame(frame);
+        final report = await _pipeline.processFrame(
+          frame,
+          rotationDegrees: _frameRotationDegrees(),
+        );
         if (!report.processed) continue;
         await Future<void>.delayed(Duration.zero);
       }
@@ -202,6 +237,24 @@ class _LiveScannerScreenState extends State<LiveScannerScreen>
         _onCameraFrame(_latestFrame!);
       }
     }
+  }
+
+  int _frameRotationDegrees() {
+    final description = _cameraDescription;
+    final controller = _cameraController;
+    if (!Platform.isAndroid || description == null || controller == null) {
+      return 0;
+    }
+    final deviceRotation = switch (controller.value.deviceOrientation) {
+      DeviceOrientation.portraitUp => 0,
+      DeviceOrientation.landscapeLeft => 90,
+      DeviceOrientation.portraitDown => 180,
+      DeviceOrientation.landscapeRight => 270,
+    };
+    if (description.lensDirection == CameraLensDirection.front) {
+      return (description.sensorOrientation + deviceRotation) % 360;
+    }
+    return (description.sensorOrientation - deviceRotation + 360) % 360;
   }
 
   void _trackCameraFps() {
@@ -499,9 +552,6 @@ class _LiveScannerScreenState extends State<LiveScannerScreen>
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// _CameraBackground  –  dark dot-grid to suggest a camera viewfinder
-// ─────────────────────────────────────────────────────────────────────────────
 class _CameraBackground extends StatelessWidget {
   const _CameraBackground();
 
@@ -541,9 +591,6 @@ class _DotGridPainter extends CustomPainter {
   bool shouldRepaint(_DotGridPainter _) => false;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// _ScanFrame  –  corner-bracket viewfinder frame
-// ─────────────────────────────────────────────────────────────────────────────
 class _ScanFrame extends StatelessWidget {
   const _ScanFrame({
     required this.size,
@@ -561,7 +608,6 @@ class _ScanFrame extends StatelessWidget {
       height: size,
       child: Stack(
         children: [
-          // Dimmed inner fill
           Container(
             decoration: BoxDecoration(
               border: Border.all(color: color, width: 1.5),
@@ -569,9 +615,7 @@ class _ScanFrame extends StatelessWidget {
               color: color.withOpacity(0.05),
             ),
           ),
-          // Corner brackets
           ..._corners(color),
-          // Scanning line animation
           if (isRecognizing)
             ClipRRect(
               borderRadius: BorderRadius.circular(11),
@@ -648,9 +692,6 @@ class _ScanFrame extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// _ScanLine  –  animated horizontal sweep line inside the frame
-// ─────────────────────────────────────────────────────────────────────────────
 class _ScanLine extends StatefulWidget {
   const _ScanLine({required this.color});
   final Color color;
@@ -703,9 +744,6 @@ class _ScanLineState extends State<_ScanLine>
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// _StatusChip  –  status pill below the title bar
-// ─────────────────────────────────────────────────────────────────────────────
 class _StatusChip extends StatelessWidget {
   const _StatusChip({required this.status, required this.tr});
   final _ScanStatus status;
@@ -872,9 +910,6 @@ class _VisualDebugPanel extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// _CartBadge  –  top-right item counter
-// ─────────────────────────────────────────────────────────────────────────────
 class _CartBadge extends StatelessWidget {
   const _CartBadge({required this.count});
   final int count;
@@ -915,9 +950,6 @@ class _CartBadge extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// _ProductFoundCard  –  green popup showing name + price + qty
-// ─────────────────────────────────────────────────────────────────────────────
 class _ProductFoundCard extends StatelessWidget {
   const _ProductFoundCard({
     required this.product,
@@ -1003,9 +1035,6 @@ class _ProductFoundCard extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// _CartSummaryBar  –  compact strip showing scanned items above Done button
-// ─────────────────────────────────────────────────────────────────────────────
 class _CartSummaryBar extends StatelessWidget {
   const _CartSummaryBar({required this.cart, required this.tr});
   final List<ScanCartItem> cart;

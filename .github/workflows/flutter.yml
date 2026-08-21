@@ -59,26 +59,22 @@ jobs:
           python3 - "$status" dart_analyze.json <<'PY'
           import json
           import sys
-
           status = int(sys.argv[1])
           path = sys.argv[2]
-          with open(path, encoding="utf-8") as f:
+          with open(path, encoding='utf-8') as f:
               data = json.load(f)
-
-          diagnostics = data.get("diagnostics", []) if isinstance(data, dict) else []
+          diagnostics = data.get('diagnostics', []) if isinstance(data, dict) else []
           errors = [
               item for item in diagnostics
               if isinstance(item, dict)
-              and str(item.get("severity", "")).upper() == "ERROR"
+              and str(item.get('severity', '')).upper() == 'ERROR'
           ]
-
           if errors:
-              print(f"Dart analyzer reported {len(errors)} error diagnostics; failing CI.")
+              print(f'Dart analyzer reported {len(errors)} error diagnostics; failing CI.')
               sys.exit(1)
-
           print(
-              f"Dart analyzer completed without error diagnostics "
-              f"(tool exit code: {status}; warnings/info are non-fatal)."
+              f'Dart analyzer completed without error diagnostics '
+              f'(tool exit code: {status}; warnings/info are non-fatal).'
           )
           sys.exit(0)
           PY
@@ -92,7 +88,7 @@ jobs:
           set -e
           cat flutter_analyze.txt
           if grep -Eq '^ *error •' flutter_analyze.txt; then
-            echo "Flutter analyzer reported error diagnostics; failing CI."
+            echo 'Flutter analyzer reported error diagnostics; failing CI.'
             exit 1
           fi
           echo "Flutter analyzer reported no error diagnostics (warnings/info are non-fatal; tool exit code: $status)."
@@ -100,6 +96,9 @@ jobs:
 
       - name: Focused MobileCLIP2 contract tests
         run: flutter test test/mobileclip2_contract_test.dart
+
+      - name: Fast scan engine contract tests
+        run: flutter test test/fast_scan_engine_contract_test.dart
 
       - name: Focused recognition pipeline tests
         run: flutter test test/recognition_pipeline_test.dart
