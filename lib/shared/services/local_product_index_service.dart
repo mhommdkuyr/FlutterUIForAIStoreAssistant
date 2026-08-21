@@ -14,14 +14,8 @@ import 'visual_embedding_service.dart';
 /// **Multiple reference images per product** are supported.
 ///
 /// **Embedding persistence** (optional): pass an [EmbeddingPersistenceService]
-/// to cache embeddings in SQLite. The first open computes and persists them;
-/// subsequent opens skip recomputation entirely.
-///
-/// Lifecycle:
-/// 1. Call [buildIndex] once when the live-scan session starts.
-/// 2. Call [refreshProduct] after any create/update operation.
-/// 3. Call [removeProduct] after a deletion.
-/// 4. Call [search] per camera frame.
+/// to cache embeddings in SQLite. Precomputed catalog embeddings are also
+/// supported, even when the product has no local image file.
 class LocalProductIndexService {
   LocalProductIndexService({
     VisualEmbeddingService? embeddingService,
@@ -31,10 +25,7 @@ class LocalProductIndexService {
 
   final VisualEmbeddingService _embedding;
   final EmbeddingPersistenceService? _persistence;
-
-  /// productId → list of precomputed embeddings (one per reference image).
   final Map<String, List<Uint8List>> _index = {};
-
   bool _built = false;
 
   bool get isBuilt => _built;
@@ -42,16 +33,6 @@ class LocalProductIndexService {
   int get indexedEmbeddingCount =>
       _index.values.fold(0, (sum, embeddings) => sum + embeddings.length);
 
-  // ── Index management ───────────────────────────────────────────────────────
-
-  /// Build (or rebuild) the full recognition index.
-  ///
-  /// For each product, embeds:
-  ///   1. The primary [ProductModel.imageUrl].
-  ///   2. Any additional paths in [extraImagePaths].
-  ///
-  /// When [_persistence] is set, previously cached embeddings are loaded from
-  /// the DB first; only missing ones are recomputed and then saved.
   Future<void> buildIndex(
     List<ProductModel> products, {
     Map<String, List<String>> extraImagePaths = const {},
@@ -59,27 +40,23 @@ class LocalProductIndexService {
     _index.clear();
     _built = false;
 
-    // Load cached embeddings for the current model version (if available).
     final cached = await _persistence?.loadAll(_embedding.modelVersion) ?? {};
 
     for (final product in products) {
-      final paths =
-          _pathsFor(product, extraImagePaths[product.id] ?? const []);
+      final paths = _pathsFor(product, extraImagePaths[product.id] ?? const []);
       final hashes = <Uint8List>[];
 
-      for (final path in paths) {
-        // 1. Try the DB cache first.
-        final fromCache = cached[product.id]?[path];
-        if (fromCache != null) {
-          hashes.add(fromCache);
-          continue;
-        }
+      // Precomputed catalog embeddings do not require a product imageUrl.
+      final cachedForProduct = cached[product.id];
+      if (cachedForProduct != null && cachedForProduct.isNotEmpty) {
+        hashes.addAll(cachedForProduct.values);
+      }
 
-        // 2. Compute from disk.
+      for (final path in paths) {
+        if (cachedForProduct?.containsKey(path) ?? false) continue;
         final computed = await _embedding.embedFile(path);
         if (computed != null) {
           hashes.add(computed);
-          // 3. Persist so future builds are instant.
           await _persistence?.save(
             productId: product.id,
             imagePath: path,
@@ -89,23 +66,32 @@ class LocalProductIndexService {
         }
       }
 
-      if (hashes.isNotEmpty) {
-        _index[product.id] = hashes;
-      }
+      if (hashes.isNotEmpty) _index[product.id] = hashes;
     }
 
     _built = true;
   }
 
-  /// Refresh a single product entry (call after create / update / new image).
   Future<void> refreshProduct(
     ProductModel product, {
     List<String> extraPaths = const [],
   }) async {
     final paths = _pathsFor(product, extraPaths);
-    final hashes = <Uint8List>[];
+    final cached = await _persistence?.loadAll(_embedding.modelVersion);
 
-    // Drop stale embeddings for images no longer attached to this product.
+    // A catalog-only product can be indexed entirely from its precomputed
+    // embeddings; do not delete those rows just because imageUrl is empty.
+    if (paths.isEmpty) {
+      final existing = cached?[product.id];
+      if (existing != null && existing.isNotEmpty) {
+        _index[product.id] = existing.values.toList(growable: false);
+        return;
+      }
+      _index.remove(product.id);
+      return;
+    }
+
+    final hashes = <Uint8List>[];
     await _persistence?.deleteProduct(product.id);
 
     for (final path in paths) {
@@ -128,20 +114,11 @@ class LocalProductIndexService {
     }
   }
 
-  /// Remove a product from the index (call after deletion).
   void removeProduct(String productId) {
     _index.remove(productId);
     _persistence?.deleteProduct(productId);
   }
 
-  // ── Search ─────────────────────────────────────────────────────────────────
-
-  /// Return the top-K best-matching products for [queryEmbedding].
-  ///
-  /// Similarity is computed via [VisualEmbeddingService.similarity], which
-  /// dispatches to cosine similarity for MobileCLIP2 ONNX embeddings. aHash is diagnostics-only.
-  ///
-  /// Only candidates with [confidence] ≥ [minConfidence] are included.
   List<RecognitionCandidate> search(
     Uint8List queryEmbedding, {
     int topK = 3,
@@ -156,11 +133,6 @@ class LocalProductIndexService {
     ).candidates.where((c) => c.confidence >= threshold).toList();
   }
 
-  /// Evaluate all products and keep best + second-best information.
-  ///
-  /// Unlike [search], this method does not drop below-threshold products before
-  /// computing ambiguity. That prevents the scanner from treating "A=0.81,
-  /// B=0.80" as a confident A match just because both are above threshold.
   RecognitionSearchResult evaluate(
     Uint8List queryEmbedding, {
     int topK = 3,
@@ -181,7 +153,6 @@ class LocalProductIndexService {
     }
 
     final results = <RecognitionCandidate>[];
-
     for (final entry in _index.entries) {
       var bestSim = 0.0;
       var support = 0;
@@ -211,8 +182,6 @@ class LocalProductIndexService {
       minSupportingReferences: minSupportingReferences,
     );
   }
-
-  // ── Internal ────────────────────────────────────────────────────────────────
 
   static List<String> _pathsFor(ProductModel product, List<String> extras) {
     final paths = <String>[];
