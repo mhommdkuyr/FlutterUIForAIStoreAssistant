@@ -8,10 +8,9 @@ import numpy as np
 import onnxruntime as ort
 import requests
 from PIL import Image, ImageEnhance, ImageFilter, ImageOps
-from bson import decode_file_iter
 ROOT=Path(__file__).resolve().parents[1]
 MODEL=ROOT/'assets/models/mobileclip2/mobileclip2_s0_vision.onnx'; MODEL_DATA=ROOT/'assets/models/mobileclip2/mobileclip2_s0_vision.onnx.data'; SEED=ROOT/'data/yemen_food_catalog_seed.json'; OUT=ROOT/'build/yemen_food_catalog'
-UA='AIStoreAssistant-YemenCatalog/2.6'; IMG='https://images.openfoodfacts.org/images/products'
+UA='AIStoreAssistant-YemenCatalog/2.7'; IMG='https://images.openfoodfacts.org/images/products'
 
 def norm(s):
  s=unicodedata.normalize('NFKD',str(s or '')); s=''.join(c for c in s if not unicodedata.combining(c)); s=re.sub(r'[\u064B-\u065F\u0670]','',s).lower(); return re.sub(r'[^\w\u0600-\u06ff]+',' ',s).strip()
@@ -29,6 +28,10 @@ def first_value(v):
     y=first_value(v[k])
     if y:return y
  return ''
+
+def barcode_from_path(path):
+ nums=[x for x in Path(path).parts if x.isdigit()]
+ return ''.join(nums[-4:]) if len(nums)>=4 else ''
 
 def barcode_image_url(code,imgid='1'):
  code=re.sub(r'\D','',str(code or ''))
@@ -54,9 +57,19 @@ def extract_image_id(images):
    if y:return y
  return ''
 
+def merge_value(existing,new):
+ if not existing:return new
+ if isinstance(existing,dict) and isinstance(new,dict):
+  merged=dict(existing)
+  for k,v in new.items():
+   merged[k]=merge_value(merged.get(k),v)
+  return merged
+ if isinstance(existing,list) and isinstance(new,list):
+  return existing+ [x for x in new if x not in existing]
+ return existing
+
 def flatten_records(obj):
  if isinstance(obj,dict):
-  # Mongo/export wrappers commonly put records under products/docs/items/results.
   for key in ('products','docs','items','results','data'):
    value=obj.get(key)
    if isinstance(value,list):
@@ -70,96 +83,64 @@ def flatten_records(obj):
 
 def parse_file(path):
  suffix=path.suffix.lower()
- # BSON first for known/extensionless files.
  try:
   with path.open('rb') as fh:
    first=fh.read(4)
    if len(first)==4:
     size=int.from_bytes(first,'little')
-    if 16 <= size <= max(path.stat().st_size,16):
+    if 16<=size<=max(path.stat().st_size,16):
      with path.open('rb') as fh2:
-      for doc in decode_file_iter(fh2):
-       yield doc
+      for doc in __import__('bson').decode_file_iter(fh2):yield doc
      return
- except Exception:
-  pass
- # JSON/JSONL/CSV fallbacks.
+ except Exception:pass
  if suffix in ('.json','.jsonl','.ndjson') or suffix=='':
   try:
-   text=path.read_text(encoding='utf-8',errors='ignore')
-   stripped=text.lstrip()
-   if stripped.startswith('{') or stripped.startswith('['):
-    obj=json.loads(text)
-    yield from flatten_records(obj)
-    return
-  except Exception:
-   pass
+   text=path.read_text(encoding='utf-8',errors='ignore');stripped=text.lstrip()
+   if stripped.startswith('{') or stripped.startswith('['):yield from flatten_records(json.loads(text));return
+  except Exception:pass
   try:
    with path.open('r',encoding='utf-8',errors='ignore') as fh:
     for line in fh:
      line=line.strip()
      if not line:continue
-     try:
-      obj=json.loads(line)
-     except Exception:
-      continue
+     try:obj=json.loads(line)
+     except Exception:continue
      yield from flatten_records(obj)
     return
-  except Exception:
-   pass
+  except Exception:pass
  if suffix=='.csv':
   with path.open('r',encoding='utf-8',errors='ignore',newline='') as fh:
    for row in csv.DictReader(fh):yield dict(row)
 
 def bson_products(sample_root,target):
- product_files=[]
- for f in Path(sample_root).rglob('*'):
-  if not f.is_file():continue
-  if f.name.endswith(('.md','.txt','.sha256','.sha1')):continue
-  product_files.append(f)
- if not product_files:raise RuntimeError(f'No product files found under {sample_root}')
- products=[]
- for pf in product_files:
-  try:
-   for p in parse_file(pf):
-    products.append(p)
-    if len(products)>=30000:break
-  except Exception:
-   continue
-  if len(products)>=30000:break
- if not products:
-  names=' | '.join(f.name for f in product_files[:20])
-  raise RuntimeError(f'Found product files but parsed zero records: {names}')
- image_root=Path(os.environ.get('OFF_IMAGES_ROOT',''))
- image_map={}
- for f in image_root.rglob('*'):
-  if not f.is_file() or f.suffix.lower() not in ('.jpg','.jpeg','.png','.webp'):continue
-  nums=[x for x in f.parts if x.isdigit()]
-  if len(nums)>=4:
-   image_map.setdefault(''.join(nums[-4:]),f)
-  m=re.search(r'(?<!\d)(\d{7,14})(?!\d)',str(f))
-  if m:image_map.setdefault(m.group(1),f)
- out=[];seen=set()
- for p in products:
-  code=str(p.get('code') or p.get('_id') or '').strip(); name=first_value(p.get('product_name')) or first_value(p.get('generic_name'))
-  if not code or code in seen or not name:continue
-  local=image_map.get(re.sub(r'\D','',code))
-  if local is None:
-   image_id=extract_image_id(p.get('images'))
-   if image_id:
-    remote=barcode_image_url(code,image_id)
-    if remote: local=remote
-  if local is None:continue
+ grouped={}
+ files=[f for f in Path(sample_root).rglob('*') if f.is_file() and f.name not in ('changes.json','scans.json')]
+ if not files:raise RuntimeError(f'No product files found under {sample_root}')
+ for pf in files:
+  path_code=barcode_from_path(pf.parent)
+  try: rows=list(parse_file(pf))
+  except Exception: rows=[]
+  for p in rows:
+   if not isinstance(p,dict):continue
+   code=str(p.get('code') or p.get('_id') or path_code or '').strip()
+   if not code:continue
+   rec=grouped.setdefault(re.sub(r'\D','',code),{})
+   for k,v in p.items():rec[k]=merge_value(rec.get(k),v)
+ out=[]
+ for code,p in grouped.items():
+  name=first_value(p.get('product_name')) or first_value(p.get('generic_name'))
+  if not code or not name:continue
+  image_id=extract_image_id(p.get('images'))
+  image=barcode_image_url(code,image_id or '1')
+  if not image:continue
   cats=p.get('categories_tags') or [];cat=first_value(cats[0] if cats else '') or 'مواد غذائية'
-  image_url=local.as_posix() if isinstance(local,Path) else local
-  out.append({'id':'off-'+re.sub(r'[^0-9A-Za-z_-]','',code),'nameAr':name,'brand':first_value(p.get('brands')),'category':cat.replace('en:','').replace('-',' '),'packSize':first_value(p.get('quantity')),'source':'Open Food Facts 10000-product sample','sourceUrl':f'https://world.openfoodfacts.org/product/{code}','sourceType':'open_food_facts_sample','imageUrls':[image_url],'barcode':code,'priceYER':None,'openingQuantity':None})
-  seen.add(code)
+  out.append({'id':'off-'+re.sub(r'[^0-9A-Za-z_-]','',code),'nameAr':name,'brand':first_value(p.get('brands')),'category':cat.replace('en:','').replace('-',' '),'packSize':first_value(p.get('quantity')),'source':'Open Food Facts 10000-product sample','sourceUrl':f'https://world.openfoodfacts.org/product/{code}','sourceType':'open_food_facts_sample','imageUrls':[image],'barcode':code,'priceYER':None,'openingQuantity':None})
   if len(out)>=target:return out
  return out
 
 def fallback_products(target):
  found=bson_products(os.environ.get('OFF_SAMPLE_ROOT',''),target)
- if len(found)<target:raise RuntimeError(f'Official sample yielded only {len(found)} image-backed products; expected {target}')
+ if len(found)<target:raise RuntimeError(f'Official sample yielded only {len(found)} merged image-backed products; expected {target}')
  return found
 
 def choose_catalog(target):
@@ -173,10 +154,7 @@ def choose_catalog(target):
 def download_one(job):
  idx,url,path=job
  try:
-  if url.startswith('/') or url.startswith('file://'):
-   src=Path(url.replace('file://',''));im=Image.open(src).convert('RGB')
-  else:
-   r=requests.get(url,headers={'User-Agent':UA,'Accept':'image/avif,image/webp,image/jpeg,image/png,*/*'},timeout=30);r.raise_for_status();im=Image.open(io.BytesIO(r.content)).convert('RGB')
+  r=requests.get(url,headers={'User-Agent':UA,'Accept':'image/avif,image/webp,image/jpeg,image/png,*/*'},timeout=30);r.raise_for_status();im=Image.open(io.BytesIO(r.content)).convert('RGB')
   if min(im.size)<96:return idx,None
   im.thumbnail((960,960),Image.Resampling.LANCZOS);path.parent.mkdir(parents=True,exist_ok=True);im.save(path,'JPEG',quality=90);return idx,path
  except Exception:return idx,None
@@ -208,7 +186,7 @@ def infer(session,images):
  return l2(np.stack(rows))
 
 def main():
- ap=argparse.ArgumentParser();ap.add_argument('--target-products',type=int,default=3000);ap.add_argument('--augments',type=int,default=8);ap.add_argument('--download-workers',type=int,default=16);a=ap.parse_args()
+ ap=argparse.ArgumentParser();ap.add_argument('--target-products',type=int,default=3000);ap.add_argument('--augments',type=int,default=8);ap.add_argument('--download-workers',type=int,default=24);a=ap.parse_args()
  if not MODEL.exists() or not MODEL_DATA.exists():raise SystemExit('MobileCLIP2 model files are missing')
  OUT.mkdir(parents=True,exist_ok=True);catalog=choose_catalog(a.target_products)
  if len(catalog)!=a.target_products:raise SystemExit(f'catalog discovery returned {len(catalog)}')
