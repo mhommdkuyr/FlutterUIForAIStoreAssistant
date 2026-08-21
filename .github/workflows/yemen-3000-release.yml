@@ -31,7 +31,7 @@ jobs:
       - name: Install ML dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install --no-cache-dir numpy pillow requests onnxruntime
+          pip install --no-cache-dir numpy pillow requests onnxruntime datasets
       - name: Build 3000-SKU catalog and MobileCLIP2 centroids
         run: |
           python tools/build_yemen_3000_catalog.py \
