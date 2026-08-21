@@ -8,7 +8,7 @@ jobs:
   build:
     name: Build Debug APK
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
 
     steps:
       - name: Checkout repository
@@ -64,10 +64,48 @@ jobs:
           ls -R build/app/outputs/flutter-apk || true
           APK_PATH="build/app/outputs/flutter-apk/app-debug.apk"
           if [ ! -f "$APK_PATH" ]; then
-            echo "ERROR: APK not found at $APK_PATH — build step must have failed silently."
+            echo "ERROR: APK not found at $APK_PATH"
             exit 1
           fi
           echo "APK found: $(du -sh $APK_PATH)"
+
+      - name: Enable KVM for Android emulator
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS="static_node=kvm"' | \
+            sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Run real application camera E2E
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_5
+          force-avd-creation: false
+          pre-emulator-launch-script: >-
+            command -v convert >/dev/null 2>&1 || { sudo apt-get update && sudo apt-get install -y imagemagick; }; convert -size 640x480 xc:'#f0f2f5' -fill '#cd322d' -draw 'roundrectangle 170,75 470,405 45,45' -fill '#1e232a' -draw 'rectangle 245,40 395,95' -fill white -draw 'roundrectangle 205,180 435,265 12,12' /tmp/mobileclip2_camera_scene.png && test -s /tmp/mobileclip2_camera_scene.png
+          emulator-options: >-
+            -no-window
+            -gpu swiftshader_indirect
+            -noaudio
+            -no-boot-anim
+            -no-snapshot-load
+            -no-snapshot-save
+            -camera-back imagefile:/tmp/mobileclip2_camera_scene.png
+          disable-animations: true
+          script: |
+            bash -lc 'set -o pipefail; timeout 300s flutter test integration_test/live_scanner_camera_e2e_test.dart 2>&1 | tee android_camera_e2e.log'
+
+      - name: Upload camera E2E log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-camera-e2e-log
+          path: android_camera_e2e.log
+          retention-days: 7
+          if-no-files-found: warn
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
