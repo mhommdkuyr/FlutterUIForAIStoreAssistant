@@ -31,7 +31,7 @@ from PIL import Image, ImageEnhance, ImageFilter, ImageOps
 
 UA = (
     "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
-    "Chrome/131 Safari/537.36 yemen-food-catalog-builder/1.0"
+    "Chrome/131 Safari/537.36 yemen-food-catalog-builder/1.1"
 )
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -89,24 +89,61 @@ def fetch(session: requests.Session, url: str, timeout: int = 25) -> str | bytes
         return None
 
 
+def extract_page_image(html: str, base: str) -> str | None:
+    soup = BeautifulSoup(html, "html.parser")
+    for selector, attr in [
+        ('meta[property="og:image"]', "content"),
+        ('meta[property="og:image:url"]', "content"),
+        ('meta[name="twitter:image"]', "content"),
+        ('meta[itemprop="image"]', "content"),
+    ]:
+        tag = soup.select_one(selector)
+        value = tag.get(attr) if tag else None
+        if value:
+            return urljoin(base, value)
+    for script in soup.select('script[type="application/ld+json"]'):
+        raw = script.string or script.get_text()
+        try:
+            data = json.loads(raw)
+        except Exception:
+            continue
+        nodes = data if isinstance(data, list) else [data]
+        stack = list(nodes)
+        while stack:
+            node = stack.pop()
+            if not isinstance(node, dict):
+                continue
+            img = node.get("image")
+            if isinstance(img, str):
+                return urljoin(base, img)
+            if isinstance(img, dict) and isinstance(img.get("url"), str):
+                return urljoin(base, img["url"])
+            if isinstance(img, list):
+                for value in img:
+                    if isinstance(value, str):
+                        return urljoin(base, value)
+                    if isinstance(value, dict) and isinstance(value.get("url"), str):
+                        return urljoin(base, value["url"])
+            for value in node.values():
+                if isinstance(value, dict):
+                    stack.append(value)
+                elif isinstance(value, list):
+                    stack.extend(value)
+    return None
+
+
 def product_cards(html: str, base: str) -> list[tuple[str, str, str]]:
     soup = BeautifulSoup(html, "html.parser")
     out: list[tuple[str, str, str]] = []
     links = soup.select("a.product-item-link, .product-item-link, a.product-name, h2.product-name a")
-    imgs = soup.select("img.product-image-photo, .product-image img, img")
-    img_urls = [
-        urljoin(base, i.get("src") or i.get("data-src") or i.get("data-lazy-src") or "")
-        for i in imgs
-    ]
-    img_urls = [u for u in img_urls if u.startswith("http")]
     for link in links:
         name = link.get_text(" ", strip=True)
         href = urljoin(base, link.get("href", ""))
         if not name or not href:
             continue
-        # Prefer an image in the nearest product container.
+        image = None
         container = link
-        for _ in range(6):
+        for _ in range(7):
             if container.parent is None:
                 break
             container = container.parent
@@ -114,11 +151,13 @@ def product_cards(html: str, base: str) -> list[tuple[str, str, str]]:
             if found:
                 src = found.get("src") or found.get("data-src") or found.get("data-lazy-src")
                 if src:
-                    out.append((name, href, urljoin(base, src)))
+                    image = urljoin(base, src)
                     break
-        else:
-            if img_urls:
-                out.append((name, href, img_urls[0]))
+        if not image:
+            meta = soup.find("link", attrs={"rel": "image_src"})
+            if meta and meta.get("href"):
+                image = urljoin(base, meta["href"])
+        out.append((name, href, image or ""))
     return out
 
 
@@ -134,7 +173,12 @@ def crawl_bazzarry(session: requests.Session, max_pages: int) -> list[dict]:
         html = fetch(session, url)
         if not isinstance(html, str):
             continue
-        for name, href, image in product_cards(html, url):
+        cards = product_cards(html, url)
+        for name, href, image in cards:
+            if not image and href:
+                detail = fetch(session, href, timeout=20)
+                if isinstance(detail, str):
+                    image = extract_page_image(detail, href) or ""
             key = norm(name)
             if key and image:
                 found[key] = {
@@ -144,7 +188,6 @@ def crawl_bazzarry(session: requests.Session, max_pages: int) -> list[dict]:
                     "source": "Bazzarry",
                     "sourceUrl": url,
                 }
-        # Magento-like pagination.
         soup = BeautifulSoup(html, "html.parser")
         for a in soup.select("a.next, .pages-item-next a, a[rel='next']"):
             nxt = urljoin(url, a.get("href", ""))
@@ -161,6 +204,12 @@ def crawl_generic(session: requests.Session, base_urls: Iterable[str], limit: in
         if not isinstance(html, str):
             continue
         soup = BeautifulSoup(html, "html.parser")
+        links = []
+        for a in soup.select("a[href]"):
+            href = urljoin(base, a.get("href", ""))
+            txt = a.get_text(" ", strip=True)
+            if href.startswith("http") and same_domain(href, base) and txt:
+                links.append((txt, href))
         for img in soup.select("img"):
             src = img.get("src") or img.get("data-src") or img.get("data-lazy-src")
             if not src:
@@ -175,15 +224,20 @@ def crawl_generic(session: requests.Session, base_urls: Iterable[str], limit: in
             key = norm(name)
             if len(key) < 4:
                 continue
-            found[key] = {
-                "name": name,
-                "productUrl": base,
-                "imageUrl": src,
-                "source": urlparse(base).netloc,
-                "sourceUrl": base,
-            }
+            found[key] = {"name": name, "productUrl": base, "imageUrl": src, "source": urlparse(base).netloc, "sourceUrl": base}
             if len(found) >= limit:
                 break
+        for name, href in links[:limit]:
+            if len(found) >= limit:
+                break
+            if not any(token in norm(name) for token in ("بسك", "شوك", "حليب", "مكر", "ارز", "أرز", "تونة", "زيت", "سكر", "تمر", "قهوة", "شاي", "milk", "rice", "pasta", "biscuit", "chocolate", "tuna", "beans")):
+                continue
+            detail = fetch(session, href, timeout=20)
+            if not isinstance(detail, str):
+                continue
+            image = extract_page_image(detail, href)
+            if image:
+                found[norm(name)] = {"name": name, "productUrl": href, "imageUrl": image, "source": urlparse(base).netloc, "sourceUrl": base}
     return list(found.values())
 
 
@@ -198,7 +252,6 @@ def build_catalog(seed: list[dict], discovered: list[dict]) -> list[dict]:
             if item["imageUrl"] not in exact["imageUrls"]:
                 exact["imageUrls"].append(item["imageUrl"])
             continue
-        # Only auto-add products carrying clear food-ish keywords.
         food_words = [
             "بسك", "شوك", "حليب", "مكر", "ارز", "أرز", "تونة", "فول", "صلصة", "زيت",
             "سكر", "عسل", "تمر", "ويفر", "كيك", "قهوة", "شاي", "juice", "milk", "rice",
@@ -358,7 +411,6 @@ def main() -> None:
                 continue
         if not ims:
             continue
-        # Bound memory while keeping multiple viewpoints per SKU.
         emb_parts: list[np.ndarray] = []
         for s in range(0, len(ims), 16):
             emb_parts.append(infer(ort_session, ims[s : s + 16]))
