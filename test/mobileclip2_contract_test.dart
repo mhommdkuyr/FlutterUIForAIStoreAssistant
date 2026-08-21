@@ -8,8 +8,8 @@ Map<String, dynamic> _actualMetadata() => {
       'embedding_dimension': 512,
       'input_size': [224, 224],
       'normalization': {
-        'mean': [0.48145466, 0.4578275, 0.40821073],
-        'std': [0.26862954, 0.26130258, 0.27577711],
+        'mean': [0.0, 0.0, 0.0],
+        'std': [1.0, 1.0, 1.0],
       },
       'l2_normalized_required': true,
       'onnx_opset': 18,
@@ -17,12 +17,12 @@ Map<String, dynamic> _actualMetadata() => {
 
 void main() {
   group('MobileClip2ModelContract actual metadata schema', () {
-    test('parses [224,224] input_size and nested normalization', () {
+    test('parses [224,224] input_size and official S0 normalization', () {
       final contract = MobileClip2ModelContract.fromJson(_actualMetadata());
       expect(contract.inputSize, 224);
       expect(contract.layout, isNull);
-      expect(contract.mean, [0.48145466, 0.4578275, 0.40821073]);
-      expect(contract.std, [0.26862954, 0.26130258, 0.27577711]);
+      expect(contract.mean, [0.0, 0.0, 0.0]);
+      expect(contract.std, [1.0, 1.0, 1.0]);
     });
 
     test('requires 512 dimension, l2_normalized_required=true, and opset=18', () {
@@ -43,8 +43,8 @@ void main() {
     test('modified mean fails closed', () {
       final invalid = _actualMetadata();
       invalid['normalization'] = {
-        'mean': [0.48145566, 0.4578275, 0.40821073],
-        'std': [0.26862954, 0.26130258, 0.27577711],
+        'mean': [0.000001, 0.0, 0.0],
+        'std': [1.0, 1.0, 1.0],
       };
       expect(() => MobileClip2ModelContract.fromJson(invalid), throwsStateError);
     });
@@ -52,8 +52,8 @@ void main() {
     test('modified std fails closed', () {
       final invalid = _actualMetadata();
       invalid['normalization'] = {
-        'mean': [0.48145466, 0.4578275, 0.40821073],
-        'std': [0.26862954, 0.26130358, 0.27577711],
+        'mean': [0.0, 0.0, 0.0],
+        'std': [1.000001, 1.0, 1.0],
       };
       expect(() => MobileClip2ModelContract.fromJson(invalid), throwsStateError);
     });
@@ -74,7 +74,7 @@ void main() {
       final invalidStd = _actualMetadata();
       invalidStd['normalization'] = {
         'mean': [0.1, 0.2, 0.3],
-        'std': [0.2, 0.0, 0.2],
+        'std': [1.0, 0.0, 1.0],
       };
       expect(() => MobileClip2ModelContract.fromJson(invalidStd), throwsStateError);
     });
