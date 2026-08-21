@@ -9,6 +9,7 @@ import '../../features/merchant/screens/merchant_dashboard_screen.dart';
 import '../../features/worker/screens/worker_dashboard_screen.dart';
 import '../../features/customer/screens/customer_search_screen.dart';
 import '../../features/inventory/screens/inventory_screen.dart';
+import '../../features/inventory/screens/yemen_catalog_screen.dart';
 import '../../features/product_scanner/screens/scanner_screen.dart';
 import '../../features/product_scanner/screens/live_scanner_screen.dart';
 import '../../features/sales/screens/invoice_screen.dart';
@@ -28,25 +29,10 @@ class AppRouter {
     initialLocation: '/splash',
     debugLogDiagnostics: false,
     routes: [
-      // ── Onboarding ──────────────────────────────────────────────────────
-      GoRoute(
-        path: '/splash',
-        builder: (context, state) => const SplashScreen(),
-      ),
-      GoRoute(
-        path: '/welcome',
-        builder: (context, state) => const WelcomeScreen(),
-      ),
-      GoRoute(
-        path: '/account-type',
-        builder: (context, state) => const AccountTypeScreen(),
-      ),
-
-      // ── Authentication ──────────────────────────────────────────────────
-      GoRoute(
-        path: '/login',
-        builder: (context, state) => const LoginScreen(),
-      ),
+      GoRoute(path: '/splash', builder: (context, state) => const SplashScreen()),
+      GoRoute(path: '/welcome', builder: (context, state) => const WelcomeScreen()),
+      GoRoute(path: '/account-type', builder: (context, state) => const AccountTypeScreen()),
+      GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
       GoRoute(
         path: '/register',
         builder: (context, state) {
@@ -55,30 +41,11 @@ class AppRouter {
           return RegisterScreen(role: role);
         },
       ),
-
-      // ── Merchant ────────────────────────────────────────────────────────
-      GoRoute(
-        path: '/merchant/dashboard',
-        builder: (context, state) => const MerchantDashboardScreen(),
-      ),
-
-      // ── Worker ──────────────────────────────────────────────────────────
-      GoRoute(
-        path: '/worker/dashboard',
-        builder: (context, state) => const WorkerDashboardScreen(),
-      ),
-
-      // ── Customer ────────────────────────────────────────────────────────
-      GoRoute(
-        path: '/customer/search',
-        builder: (context, state) => const CustomerSearchScreen(),
-      ),
-
-      // ── Shared features ─────────────────────────────────────────────────
-      GoRoute(
-        path: '/inventory',
-        builder: (context, state) => const InventoryScreen(),
-      ),
+      GoRoute(path: '/merchant/dashboard', builder: (context, state) => const MerchantDashboardScreen()),
+      GoRoute(path: '/worker/dashboard', builder: (context, state) => const WorkerDashboardScreen()),
+      GoRoute(path: '/customer/search', builder: (context, state) => const CustomerSearchScreen()),
+      GoRoute(path: '/inventory', builder: (context, state) => const InventoryScreen()),
+      GoRoute(path: '/inventory/yemen-catalog', builder: (context, state) => const YemenCatalogScreen()),
       GoRoute(
         path: '/scanner',
         builder: (context, state) {
@@ -86,17 +53,13 @@ class AppRouter {
           return ScannerScreen(initialBarcode: extra?['barcode'] as String?);
         },
       ),
-      GoRoute(
-        path: '/scanner/live',
-        builder: (context, state) => const LiveScannerScreen(),
-      ),
+      GoRoute(path: '/scanner/live', builder: (context, state) => const LiveScannerScreen()),
       GoRoute(
         path: '/invoice',
         builder: (context, state) {
           final extra = state.extra as Map<String, dynamic>?;
           final rawItems = extra?['cartItems'] as List<dynamic>?;
-          final items =
-              rawItems?.map((e) => e as Map<String, dynamic>).toList() ?? [];
+          final items = rawItems?.map((e) => e as Map<String, dynamic>).toList() ?? [];
           return InvoiceScreen(initialItems: items);
         },
       ),
@@ -105,38 +68,17 @@ class AppRouter {
         builder: (context, state) {
           final extra = state.extra as Map<String, dynamic>?;
           final rawItems = extra?['cartItems'] as List<dynamic>?;
-          final cartItems =
-              rawItems?.map((e) => e as Map<String, dynamic>).toList();
+          final cartItems = rawItems?.map((e) => e as Map<String, dynamic>).toList();
           return SalesScreen(initialCartItems: cartItems);
         },
       ),
-      GoRoute(
-        path: '/debts',
-        builder: (context, state) => const DebtsScreen(),
-      ),
-      GoRoute(
-        path: '/analytics',
-        builder: (context, state) => const AnalyticsScreen(),
-      ),
-      GoRoute(
-        path: '/branches',
-        builder: (context, state) => const BranchesScreen(),
-      ),
-      GoRoute(
-        path: '/marketing',
-        builder: (context, state) => const MarketingScreen(),
-      ),
-      GoRoute(
-        path: '/ai-assistant',
-        builder: (context, state) => const AiChatScreen(),
-      ),
-      GoRoute(
-        path: '/settings',
-        builder: (context, state) => const SettingsScreen(),
-      ),
+      GoRoute(path: '/debts', builder: (context, state) => const DebtsScreen()),
+      GoRoute(path: '/analytics', builder: (context, state) => const AnalyticsScreen()),
+      GoRoute(path: '/branches', builder: (context, state) => const BranchesScreen()),
+      GoRoute(path: '/marketing', builder: (context, state) => const MarketingScreen()),
+      GoRoute(path: '/ai-assistant', builder: (context, state) => const AiChatScreen()),
+      GoRoute(path: '/settings', builder: (context, state) => const SettingsScreen()),
     ],
-
-    // Global error page
     errorBuilder: (context, state) => Scaffold(
       body: Center(
         child: Column(
@@ -144,15 +86,11 @@ class AppRouter {
           children: [
             const Icon(Icons.error_outline_rounded, size: 64),
             const SizedBox(height: 16),
-            Text(context.tr.pageNotFound,
-                style: Theme.of(context).textTheme.titleLarge),
+            Text(context.tr.pageNotFound, style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: 8),
             Text(state.uri.path, style: Theme.of(context).textTheme.bodySmall),
             const SizedBox(height: 24),
-            ElevatedButton(
-              onPressed: () => context.go('/splash'),
-              child: Text(context.tr.goHome),
-            ),
+            ElevatedButton(onPressed: () => context.go('/splash'), child: Text(context.tr.goHome)),
           ],
         ),
       ),
