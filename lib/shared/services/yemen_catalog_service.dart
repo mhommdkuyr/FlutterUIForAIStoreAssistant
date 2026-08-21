@@ -48,22 +48,30 @@ class YemenCatalogItem {
 
 class YemenCatalogService {
   static const assetPath = 'data/yemen_food_catalog_seed.json';
+  static const trainedAdditionsAssetPath =
+      'data/yemen_food_catalog_trained_additions.json';
 
   Future<List<YemenCatalogItem>> load() async {
-    final raw = await rootBundle.loadString(assetPath);
-    final decoded = jsonDecode(raw);
-    if (decoded is! Map<String, dynamic>) {
-      throw const FormatException('Invalid Yemen catalog root object.');
+    final docs = await Future.wait([
+      rootBundle.loadString(assetPath),
+      rootBundle.loadString(trainedAdditionsAssetPath),
+    ]);
+    final merged = <String, YemenCatalogItem>{};
+    for (final raw in docs) {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map<String, dynamic>) {
+        throw const FormatException('Invalid Yemen catalog root object.');
+      }
+      final products = decoded['products'];
+      if (products is! List) {
+        throw const FormatException('Yemen catalog products array is missing.');
+      }
+      for (final json in products.whereType<Map<String, dynamic>>()) {
+        final item = YemenCatalogItem.fromJson(json);
+        if (item.nameAr.isNotEmpty) merged[item.id] = item;
+      }
     }
-    final products = decoded['products'];
-    if (products is! List) {
-      throw const FormatException('Yemen catalog products array is missing.');
-    }
-    return products
-        .whereType<Map<String, dynamic>>()
-        .map(YemenCatalogItem.fromJson)
-        .where((p) => p.nameAr.isNotEmpty)
-        .toList(growable: false);
+    return merged.values.toList(growable: false);
   }
 
   List<YemenCatalogItem> filter(
@@ -77,8 +85,9 @@ class YemenCatalogService {
         return false;
       }
       if (q.isEmpty) return true;
-      final haystack = '${item.nameAr} ${item.brand} ${item.category} ${item.packSize}'
-          .toLowerCase();
+      final haystack =
+          '${item.nameAr} ${item.brand} ${item.category} ${item.packSize}'
+              .toLowerCase();
       return haystack.contains(q);
     }).toList(growable: false);
   }
