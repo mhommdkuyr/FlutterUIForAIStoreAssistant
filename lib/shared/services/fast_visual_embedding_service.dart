@@ -13,11 +13,6 @@ import 'package:path_provider/path_provider.dart';
 import 'visual_embedding_service.dart';
 
 /// MobileCLIP2 runtime specialized for continuous Android live scanning.
-///
-/// It keeps the verified model contract, external-data loading, fail-closed
-/// semantics, serialized inference, and L2-normalized 512-D output, while
-/// optimizing camera preprocessing and ONNX session execution for repeated
-/// short inferences.
 class FastMobileVisionEmbeddingService implements VisualEmbeddingService {
   static const assetPath =
       'assets/models/mobileclip2/mobileclip2_s0_vision.onnx';
@@ -26,7 +21,7 @@ class FastMobileVisionEmbeddingService implements VisualEmbeddingService {
   static const metadataAssetPath =
       'assets/models/mobileclip2/model_metadata.json';
   static const modelContractVersion =
-      'mobileclip2_s0_vision_onnx_v2_fastscan';
+      'mobileclip2_s0_vision_onnx_v3_fastscan_official_preprocess';
 
   final OnnxRuntime _runtime = OnnxRuntime();
   OrtSession? _session;
@@ -59,8 +54,33 @@ class FastMobileVisionEmbeddingService implements VisualEmbeddingService {
     _disposed = false;
     try {
       final raw = await rootBundle.loadString(metadataAssetPath);
-      _contract = MobileClip2ModelContract.fromJson(
-        jsonDecode(raw) as Map<String, dynamic>,
+      final metadata = jsonDecode(raw) as Map<String, dynamic>;
+      final inputSize = metadata['input_size'];
+      final normalization = metadata['normalization'];
+      if (inputSize is! List || inputSize.length != 2 ||
+          inputSize[0] != 224 || inputSize[1] != 224 ||
+          normalization is! Map<String, dynamic>) {
+        throw StateError('MobileCLIP2-S0 runtime metadata is invalid.');
+      }
+      final mean = (normalization['mean'] as List?)?.map((v) => (v as num).toDouble()).toList();
+      final std = (normalization['std'] as List?)?.map((v) => (v as num).toDouble()).toList();
+      if (mean == null || std == null || mean.length != 3 || std.length != 3 ||
+          mean.any((v) => v != 0.0) || std.any((v) => v != 1.0) ||
+          metadata['embedding_dimension'] != 512 ||
+          metadata['l2_normalized_required'] != true ||
+          metadata['onnx_opset'] != 18) {
+        throw StateError(
+          'MobileCLIP2-S0 runtime metadata must use 224x224, RGB [0,1], '
+          'mean=(0,0,0), std=(1,1,1), 512-D output and opset 18.',
+        );
+      }
+      _contract = MobileClip2ModelContract(
+        inputSize: 224,
+        mean: const [0.0, 0.0, 0.0],
+        std: const [1.0, 1.0, 1.0],
+        embeddingDimensions: 512,
+        l2NormalizedRequired: true,
+        onnxOpset: 18,
       );
 
       final modelAsset = await rootBundle.load(assetPath);
@@ -131,11 +151,11 @@ class FastMobileVisionEmbeddingService implements VisualEmbeddingService {
         final outputShape = _readShape(outputInfo, _outputName!, 'output');
         final layout = MobileClip2ModelContract.detectGraphLayout(
           inputShape,
-          _contract!.inputSize,
+          224,
         );
         if (!MobileClip2ModelContract.isSingleEmbeddingShape(
           outputShape,
-          _contract!.embeddingDimensions,
+          512,
         )) {
           throw StateError(
             'MobileCLIP2 output shape $outputShape must be [1,512].',
@@ -189,10 +209,10 @@ class FastMobileVisionEmbeddingService implements VisualEmbeddingService {
   Future<void> _smokeTest(OrtSession session) async {
     final contract = _requireContract();
     final shape = contract.layout == 'NHWC'
-        ? [1, contract.inputSize, contract.inputSize, 3]
-        : [1, 3, contract.inputSize, contract.inputSize];
+        ? [1, 224, 224, 3]
+        : [1, 3, 224, 224];
     final input = await OrtValue.fromList(
-      Float32List(contract.inputSize * contract.inputSize * 3),
+      Float32List(224 * 224 * 3),
       shape,
     );
     Map<String, OrtValue>? outputs;
@@ -251,7 +271,6 @@ class FastMobileVisionEmbeddingService implements VisualEmbeddingService {
     }
   }
 
-  /// Camera inference with explicit clockwise rotation correction.
   Future<Uint8List?> embedFrameWithRotation(
     CameraImage image, {
     int rotationDegrees = 0,
@@ -299,10 +318,12 @@ class FastMobileVisionEmbeddingService implements VisualEmbeddingService {
   }
 
   Float32List _yuvTensor(CameraImage image, int rotationDegrees) {
-    final contract = _requireContract();
-    final size = contract.inputSize;
+    final size = 224;
     final width = image.width;
     final height = image.height;
+    if (width <= 0 || height <= 0 || image.planes.length < 3) {
+      throw StateError('Invalid YUV420 camera frame dimensions/planes.');
+    }
     final cropSize = min(width, height);
     final left = (width - cropSize) ~/ 2;
     final top = (height - cropSize) ~/ 2;
@@ -362,10 +383,12 @@ class FastMobileVisionEmbeddingService implements VisualEmbeddingService {
   }
 
   Float32List _bgraTensor(CameraImage image, int rotationDegrees) {
-    final contract = _requireContract();
-    final size = contract.inputSize;
+    final size = 224;
     final width = image.width;
     final height = image.height;
+    if (width <= 0 || height <= 0 || image.planes.isEmpty) {
+      throw StateError('Invalid BGRA camera frame dimensions/planes.');
+    }
     final cropSize = min(width, height);
     final left = (width - cropSize) ~/ 2;
     final top = (height - cropSize) ~/ 2;
@@ -425,23 +448,20 @@ class FastMobileVisionEmbeddingService implements VisualEmbeddingService {
     double g,
     double b,
   ) {
-    final contract = _requireContract();
-    final values = [
-      (r / 255.0 - contract.mean[0]) / contract.std[0],
-      (g / 255.0 - contract.mean[1]) / contract.std[1],
-      (b / 255.0 - contract.mean[2]) / contract.std[2],
-    ];
-    if (contract.layout == 'NHWC') {
-      final base = (row * contract.inputSize + column) * 3;
-      tensor[base] = values[0];
-      tensor[base + 1] = values[1];
-      tensor[base + 2] = values[2];
+    final rv = r / 255.0;
+    final gv = g / 255.0;
+    final bv = b / 255.0;
+    final base = row * 224 + column;
+    if (_contract?.layout == 'NHWC') {
+      final offset = base * 3;
+      tensor[offset] = rv;
+      tensor[offset + 1] = gv;
+      tensor[offset + 2] = bv;
     } else {
-      final planeSize = contract.inputSize * contract.inputSize;
-      final offset = row * contract.inputSize + column;
-      tensor[offset] = values[0];
-      tensor[planeSize + offset] = values[1];
-      tensor[(planeSize * 2) + offset] = values[2];
+      final planeSize = 224 * 224;
+      tensor[base] = rv;
+      tensor[planeSize + base] = gv;
+      tensor[(planeSize * 2) + base] = bv;
     }
   }
 
@@ -471,8 +491,8 @@ class FastMobileVisionEmbeddingService implements VisualEmbeddingService {
     }
 
     final shape = contract.layout == 'NHWC'
-        ? [1, contract.inputSize, contract.inputSize, 3]
-        : [1, 3, contract.inputSize, contract.inputSize];
+        ? [1, 224, 224, 3]
+        : [1, 3, 224, 224];
     final input = await OrtValue.fromList(tensor, shape);
     Map<String, OrtValue>? outputs;
     try {
@@ -560,7 +580,6 @@ class FastMobileVisionEmbeddingService implements VisualEmbeddingService {
   }
 }
 
-/// Adapter for the existing VisualEmbeddingProvider contract.
 class FastVisualEmbeddingProvider extends VisualEmbeddingProvider {
   final FastMobileVisionEmbeddingService _fast =
       FastMobileVisionEmbeddingService();
