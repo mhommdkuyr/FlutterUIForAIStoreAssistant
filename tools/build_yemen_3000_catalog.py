@@ -1,19 +1,20 @@
 #!/usr/bin/env python3
 """Build and enroll an exact 3000-SKU grocery visual catalog."""
 from __future__ import annotations
-import argparse, csv, io, json, os, random, re, time, unicodedata
+import argparse, csv, gzip, io, json, os, random, re, time, unicodedata
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 import numpy as np
 import onnxruntime as ort
 import requests
 from PIL import Image, ImageEnhance, ImageFilter, ImageOps
+from bson import decode_file_iter
 ROOT=Path(__file__).resolve().parents[1]
 MODEL=ROOT/'assets/models/mobileclip2/mobileclip2_s0_vision.onnx'; MODEL_DATA=ROOT/'assets/models/mobileclip2/mobileclip2_s0_vision.onnx.data'; SEED=ROOT/'data/yemen_food_catalog_seed.json'; OUT=ROOT/'build/yemen_food_catalog'
-UA='AIStoreAssistant-YemenCatalog/2.7'; IMG='https://images.openfoodfacts.org/images/products'
+UA='AIStoreAssistant-YemenCatalog/2.8'; IMG='https://images.openfoodfacts.org/images/products'
 
 def norm(s):
- s=unicodedata.normalize('NFKD',str(s or '')); s=''.join(c for c in s if not unicodedata.combining(c)); s=re.sub(r'[\u064B-\u065F\u0670]','',s).lower(); return re.sub(r'[^\w\u0600-\u06ff]+',' ',s).strip()
+ s=unicodedata.normalize('NFKD',str(s or ''));s=''.join(c for c in s if not unicodedata.combining(c));s=re.sub(r'[\u064B-\u065F\u0670]','',s).lower();return re.sub(r'[^\w\u0600-\u06ff]+',' ',s).strip()
 
 def first_value(v):
  if isinstance(v,str):return v.strip()
@@ -61,11 +62,9 @@ def merge_value(existing,new):
  if not existing:return new
  if isinstance(existing,dict) and isinstance(new,dict):
   merged=dict(existing)
-  for k,v in new.items():
-   merged[k]=merge_value(merged.get(k),v)
+  for k,v in new.items():merged[k]=merge_value(merged.get(k),v)
   return merged
- if isinstance(existing,list) and isinstance(new,list):
-  return existing+ [x for x in new if x not in existing]
+ if isinstance(existing,list) and isinstance(new,list):return existing+[x for x in new if x not in existing]
  return existing
 
 def flatten_records(obj):
@@ -83,64 +82,78 @@ def flatten_records(obj):
 
 def parse_file(path):
  suffix=path.suffix.lower()
- try:
-  with path.open('rb') as fh:
-   first=fh.read(4)
-   if len(first)==4:
-    size=int.from_bytes(first,'little')
-    if 16<=size<=max(path.stat().st_size,16):
-     with path.open('rb') as fh2:
-      for doc in __import__('bson').decode_file_iter(fh2):yield doc
-     return
- except Exception:pass
- if suffix in ('.json','.jsonl','.ndjson') or suffix=='':
+ if suffix=='.jsonl' or suffix=='.ndjson':
+  with path.open('r',encoding='utf-8',errors='ignore') as fh:
+   for line in fh:
+    if not line.strip():continue
+    try:obj=json.loads(line)
+    except Exception:continue
+    yield from flatten_records(obj)
+  return
+ if suffix=='.gz' and path.name.endswith('.jsonl.gz'):
+  with gzip.open(path,'rt',encoding='utf-8',errors='ignore') as fh:
+   for line in fh:
+    if not line.strip():continue
+    try:obj=json.loads(line)
+    except Exception:continue
+    yield from flatten_records(obj)
+  return
+ if suffix in ('.json',''):
   try:
    text=path.read_text(encoding='utf-8',errors='ignore');stripped=text.lstrip()
    if stripped.startswith('{') or stripped.startswith('['):yield from flatten_records(json.loads(text));return
   except Exception:pass
   try:
-   with path.open('r',encoding='utf-8',errors='ignore') as fh:
-    for line in fh:
-     line=line.strip()
-     if not line:continue
-     try:obj=json.loads(line)
-     except Exception:continue
-     yield from flatten_records(obj)
-    return
+   with path.open('rb') as fh:
+    first=fh.read(4)
+    if len(first)==4:
+     size=int.from_bytes(first,'little')
+     if 16<=size<=max(path.stat().st_size,16):
+      with path.open('rb') as fh2:
+       for doc in decode_file_iter(fh2):yield doc
+      return
   except Exception:pass
  if suffix=='.csv':
   with path.open('r',encoding='utf-8',errors='ignore',newline='') as fh:
    for row in csv.DictReader(fh):yield dict(row)
 
-def bson_products(sample_root,target):
+def iter_off_records(sample_root):
+ root=Path(sample_root)
+ jsonl=list(root.rglob('*.jsonl'))
+ if jsonl:
+  for f in jsonl:yield from parse_file(f)
+  return
+ # Support the official Mongo-style directory export as fallback.
+ for f in root.rglob('*.json'):
+  if f.name in ('changes.json','scans.json'):continue
+  for row in parse_file(f):yield row
+
+def off_products(target):
  grouped={}
- files=[f for f in Path(sample_root).rglob('*') if f.is_file() and f.name not in ('changes.json','scans.json')]
- if not files:raise RuntimeError(f'No product files found under {sample_root}')
- for pf in files:
-  path_code=barcode_from_path(pf.parent)
-  try: rows=list(parse_file(pf))
-  except Exception: rows=[]
-  for p in rows:
-   if not isinstance(p,dict):continue
-   code=str(p.get('code') or p.get('_id') or path_code or '').strip()
-   if not code:continue
-   rec=grouped.setdefault(re.sub(r'\D','',code),{})
-   for k,v in p.items():rec[k]=merge_value(rec.get(k),v)
+ for p in iter_off_records(os.environ.get('OFF_SAMPLE_ROOT','')):
+  if not isinstance(p,dict):continue
+  code=str(p.get('code') or p.get('_id') or '').strip()
+  if not code:continue
+  code_digits=re.sub(r'\D','',code)
+  rec=grouped.setdefault(code_digits,{})
+  for k,v in p.items():rec[k]=merge_value(rec.get(k),v)
  out=[]
  for code,p in grouped.items():
   name=first_value(p.get('product_name')) or first_value(p.get('generic_name'))
   if not code or not name:continue
-  image_id=extract_image_id(p.get('images'))
-  image=barcode_image_url(code,image_id or '1')
-  if not image:continue
+  image=(p.get('image_front_url') or p.get('image_front_small_url') or p.get('image_front_thumb_url') or '').strip()
+  if not image:
+   image_id=extract_image_id(p.get('images'))
+   image=barcode_image_url(code,image_id or '1')
+  if not image or not image.startswith('http'):continue
   cats=p.get('categories_tags') or [];cat=first_value(cats[0] if cats else '') or 'مواد غذائية'
-  out.append({'id':'off-'+re.sub(r'[^0-9A-Za-z_-]','',code),'nameAr':name,'brand':first_value(p.get('brands')),'category':cat.replace('en:','').replace('-',' '),'packSize':first_value(p.get('quantity')),'source':'Open Food Facts 10000-product sample','sourceUrl':f'https://world.openfoodfacts.org/product/{code}','sourceType':'open_food_facts_sample','imageUrls':[image],'barcode':code,'priceYER':None,'openingQuantity':None})
+  out.append({'id':'off-'+re.sub(r'[^0-9A-Za-z_-]','',code),'nameAr':name,'brand':first_value(p.get('brands')),'category':cat.replace('en:','').replace('-',' '),'packSize':first_value(p.get('quantity')),'source':'Open Food Facts 10000-product JSONL sample','sourceUrl':f'https://world.openfoodfacts.org/product/{code}','sourceType':'open_food_facts_jsonl','imageUrls':[image],'barcode':code,'priceYER':None,'openingQuantity':None})
   if len(out)>=target:return out
  return out
 
 def fallback_products(target):
- found=bson_products(os.environ.get('OFF_SAMPLE_ROOT',''),target)
- if len(found)<target:raise RuntimeError(f'Official sample yielded only {len(found)} merged image-backed products; expected {target}')
+ found=off_products(target)
+ if len(found)<target:raise RuntimeError(f'Open Food Facts sample yielded only {len(found)} image-backed products; expected {target}')
  return found
 
 def choose_catalog(target):
@@ -208,6 +221,6 @@ def main():
   if idx%100==0:print(f'embedded {idx}/{len(catalog)}',flush=True)
  if len(trained)<a.target_products:raise SystemExit(f'Only {len(trained)} products have usable images; refusing to publish <{a.target_products}')
  matrix=np.stack(centroids);matrix.astype(np.float16).tofile(OUT/'catalog_centroids.f16');(OUT/'catalog_labels.json').write_text(json.dumps(trained,ensure_ascii=False),encoding='utf-8');(OUT/'catalog.json').write_text(json.dumps(catalog,ensure_ascii=False,indent=2),encoding='utf-8')
- stats={'targetProducts':a.target_products,'catalogProducts':len(catalog),'trainedProducts':len(trained),'embeddingDimension':512,'storedVectors':int(matrix.shape[0]),'referenceVariantsPerTrainedProduct':a.augments+1,'hydratedImages':hydrated,'encoder':'MobileCLIP2-S0 Vision ONNX','catalogImageSources':['Yemen seed catalog','Open Food Facts 10000-product sample'],'rights':'Open Food Facts data is ODbL and product images CC-BY-SA; preserve attribution and comply with licenses before commercial redistribution.','embeddingSeconds':round(time.perf_counter()-t0,2),'builtAt':time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime())}
- (OUT/'build_stats.json').write_text(json.dumps(stats,ensure_ascii=False,indent=2),encoding='utf-8');(OUT/'source_licenses.md').write_text('# Provenance and licenses\n\nFallback products are from the official Open Food Facts 10,000-product sample. Data is ODbL and product images CC-BY-SA; preserve attribution and comply with applicable licenses before commercial redistribution.\n',encoding='utf-8');print(json.dumps(stats,ensure_ascii=False,indent=2))
+ stats={'targetProducts':a.target_products,'catalogProducts':len(catalog),'trainedProducts':len(trained),'embeddingDimension':512,'storedVectors':int(matrix.shape[0]),'referenceVariantsPerTrainedProduct':a.augments+1,'hydratedImages':hydrated,'encoder':'MobileCLIP2-S0 Vision ONNX','catalogImageSources':['Yemen seed catalog','Open Food Facts 10000-product JSONL sample'],'rights':'Open Food Facts data is ODbL and product images CC-BY-SA; preserve attribution and comply with licenses before commercial redistribution.','embeddingSeconds':round(time.perf_counter()-t0,2),'builtAt':time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime())}
+ (OUT/'build_stats.json').write_text(json.dumps(stats,ensure_ascii=False,indent=2),encoding='utf-8');(OUT/'source_licenses.md').write_text('# Provenance and licenses\n\nFallback products are from Open Food Facts 10,000-product JSONL sample. Data is ODbL and product images CC-BY-SA; preserve attribution and comply with applicable licenses before commercial redistribution.\n',encoding='utf-8');print(json.dumps(stats,ensure_ascii=False,indent=2))
 if __name__=='__main__':main()
