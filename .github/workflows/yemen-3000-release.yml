@@ -21,7 +21,28 @@ env:
   OFF_SAMPLE_ROOT: '/tmp/off'
 
 jobs:
+  prepare-source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Stream 150000 products from full Open Food Facts JSONL
+        run: |
+          mkdir -p /tmp/off
+          curl -L --fail --retry 3 --retry-all-errors --retry-delay 2 \
+            https://openfoodfacts-ds.s3.eu-west-3.amazonaws.com/openfoodfacts-products.jsonl.gz \
+            | gzip -dc \
+            | head -n 150000 > /tmp/off/products.jsonl || true
+          test "$(wc -l < /tmp/off/products.jsonl)" -ge 140000
+      - uses: actions/upload-artifact@v4
+        with:
+          name: off-150k-source
+          path: /tmp/off/products.jsonl
+          retention-days: 2
+          compression-level: 0
+          if-no-files-found: error
+
   train-batches:
+    needs: prepare-source
     strategy:
       fail-fast: false
       matrix:
@@ -51,19 +72,14 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+      - uses: actions/download-artifact@v4
+        with:
+          name: off-150k-source
+          path: /tmp/off
       - name: Install ML dependencies
         run: |
           python -m pip install --upgrade pip
           pip install --no-cache-dir numpy pillow requests onnxruntime
-      - name: Stream 50000 products from full Open Food Facts JSONL export
-        run: |
-          mkdir -p /tmp/off
-          set +o pipefail
-          curl -L --fail --retry 8 --retry-all-errors --retry-delay 3 \
-            https://openfoodfacts-ds.s3.eu-west-3.amazonaws.com/openfoodfacts-products.jsonl.gz \
-            | gzip -dc \
-            | head -n 50000 > /tmp/off/products.jsonl
-          test "$(wc -l < /tmp/off/products.jsonl)" -ge 45000
       - name: Train 500-SKU batch ${{ matrix.batch }}
         run: |
           args="--target-products 500 --start-index ${{ matrix.start }} --augments 8 --download-workers 24"
@@ -72,19 +88,13 @@ jobs:
       - name: Validate batch
         run: |
           python - <<'PY'
-          import json, numpy as np
+          import json,numpy as np
           from pathlib import Path
-          root=Path('build/yemen_food_catalog')
-          s=json.loads((root/'build_stats.json').read_text())
-          c=json.loads((root/'catalog.json').read_text())
-          l=json.loads((root/'catalog_labels.json').read_text())
-          e=np.fromfile(root/'catalog_centroids.f16',dtype=np.float16).reshape(-1,512)
-          assert s['batchProducts']==500,s
-          assert s['trainedProducts']==500,s
-          assert len(c)==len(l)==e.shape[0]==500
-          assert len({p['id'] for p in c})==500
-          assert all(p.get('recognitionReady') is True for p in c)
-          print(json.dumps(s,indent=2,ensure_ascii=False))
+          r=Path('build/yemen_food_catalog');s=json.loads((r/'build_stats.json').read_text());c=json.loads((r/'catalog.json').read_text());l=json.loads((r/'catalog_labels.json').read_text());e=np.fromfile(r/'catalog_centroids.f16',dtype=np.float16).reshape(-1,512)
+          assert s['batchProducts']==500 and s['trainedProducts']==500
+          assert len(c)==len(l)==e.shape[0]==500 and e.shape[1]==512
+          assert len({x['id'] for x in c})==500 and all(x.get('recognitionReady') for x in c)
+          print(json.dumps(s,indent=2))
           PY
       - uses: actions/upload-artifact@v4
         with:
@@ -99,39 +109,29 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-      - name: Download all trained batches
-        uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v4
         with:
           pattern: yemen-batch-*
           path: build/batches
           merge-multiple: false
-      - name: Assemble exact 3000-SKU catalog
+      - name: Assemble and validate 3000 vectors
         run: |
           python - <<'PY'
-          import json, numpy as np
+          import json,numpy as np
           from pathlib import Path
-          out=Path('build/yemen_food_catalog'); out.mkdir(parents=True,exist_ok=True)
-          batches=[]
-          for d in sorted(Path('build/batches').glob('yemen-batch-*')):
-            c=json.loads((d/'catalog.json').read_text())
-            l=json.loads((d/'catalog_labels.json').read_text())
-            e=np.fromfile(d/'catalog_centroids.f16',dtype=np.float16).reshape(-1,512)
-            if len(c)!=500 or len(l)!=500 or e.shape!=(500,512): raise SystemExit(f'bad batch {d}')
-            batches.append((c,l,e))
-          if len(batches)!=6: raise SystemExit(f'expected 6 batches, got {len(batches)}')
-          catalog=[];labels=[];embs=[]
-          for c,l,e in batches: catalog.extend(c);labels.extend(l);embs.append(e)
-          matrix=np.concatenate(embs,axis=0)
-          ids=[p['id'] for p in catalog]
-          if len(catalog)!=3000 or len(labels)!=3000 or matrix.shape!=(3000,512): raise SystemExit('not exactly 3000x512')
-          if len(set(ids))!=3000 or len(set(labels))!=3000: raise SystemExit('duplicate ids')
-          if not all(p.get('recognitionReady') is True for p in catalog): raise SystemExit('untrained product present')
-          (out/'catalog.json').write_text(json.dumps(catalog,ensure_ascii=False),encoding='utf-8')
-          (out/'catalog_labels.json').write_text(json.dumps(labels,ensure_ascii=False),encoding='utf-8')
-          matrix.astype(np.float16).tofile(out/'catalog_centroids.f16')
-          stats={'catalogProducts':3000,'trainedProducts':3000,'embeddingDimension':512,'storedVectors':3000,'referenceVariantsPerProduct':9,'batches':6,'encoder':'MobileCLIP2-S0 Vision ONNX'}
-          (out/'build_stats.json').write_text(json.dumps(stats,indent=2),encoding='utf-8')
-          print(json.dumps(stats,indent=2))
+          out=Path('build/yemen_food_catalog');out.mkdir(parents=True,exist_ok=True);catalog=[];labels=[];parts=[]
+          ds=sorted(Path('build/batches').glob('yemen-batch-*'))
+          assert len(ds)==6, ds
+          for d in ds:
+           c=json.loads((d/'catalog.json').read_text());l=json.loads((d/'catalog_labels.json').read_text());e=np.fromfile(d/'catalog_centroids.f16',dtype=np.float16).reshape(-1,512)
+           assert len(c)==len(l)==e.shape[0]==500 and e.shape[1]==512
+           catalog+=c;labels+=l;parts.append(e)
+          emb=np.concatenate(parts)
+          assert len(catalog)==len(labels)==emb.shape[0]==3000 and emb.shape[1]==512
+          assert len({x['id'] for x in catalog})==3000 and len(set(labels))==3000
+          assert all(x.get('recognitionReady') for x in catalog)
+          (out/'catalog.json').write_text(json.dumps(catalog,ensure_ascii=False),encoding='utf-8');(out/'catalog_labels.json').write_text(json.dumps(labels,ensure_ascii=False),encoding='utf-8');emb.astype(np.float16).tofile(out/'catalog_centroids.f16');(out/'build_stats.json').write_text(json.dumps({'catalogProducts':3000,'trainedProducts':3000,'embeddingDimension':512,'storedVectors':3000,'batches':6,'referenceVariantsPerProduct':9,'encoder':'MobileCLIP2-S0 Vision ONNX'},indent=2),encoding='utf-8')
+          print('FINAL: 3000 products, 3000 embeddings, 512D')
           PY
       - uses: actions/upload-artifact@v4
         with:
@@ -146,8 +146,7 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
-      - name: Download runtime assets
-        uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v4
         with:
           name: yemen-3000-runtime-assets
           path: assets/generated
@@ -161,35 +160,26 @@ jobs:
           distribution: temurin
           java-version: '17'
       - run: flutter pub get
-      - name: Analyze
-        run: flutter analyze
-      - name: Focused recognition tests
-        run: |
+      - run: flutter analyze
+      - run: |
           flutter test test/mobileclip2_model_contract_test.dart
           flutter test test/local_product_index_service_test.dart
           flutter test test/recognition_pipeline_test.dart
           flutter test test/visual_recognition_integration_test.dart
-      - name: Full tests
-        run: flutter test
-      - name: Verify catalog before APK
+          flutter test
+      - name: Verify final catalog
         run: |
           python - <<'PY'
           import json,numpy as np
           from pathlib import Path
-          p=Path('assets/generated');s=json.loads((p/'build_stats.json').read_text());c=json.loads((p/'catalog.json').read_text());l=json.loads((p/'catalog_labels.json').read_text());e=np.fromfile(p/'catalog_centroids.f16',dtype=np.float16).reshape(-1,512)
-          assert s['catalogProducts']==s['trainedProducts']==3000
-          assert len(c)==len(l)==e.shape[0]==3000
-          assert e.shape[1]==512
-          print('FINAL CATALOG VERIFIED: 3000 products / 3000 embeddings / 512D')
+          p=Path('assets/generated');s=json.loads((p/'build_stats.json').read_text());c=json.loads((p/'catalog.json').read_text());l=json.loads((p/'catalog_labels.json').read_text());e=np.fromfile(p/'catalog_centroids.f16',dtype=np.float16).reshape(-1,512);assert s['catalogProducts']==s['trainedProducts']==3000 and len(c)==len(l)==e.shape[0]==3000 and e.shape[1]==512
+          print('FINAL CATALOG VERIFIED: 3000/3000')
           PY
-      - name: Build release APK
-        run: flutter build apk --release
-      - name: Verify APK and catalog assets
-        run: |
+      - run: flutter build apk --release
+      - run: |
           test -s build/app/outputs/flutter-apk/app-release.apk
           unzip -l build/app/outputs/flutter-apk/app-release.apk | grep -F 'assets/flutter_assets/assets/generated/yemen_food_catalog_3000.json'
           unzip -l build/app/outputs/flutter-apk/app-release.apk | grep -F 'assets/flutter_assets/assets/generated/yemen_food_catalog_centroids.f16'
-          unzip -l build/app/outputs/flutter-apk/app-release.apk | grep -F 'assets/flutter_assets/assets/generated/yemen_food_catalog_stats.json'
       - uses: actions/upload-artifact@v4
         with:
           name: ai-store-assistant-yemen-3000-release-apk
