@@ -258,7 +258,6 @@ img.Image _makeProductImage(int id) {
   }
 
   final cx = 160;
-  final base = 245;
   const dark = [32, 38, 46];
   const accent = [208, 58, 52];
   const metal = [170, 178, 188];
@@ -353,7 +352,6 @@ img.Image _makeProductImage(int id) {
 
   _fillCircle(image, 292, 292, 9, const [210, 215, 220]);
   _fillCircle(image, 27, 292, 6, metal);
-  _ = base;
   return image;
 }
 
@@ -433,7 +431,7 @@ void _outlineCircle(
   int cy,
   int r,
   List<int> c,
-  int width,
+  int _width,
 ) {
   final outer = r * r;
   final inner = max(0, r - width) * max(0, r - width);
@@ -466,7 +464,6 @@ void _outlineArc(
       }
     }
   }
-  _ = width;
 }
 
 void _fillRoundRect(img.Image image, int x0, int y0, int x1, int y1, List<int> c) {
