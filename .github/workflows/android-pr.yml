@@ -76,7 +76,7 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
-      - name: Run real application camera E2E
+      - name: Run real application camera E2E and validate exact APK
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 35
@@ -96,7 +96,19 @@ jobs:
             -camera-back imagefile:/tmp/mobileclip2_camera_scene.png
           disable-animations: true
           script: |
-            bash -lc 'set -o pipefail; timeout 300s flutter test integration_test/live_scanner_camera_e2e_test.dart 2>&1 | tee android_camera_e2e.log'
+            bash -lc '
+              set -euo pipefail
+              timeout 300s flutter test integration_test/live_scanner_camera_e2e_test.dart 2>&1 | tee android_camera_e2e.log
+              APK_PATH="build/app/outputs/flutter-apk/app-debug.apk"
+              adb install -r "$APK_PATH"
+              adb shell pm path com.aistoreassistant.ai_store_assistant
+              adb shell am force-stop com.aistoreassistant.ai_store_assistant
+              adb shell monkey -p com.aistoreassistant.ai_store_assistant 1 >/dev/null
+              sleep 8
+              pid="$(adb shell pidof com.aistoreassistant.ai_store_assistant | tr -d "\\r")"
+              test -n "$pid"
+              echo "✅ EXACT APK INSTALL/LAUNCH PASS: pid=$pid"
+            '
 
       - name: Upload camera E2E log
         if: always()
