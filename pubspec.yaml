@@ -42,5 +42,6 @@ flutter:
   assets:
     - assets/models/
     - assets/models/mobileclip2/
+    - assets/generated/
     - data/yemen_food_catalog_seed.json
     - data/yemen_food_catalog_trained_additions.json
