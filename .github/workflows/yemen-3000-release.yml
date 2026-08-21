@@ -80,6 +80,41 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install --no-cache-dir numpy pillow requests onnxruntime
+      - name: Normalize OFF image source to AWS S3
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          src=Path('/tmp/off/products.jsonl'); tmp=Path('/tmp/off/products.aws.jsonl')
+          def first(v):
+              if isinstance(v,str): return v.strip()
+              if isinstance(v,list):
+                  for x in v:
+                      y=first(x)
+                      if y:return y
+              if isinstance(v,dict):
+                  for k in ('imgid','imageid','id'):
+                      if v.get(k): return str(v[k])
+                  for x in v.values():
+                      y=first(x)
+                      if y:return y
+              return ''
+          def folder(code):
+              d=''.join(c for c in str(code or '') if c.isdigit())
+              return d if len(d)<=8 else f'{d[:3]}/{d[3:6]}/{d[6:9]}/{d[9:]}'
+          n=0
+          with src.open('r',encoding='utf-8',errors='ignore') as fi, tmp.open('w',encoding='utf-8') as fo:
+              for line in fi:
+                  try:p=json.loads(line)
+                  except Exception:continue
+                  p.pop('image_front_url',None);p.pop('image_front_small_url',None);p.pop('image_front_thumb_url',None)
+                  code=p.get('code') or p.get('_id'); img=first(p.get('images'))
+                  if code and img:
+                      p['image_front_url']=f'https://openfoodfacts-images.s3.eu-west-3.amazonaws.com/data/{folder(code)}/{img}.400.jpg'
+                  fo.write(json.dumps(p,ensure_ascii=False,separators=(',',':'))+'\n');n+=1
+          tmp.replace(src)
+          print('normalized records:',n)
+          PY
       - name: Train 500-SKU batch ${{ matrix.batch }}
         run: |
           args="--target-products 500 --start-index ${{ matrix.start }} --augments 8 --download-workers 24"
