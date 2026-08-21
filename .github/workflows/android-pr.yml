@@ -54,18 +54,8 @@ jobs:
           arch: x86_64
           profile: pixel_5
           force-avd-creation: false
-          pre-emulator-launch-script: |
-            set -e
-            if ! command -v convert >/dev/null 2>&1; then
-              sudo apt-get update
-              sudo apt-get install -y imagemagick
-            fi
-            convert -size 640x480 xc:'#f0f2f5' \
-              -fill '#cd322d' -draw 'roundrectangle 170,75 470,405 45,45' \
-              -fill '#1e232a' -draw 'rectangle 245,40 395,95' \
-              -fill white -draw 'roundrectangle 205,180 435,265 12,12' \
-              /tmp/mobileclip2_camera_scene.png
-            test -s /tmp/mobileclip2_camera_scene.png
+          pre-emulator-launch-script: >-
+            command -v convert >/dev/null 2>&1 || { sudo apt-get update && sudo apt-get install -y imagemagick; }; convert -size 640x480 xc:'#f0f2f5' -fill '#cd322d' -draw 'roundrectangle 170,75 470,405 45,45' -fill '#1e232a' -draw 'rectangle 245,40 395,95' -fill white -draw 'roundrectangle 205,180 435,265 12,12' /tmp/mobileclip2_camera_scene.png && test -s /tmp/mobileclip2_camera_scene.png
           emulator-options: >-
             -no-window
             -gpu swiftshader_indirect
@@ -99,14 +89,12 @@ jobs:
           test -s "$APK_PATH"
           unzip -t "$APK_PATH" >/dev/null
           echo "APK size: $(du -h "$APK_PATH" | cut -f1)"
-          echo "Checking Flutter MobileCLIP2 assets..."
           unzip -l "$APK_PATH" | grep -F 'flutter_assets/assets/models/mobileclip2/mobileclip2_s0_vision.onnx' >/dev/null
           unzip -l "$APK_PATH" | grep -F 'flutter_assets/assets/models/mobileclip2/mobileclip2_s0_vision.onnx.data' >/dev/null
           unzip -l "$APK_PATH" | grep -F 'flutter_assets/assets/models/mobileclip2/model_metadata.json' >/dev/null
-          echo "Checking package metadata..."
-          "$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)/aapt" dump badging "$APK_PATH" | grep -F "package: name='com.aistoreassistant.ai_store_assistant'" >/dev/null
-          "$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)/aapt" dump permissions "$APK_PATH" | grep -F 'android.permission.CAMERA' >/dev/null
-          echo "Installing APK into the same validated emulator..."
+          BUILD_TOOLS="$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)"
+          "$BUILD_TOOLS/aapt" dump badging "$APK_PATH" | grep -F "package: name='com.aistoreassistant.ai_store_assistant'" >/dev/null
+          "$BUILD_TOOLS/aapt" dump permissions "$APK_PATH" | grep -F 'android.permission.CAMERA' >/dev/null
           adb install -r "$APK_PATH"
           adb shell pm path com.aistoreassistant.ai_store_assistant
           adb shell am force-stop com.aistoreassistant.ai_store_assistant
