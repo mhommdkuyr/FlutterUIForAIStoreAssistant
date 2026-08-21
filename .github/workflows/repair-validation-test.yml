@@ -1,0 +1,41 @@
+name: Repair validation test syntax
+
+on:
+  push:
+    branches: [hotfix/mobileclip2-fast-scan-engine]
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: hotfix/mobileclip2-fast-scan-engine
+          fetch-depth: 1
+      - name: Repair invalid discard expressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('integration_test/mobileclip2_full_single_fixed_test.dart')
+          s = p.read_text()
+          s = s.replace('  final base = 245;\n', '')
+          s = s.replace('  _ = base;\n', '')
+          s = s.replace('  int width,\n) {\n', '  int _width,\n) {\n', 1)
+          s = s.replace('  _ = width;\n', '')
+          p.write_text(s)
+          PY
+          git diff --check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add integration_test/mobileclip2_full_single_fixed_test.dart
+          git commit -m "fix: repair validation test analyzer errors"
+          git push
+          git rm .github/workflows/repair-validation-test.yml
+          git commit -m "chore: remove one-shot validation repair workflow"
+          git push
