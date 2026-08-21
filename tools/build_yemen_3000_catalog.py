@@ -2,18 +2,15 @@
 """Build a 3000-SKU grocery visual catalog.
 
 Priority order:
-1. Existing Yemen seed catalog entries with usable images.
+1. Existing Yemen seed catalog entries.
 2. Open Food Facts products with front-pack images as a broad grocery fallback.
 
 This is catalog enrollment, not fine-tuning. MobileCLIP2-S0 remains fixed.
-For each SKU we generate several scene/lighting/background variants, encode them,
-and store one L2-normalized centroid per SKU for compact on-device search.
 """
 from __future__ import annotations
 import argparse, io, json, random, re, time, unicodedata
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
-from urllib.parse import urljoin
 import numpy as np
 import onnxruntime as ort
 import requests
@@ -24,8 +21,12 @@ MODEL = ROOT / 'assets/models/mobileclip2/mobileclip2_s0_vision.onnx'
 MODEL_DATA = ROOT / 'assets/models/mobileclip2/mobileclip2_s0_vision.onnx.data'
 SEED = ROOT / 'data/yemen_food_catalog_seed.json'
 OUT = ROOT / 'build/yemen_food_catalog'
-UA = 'AIStoreAssistant-YemenCatalog/2.0 (contact: github.com/mhommdkuyr/FlutterUIForAIStoreAssistant)'
-OFF = 'https://world.openfoodfacts.org/api/v2/search'
+UA = 'AIStoreAssistant-YemenCatalog/2.1 (contact: github.com/mhommdkuyr/FlutterUIForAIStoreAssistant)'
+OFF_HOSTS = [
+    'https://world.openfoodfacts.org/api/v2/search',
+    'https://us.openfoodfacts.org/api/v2/search',
+    'https://fr.openfoodfacts.org/api/v2/search',
+]
 
 
 def norm(s: str) -> str:
@@ -35,24 +36,36 @@ def norm(s: str) -> str:
     return re.sub(r'[^\w\u0600-\u06ff]+', ' ', s).strip()
 
 
-def slug(s: str) -> str:
-    x = re.sub(r'[^a-z0-9_-]+', '-', norm(s).replace(' ', '-'))[:80].strip('-')
-    return x or 'product'
-
-
-def get_json(s: requests.Session, url: str, params: dict | None = None, timeout=30):
-    r = s.get(url, params=params, headers={'User-Agent': UA, 'Accept': 'application/json'}, timeout=timeout)
-    r.raise_for_status()
-    return r.json()
+def off_json(session: requests.Session, params: dict) -> dict:
+    last = None
+    for attempt in range(6):
+        for host in OFF_HOSTS:
+            try:
+                r = session.get(
+                    host,
+                    params=params,
+                    headers={'User-Agent': UA, 'Accept': 'application/json'},
+                    timeout=45,
+                )
+                if r.status_code in (429, 500, 502, 503, 504):
+                    last = RuntimeError(f'Open Food Facts temporary HTTP {r.status_code}')
+                    continue
+                r.raise_for_status()
+                return r.json()
+            except requests.RequestException as exc:
+                last = exc
+        time.sleep(min(3.0 * (attempt + 1), 15.0))
+    raise RuntimeError(f'Open Food Facts unavailable after retries: {last}')
 
 
 def off_products(target: int) -> list[dict]:
     s = requests.Session()
     fields = 'code,product_name,product_name_ar,brands,categories_tags_en,image_front_url,image_url,quantity,countries_tags_en'
     out, seen = [], set()
-    page = 1
-    while len(out) < target and page <= 45:
-        data = get_json(s, OFF, {
+    for page in range(1, 61):
+        if len(out) >= target:
+            break
+        data = off_json(s, {
             'page': page,
             'page_size': 100,
             'sort_by': 'popularity_key',
@@ -65,8 +78,6 @@ def off_products(target: int) -> list[dict]:
             if not code or code in seen or not name or not image or not image.startswith('http'):
                 continue
             cats = p.get('categories_tags_en') or []
-            if not cats:
-                cats = []
             seen.add(code)
             out.append({
                 'id': 'off-' + re.sub(r'[^0-9A-Za-z_-]', '', code),
@@ -87,15 +98,12 @@ def off_products(target: int) -> list[dict]:
                 break
         if data.get('page_count', 0) == 0:
             break
-        page += 1
     return out
 
 
 def choose_catalog(target: int) -> list[dict]:
     seed = json.loads(SEED.read_text(encoding='utf-8')).get('products', [])
-    catalog = []
-    ids = set()
-    # Keep every seed product; image readiness is resolved below.
+    catalog, ids = [], set()
     for p in seed:
         q = dict(p)
         q.setdefault('sourceType', 'yemen_seed')
@@ -105,7 +113,7 @@ def choose_catalog(target: int) -> list[dict]:
         catalog.append(q)
         ids.add(q['id'])
     needed = max(0, target - len(catalog))
-    for p in off_products(needed + 300):
+    for p in off_products(needed + 500):
         if p['id'] in ids:
             continue
         catalog.append(p)
@@ -115,7 +123,7 @@ def choose_catalog(target: int) -> list[dict]:
     return catalog[:target]
 
 
-def download_one(item: tuple[int, str, Path]) -> tuple[int, Path | None]:
+def download_one(item):
     idx, url, path = item
     try:
         r = requests.get(url, headers={'User-Agent': UA, 'Accept': 'image/avif,image/webp,image/jpeg,image/png,*/*'}, timeout=25)
@@ -131,13 +139,12 @@ def download_one(item: tuple[int, str, Path]) -> tuple[int, Path | None]:
         return idx, None
 
 
-def augment(im: Image.Image, n: int, rng: random.Random) -> list[Image.Image]:
+def augment(im: Image.Image, n: int, rng: random.Random):
     base = ImageOps.contain(im, (320, 320), Image.Resampling.LANCZOS)
     out = []
     for _ in range(n):
         x = base.copy()
-        angle = rng.uniform(-15, 15)
-        x = x.rotate(angle, resample=Image.Resampling.BICUBIC, expand=False, fillcolor=tuple(rng.randint(175, 255) for _ in range(3)))
+        x = x.rotate(rng.uniform(-15, 15), resample=Image.Resampling.BICUBIC, expand=False, fillcolor=tuple(rng.randint(175, 255) for _ in range(3)))
         if rng.random() < 0.75:
             scale = rng.uniform(0.78, 1.0)
             nw, nh = max(1, int(x.width * scale)), max(1, int(x.height * scale))
@@ -160,23 +167,22 @@ def preprocess(im: Image.Image) -> np.ndarray:
     x = ImageOps.fit(im.convert('RGB'), (224, 224), Image.Resampling.BICUBIC)
     a = np.asarray(x, dtype=np.float32) / 255.0
     a = (a - mean) / std
-    return np.transpose(a, (2, 0, 1))[None, ...]
+    return np.transpose((a - mean) / std, (2, 0, 1))[None, ...]
 
 
 def l2(v: np.ndarray) -> np.ndarray:
-    n = np.linalg.norm(v, axis=1, keepdims=True)
-    return v / np.clip(n, 1e-12, None)
+    return v / np.clip(np.linalg.norm(v, axis=1, keepdims=True), 1e-12, None)
 
 
-def infer(session, images: list[Image.Image]) -> np.ndarray:
+def infer(session, images):
     inp = session.get_inputs()[0].name
-    outs = []
+    rows = []
     for im in images:
         raw = session.run(None, {inp: preprocess(im)})[0].astype(np.float32)
         if raw.shape != (1, 512):
             raise RuntimeError(f'Unexpected MobileCLIP2 output shape {raw.shape}')
-        outs.append(raw[0])
-    return l2(np.stack(outs, axis=0))
+        rows.append(raw[0])
+    return l2(np.stack(rows, axis=0))
 
 
 def main():
@@ -185,21 +191,23 @@ def main():
     ap.add_argument('--augments', type=int, default=8)
     ap.add_argument('--download-workers', type=int, default=12)
     args = ap.parse_args()
-    if not MODEL.exists() or not MODEL_DATA.exists(): raise SystemExit('MobileCLIP2 model files are missing')
+    if not MODEL.exists() or not MODEL_DATA.exists():
+        raise SystemExit('MobileCLIP2 model files are missing')
     OUT.mkdir(parents=True, exist_ok=True)
     catalog = choose_catalog(args.target_products)
+    if len(catalog) != args.target_products:
+        raise SystemExit(f'Catalog discovery returned {len(catalog)}, expected {args.target_products}')
     (OUT / 'catalog.json').write_text(json.dumps(catalog, ensure_ascii=False, indent=2), encoding='utf-8')
 
     jobs, path_map = [], {}
     for i, p in enumerate(catalog):
         urls = [u for u in p.get('imageUrls', []) if isinstance(u, str) and u.startswith('http')]
-        if not urls: continue
-        dest = OUT / 'images' / p['id'] / 'front.jpg'
-        jobs.append((i, urls[0], dest)); path_map[p['id']] = dest
+        if urls:
+            dest = OUT / 'images' / p['id'] / 'front.jpg'
+            jobs.append((i, urls[0], dest)); path_map[p['id']] = dest
     hydrated = 0
     with ThreadPoolExecutor(max_workers=args.download_workers) as ex:
-        futures = [ex.submit(download_one, j) for j in jobs]
-        for f in as_completed(futures):
+        for f in as_completed([ex.submit(download_one, j) for j in jobs]):
             _, path = f.result()
             if path is not None: hydrated += 1
 
@@ -216,24 +224,21 @@ def main():
             im = Image.open(path).convert('RGB')
             variants = [im] + augment(im, args.augments, rng)
             emb = infer(session, variants)
-            centroid = emb.mean(axis=0, keepdims=True)
-            centroid = l2(centroid)[0]
+            centroid = l2(emb.mean(axis=0, keepdims=True))[0]
             centroids.append(centroid.astype(np.float32))
             trained.append(p['id'])
             p['recognitionReady'] = True
             p['referenceVariants'] = len(variants)
         except Exception:
             p['recognitionReady'] = False
-        if idx % 100 == 0: print(f'embedded {idx}/{len(catalog)}')
+        if idx % 100 == 0:
+            print(f'embedded {idx}/{len(catalog)}')
 
-    if len(trained) < 3000:
-        raise SystemExit(f'Only {len(trained)} products have usable images; refusing to publish a <3000 catalog.')
-
+    if len(trained) < args.target_products:
+        raise SystemExit(f'Only {len(trained)} products have usable images; refusing to publish a <{args.target_products} catalog.')
     matrix = np.stack(centroids, axis=0)
-    # float16 keeps the 3000x512 catalog compact for APK/runtime delivery.
     matrix.astype(np.float16).tofile(OUT / 'catalog_centroids.f16')
-    labels = trained
-    (OUT / 'catalog_labels.json').write_text(json.dumps(labels, ensure_ascii=False), encoding='utf-8')
+    (OUT / 'catalog_labels.json').write_text(json.dumps(trained, ensure_ascii=False), encoding='utf-8')
     (OUT / 'catalog.json').write_text(json.dumps(catalog, ensure_ascii=False, indent=2), encoding='utf-8')
     stats = {
         'targetProducts': args.target_products,
@@ -250,7 +255,7 @@ def main():
         'builtAt': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
     }
     (OUT / 'build_stats.json').write_text(json.dumps(stats, ensure_ascii=False, indent=2), encoding='utf-8')
-    (OUT / 'source_licenses.md').write_text('# Catalog provenance and licenses\n\nThe Yemen seed records source URLs. Fallback products are from Open Food Facts. Retain attribution and comply with the applicable Open Food Facts database/image licenses before commercial redistribution.\n', encoding='utf-8')
+    (OUT / 'source_licenses.md').write_text('# Catalog provenance and licenses\n\nYemen seed records source URLs. Fallback products are from Open Food Facts. Retain attribution and comply with applicable database/image licenses before commercial redistribution.\n', encoding='utf-8')
     print(json.dumps(stats, ensure_ascii=False, indent=2))
 
 if __name__ == '__main__':
