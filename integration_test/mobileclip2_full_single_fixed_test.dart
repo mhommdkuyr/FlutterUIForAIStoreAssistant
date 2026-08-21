@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:math';
 
@@ -58,10 +59,6 @@ void main() {
       expect(index.indexedProductCount, productCount);
       expect(index.indexedEmbeddingCount, productCount);
 
-      // Each query is a materially different view of the stored product:
-      // background/exposure/compression/crop changes are applied after the
-      // reference image is created. The test is top-1 over all products, not
-      // a self-match against the same file.
       var correct = 0;
       var totalQueries = 0;
       final recognitionTimes = <int>[];
@@ -87,13 +84,9 @@ void main() {
             minMargin: 0.08,
           );
           totalQueries++;
-          if (result.isAccepted && result.best?.productId == products[id].id) {
-            correct++;
-          } else {
-            // Keep the full ranking in the test output so a failure identifies
-            // whether the model collapsed products or the margin rejected a
-            // correct candidate.
-            // ignore: avoid_print
+          if (result.isAccepted && result.best?.productId == products[id].id) correct++;
+          // ignore: avoid_print
+          if (result.best?.productId != products[id].id || !result.isAccepted) {
             print('RECOGNITION FAILURE id=$id variant=$variant best=${result.best?.productId} score=${result.bestScore} second=${result.secondBestScore} margin=${result.margin} reason=${result.rejectionReason}');
           }
           expect(result.best?.productId, products[id].id);
@@ -102,9 +95,6 @@ void main() {
       }
       expect(correct, totalQueries);
 
-      // Different product images must remain distinguishable. This catches
-      // the historical "every product becomes the last indexed product"
-      // failure mode.
       final pairScores = <double>[];
       for (var i = 0; i < productCount; i++) {
         final a = await provider.embedFile(referencePaths[i]);
@@ -118,9 +108,6 @@ void main() {
       final maxDifferentProductSimilarity = pairScores.reduce(max);
       expect(maxDifferentProductSimilarity, lessThan(0.97));
 
-      // Real Android camera path: initialize the physical camera interface in
-      // the emulator, receive a CameraImage from startImageStream, and run the
-      // exact CameraImage -> YUV -> 224x224 -> ONNX path used by the scanner.
       final cameras = await availableCameras().timeout(const Duration(seconds: 20));
       expect(cameras, isNotEmpty);
       final description = cameras.firstWhere(
@@ -146,12 +133,10 @@ void main() {
       expect(liveFrame, isNotNull);
 
       final frameWatch = Stopwatch()..start();
-      final liveEmbedding = await provider
-          .embedFrameWithRotation(
-            liveFrame!,
-            rotationDegrees: _rotationForCamera(camera, description),
-          )
-          .timeout(const Duration(seconds: 15));
+      final liveEmbedding = await provider.embedFrameWithRotation(
+        liveFrame!,
+        rotationDegrees: _rotationForCamera(camera, description),
+      ).timeout(const Duration(seconds: 15));
       frameWatch.stop();
       expect(liveEmbedding, isNotNull);
       expect(liveEmbedding!.length, 2048);
@@ -163,9 +148,6 @@ void main() {
       expect(capturedEmbedding, isNotNull);
       expect(provider.similarity(liveEmbedding, capturedEmbedding!), greaterThan(0.70));
 
-      // Pipeline-level smoke: the same live CameraImage must pass through
-      // RecognitionPipeline without throwing, and a camera frame is actually
-      // marked as processed when an index is ready.
       final pipeline = RecognitionPipeline(
         embeddingService: provider,
         config: const RecognitionConfig(minConfidence: 0.45, minMargin: 0.08),
@@ -181,23 +163,15 @@ void main() {
 
       final sortedTimes = [...recognitionTimes]..sort();
       final p95 = sortedTimes[(sortedTimes.length * 0.95).ceil().clamp(1, sortedTimes.length) - 1];
-      // CI is an x86 emulator, not the target phone. This is a guard against
-      // pathological regressions, not a claim that every phone is <=500ms.
       expect(p95, lessThan(1500));
 
       // ignore: avoid_print
       print('MOBILECLIP2 REAL VALIDATION PASS: init=${initWatch.elapsedMilliseconds}ms index=${indexWatch.elapsedMilliseconds}ms queries=$totalQueries accuracy=${correct / totalQueries} p95FileInference=${p95}ms liveCameraInference=${frameWatch.elapsedMilliseconds}ms maxDifferentSimilarity=${maxDifferentProductSimilarity.toStringAsFixed(4)}');
     } finally {
-      try {
-        await camera?.stopImageStream();
-      } catch (_) {}
+      try { await camera?.stopImageStream(); } catch (_) {}
       await camera?.dispose();
       await provider.dispose();
-      for (final path in files) {
-        try {
-          await File(path).delete();
-        } catch (_) {}
-      }
+      for (final path in files) { try { await File(path).delete(); } catch (_) {} }
     }
   });
 }
