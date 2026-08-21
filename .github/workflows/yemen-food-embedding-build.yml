@@ -3,6 +3,13 @@ name: Yemen Food Embedding Build
 on:
   push:
     branches: [data/yemen-food-embedding-build]
+  pull_request:
+    branches: [main]
+    paths:
+      - 'tools/build_yemen_food_embeddings_safe.py'
+      - 'data/**'
+      - 'assets/models/mobileclip2/**'
+      - '.github/workflows/yemen-food-embedding-build.yml'
   workflow_dispatch:
 
 permissions:
