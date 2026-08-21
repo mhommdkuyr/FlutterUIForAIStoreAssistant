@@ -1,8 +1,9 @@
 name: Repair MobileCLIP2 preprocessing contract
 
 on:
-  push:
-    branches: [hotfix/mobileclip2-fast-scan-engine]
+  pull_request:
+    branches: [main]
+    types: [synchronize]
 
 permissions:
   contents: write
@@ -25,14 +26,8 @@ jobs:
 
           visual = Path('lib/shared/services/visual_embedding_service.dart')
           text = visual.read_text()
-          text = text.replace(
-              'static const expectedMean = [0.48145466, 0.4578275, 0.40821073];',
-              'static const expectedMean = [0.0, 0.0, 0.0];',
-          )
-          text = text.replace(
-              'static const expectedStd = [0.26862954, 0.26130258, 0.27577711];',
-              'static const expectedStd = [1.0, 1.0, 1.0];',
-          )
+          text = text.replace('static const expectedMean = [0.48145466, 0.4578275, 0.40821073];', 'static const expectedMean = [0.0, 0.0, 0.0];')
+          text = text.replace('static const expectedStd = [0.26862954, 0.26130258, 0.27577711];', 'static const expectedStd = [1.0, 1.0, 1.0];')
           visual.write_text(text)
 
           fast = Path('lib/shared/services/fast_visual_embedding_service.dart')
@@ -45,15 +40,15 @@ jobs:
     ];
     if (contract.layout == 'NHWC') {'''
           new = '''    // MobileCLIP2-S0 official preprocessing is RGB in [0,1] with
-    // mean=(0,0,0) and std=(1,1,1). Avoid allocating a temporary List for
-    // every pixel: this method runs 50,176 times for every camera frame.
+    // mean=(0,0,0) and std=(1,1,1). Avoid a temporary List allocation for
+    // every pixel; this path executes 50,176 times per camera frame.
     final contract = _requireContract();
     final rv = r / 255.0;
     final gv = g / 255.0;
     final bv = b / 255.0;
     if (contract.layout == 'NHWC') {'''
           if old not in text:
-              raise SystemExit('expected _writePixel preprocessing block not found')
+              raise SystemExit('expected preprocessing block not found')
           text = text.replace(old, new, 1)
           text = text.replace('''      tensor[base] = values[0];
       tensor[base + 1] = values[1];
@@ -69,43 +64,23 @@ jobs:
 
           tests = Path('test/mobileclip2_contract_test.dart')
           text = tests.read_text()
-          text = text.replace(
-              "expect(contract.mean, [0.48145466, 0.4578275, 0.40821073]);",
-              "expect(contract.mean, [0.0, 0.0, 0.0]);",
-          )
-          text = text.replace(
-              "expect(contract.std, [0.26862954, 0.26130258, 0.27577711]);",
-              "expect(contract.std, [1.0, 1.0, 1.0]);",
-          )
-          text = text.replace(
-              "'mean': [0.48145566, 0.4578275, 0.40821073],\n        'std': [0.26862954, 0.26130258, 0.27577711],",
-              "'mean': [0.000001, 0.0, 0.0],\n        'std': [1.0, 1.0, 1.0],",
-          )
-          text = text.replace(
-              "'mean': [0.48145466, 0.4578275, 0.40821073],\n        'std': [0.26862954, 0.26130258, 0.27577711],",
-              "'mean': [0.0, 0.0, 0.0],\n        'std': [1.000001, 1.0, 1.0],",
-          )
+          text = text.replace('expect(contract.mean, [0.48145466, 0.4578275, 0.40821073]);', 'expect(contract.mean, [0.0, 0.0, 0.0]);')
+          text = text.replace('expect(contract.std, [0.26862954, 0.26130258, 0.27577711]);', 'expect(contract.std, [1.0, 1.0, 1.0]);')
+          text = text.replace("'mean': [0.48145566, 0.4578275, 0.40821073],\n        'std': [0.26862954, 0.26130258, 0.27577711],", "'mean': [0.000001, 0.0, 0.0],\n        'std': [1.0, 1.0, 1.0],")
+          text = text.replace("'mean': [0.48145466, 0.4578275, 0.40821073],\n        'std': [0.26862954, 0.26130258, 0.27577711],", "'mean': [0.0, 0.0, 0.0],\n        'std': [1.000001, 1.0, 1.0],")
           tests.write_text(text)
 
-          readme = Path('assets/models/mobileclip2/README.md')
-          readme.write_text('# MobileCLIP2-S0 Vision ONNX\n\nUse RGB images at 224x224. Official MobileCLIP2-S0 preprocessing is RGB float32 scaled to [0,1] with mean=(0,0,0) and std=(1,1,1). Output is L2-normalized by the application.\n')
+          Path('assets/models/mobileclip2/README.md').write_text('# MobileCLIP2-S0 Vision ONNX\n\nUse RGB images at 224x224. Official MobileCLIP2-S0 preprocessing is RGB float32 scaled to [0,1] with mean=(0,0,0) and std=(1,1,1). Output is L2-normalized by the application.\n')
 
           manifest = Path('assets/models/mobileclip2/MANIFEST.md')
-          text = manifest.read_text()
-          text = text.replace('Input: RGB float32 after metadata-defined CLIP normalization', 'Input: RGB float32 in [0,1], with mean=(0,0,0) and std=(1,1,1), matching the official MobileCLIP2-S0 preprocessing contract')
+          text = manifest.read_text().replace('Input: RGB float32 after metadata-defined CLIP normalization', 'Input: RGB float32 in [0,1], with mean=(0,0,0) and std=(1,1,1), matching the official MobileCLIP2-S0 preprocessing contract')
           manifest.write_text(text)
-
-          report = Path('assets/models/mobileclip2/verification_report.json')
-          text = report.read_text()
-          if 'preprocessing_normalization' not in text:
-              text = text.rstrip()[:-1] + ',\n    "preprocessing_normalization": {"mean": [0.0, 0.0, 0.0], "std": [1.0, 1.0, 1.0], "source": "official MobileCLIP2-S0"}\n}\n'
-          report.write_text(text)
 
       - name: Commit repair and remove one-shot workflow
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add lib/shared/services/visual_embedding_service.dart lib/shared/services/fast_visual_embedding_service.dart test/mobileclip2_contract_test.dart assets/models/mobileclip2/README.md assets/models/mobileclip2/MANIFEST.md assets/models/mobileclip2/verification_report.json .github/workflows/repair-mobileclip2-contract.yml
+          git add lib/shared/services/visual_embedding_service.dart lib/shared/services/fast_visual_embedding_service.dart test/mobileclip2_contract_test.dart assets/models/mobileclip2/README.md assets/models/mobileclip2/MANIFEST.md
           git commit -m "fix: align MobileCLIP2-S0 preprocessing and optimize pixel path"
           git rm .github/workflows/repair-mobileclip2-contract.yml
           git commit -m "chore: remove one-shot MobileCLIP2 repair workflow"
