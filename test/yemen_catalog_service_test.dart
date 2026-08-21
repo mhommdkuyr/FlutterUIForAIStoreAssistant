@@ -2,6 +2,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:ai_store_assistant/shared/services/yemen_catalog_service.dart';
 
 void main() {
+  setUpAll(TestWidgetsFlutterBinding.ensureInitialized);
+
   test('loads the bundled Yemen catalog', () async {
     final service = YemenCatalogService();
     final products = await service.load();
