@@ -40,21 +40,15 @@ jobs:
           curl -L --fail --retry 8 --retry-all-errors --retry-delay 3 \
             https://static.openfoodfacts.org/exports/products.random-modulo-10000.tar.gz \
             -o /tmp/off/products.tgz
-          curl -L --fail --retry 8 --retry-all-errors --retry-delay 3 \
-            https://static.openfoodfacts.org/exports/products.random-modulo-10000.images.tar.gz \
-            -o /tmp/off/images.tgz
           tar -xzf /tmp/off/products.tgz -C /tmp/off/products
-          tar -xzf /tmp/off/images.tgz -C /tmp/off/images
-          echo 'BSON files:'
-          find /tmp/off/products -type f -name '*.bson' -print
-          echo 'Image files:'
-          find /tmp/off/images -type f \( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.png' -o -iname '*.webp' \) | head -20
+          echo 'Product files:'
+          find /tmp/off/products -type f -printf '%p %s bytes\n' | head -50
       - name: Build 3000-SKU catalog and MobileCLIP2 centroids
         run: |
           python tools/build_yemen_3000_catalog.py \
             --target-products "$TARGET_PRODUCTS" \
             --augments 8 \
-            --download-workers 16
+            --download-workers 24
       - name: Validate exact 3000-product result
         run: |
           python - <<'PY'
