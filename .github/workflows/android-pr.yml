@@ -8,7 +8,7 @@ jobs:
   build:
     name: Build Debug APK
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
 
     steps:
       - name: Checkout repository
@@ -46,7 +46,7 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
-      - name: Run MobileCLIP2 Android runtime integration test
+      - name: Run full MobileCLIP2 Android integration suite
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 35
@@ -61,7 +61,7 @@ jobs:
             -no-boot-anim
           disable-animations: true
           script: |
-            bash -lc 'set -o pipefail; timeout 600s flutter test integration_test/mobileclip2_runtime_test.dart 2>&1 | tee android_runtime_test.log'
+            bash -lc 'set -o pipefail; timeout 900s flutter test integration_test/mobileclip2_full_android_test.dart 2>&1 | tee android_runtime_test.log'
 
       - name: Upload Android runtime test log
         if: always()
