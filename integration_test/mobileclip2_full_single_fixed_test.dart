@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:math';
+import 'dart:typed_data';
 
 import 'package:camera/camera.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as img;
 import 'package:integration_test/integration_test.dart';
@@ -82,11 +84,6 @@ void main() {
           expect(embedding, isNotNull);
           expect(embedding!.length, 512 * 4);
 
-          // Validation deliberately separates ranking accuracy from the
-          // production ambiguity gate. The first Android failure had a
-          // correct top-1 result but a 0.0105 margin, so the test must not
-          // classify a correct retrieval as an engine failure solely because
-          // the synthetic corpus is visually close.
           final result = index.evaluate(
             embedding,
             topK: 3,
@@ -106,7 +103,6 @@ void main() {
       expect(total, count * 3);
       expect(margins.reduce(min), greaterThan(0.001));
 
-      // Different products must not collapse into the same visual embedding.
       final pairScores = <double>[];
       final embeddings = <Uint8List>[];
       for (final path in refs) {
@@ -121,9 +117,6 @@ void main() {
       }
       expect(pairScores.reduce(max), lessThan(0.97));
 
-      // Camera integration: obtain a real CameraImage from Android's camera
-      // stream and require that the captured frame itself retrieves the
-      // deterministic bottle fixture used by the emulator camera backend.
       final cameras = await availableCameras().timeout(const Duration(seconds: 20));
       expect(cameras, isNotEmpty);
       final description = cameras.firstWhere(
@@ -165,7 +158,6 @@ void main() {
         minConfidence: 0.35,
         minMargin: 0.0,
       );
-      // Emulator camera is configured in CI to show the red bottle fixture.
       expect(liveResult.best?.productId, 'validation-0');
       expect(liveResult.bestScore, greaterThanOrEqualTo(0.35));
 
@@ -238,44 +230,44 @@ img.Image _productImage(int id) {
   _fill(image, 0, 0, 320, 320, bg);
   final dark = const [30, 35, 42];
   switch (id) {
-    case 0: // red bottle
+    case 0:
       _round(image, 100, 95, 220, 260, const [205, 50, 45]);
       _fill(image, 130, 55, 190, 100, dark);
       _round(image, 118, 135, 202, 180, const [248, 248, 248]);
       _fill(image, 130, 150, 190, 164, const [205, 50, 45]);
       break;
-    case 1: // blue phone
+    case 1:
       _round(image, 92, 45, 228, 275, dark);
       _round(image, 105, 60, 215, 260, const [45, 115, 195]);
       _fillCircle(image, 160, 235, 10, bg);
       break;
-    case 2: // black/red shoe
+    case 2:
       _round(image, 65, 175, 255, 260, dark);
       _round(image, 105, 115, 220, 205, const [190, 45, 40]);
       _fill(image, 120, 160, 220, 178, const [230, 230, 235]);
       break;
-    case 3: // laptop
+    case 3:
       _fill(image, 82, 62, 238, 205, dark);
       _fill(image, 98, 78, 222, 190, const [70, 135, 205]);
       _fill(image, 50, 205, 270, 240, const [175, 180, 188]);
       _fill(image, 120, 214, 200, 226, const [225, 225, 228]);
       break;
-    case 4: // green book
+    case 4:
       _fill(image, 80, 65, 240, 260, const [50, 145, 85]);
       _fill(image, 155, 65, 165, 260, dark);
       _fill(image, 100, 105, 140, 118, const [245, 245, 245]);
       _fill(image, 180, 105, 220, 118, const [245, 245, 245]);
       break;
-    case 5: // orange ball
+    case 5:
       _fillCircle(image, 160, 160, 100, const [235, 120, 30]);
       _fillCircle(image, 125, 125, 20, const [250, 210, 160]);
       break;
-    case 6: // yellow cup
+    case 6:
       _round(image, 90, 95, 220, 245, const [225, 175, 40]);
       _fill(image, 108, 115, 202, 145, const [250, 250, 250]);
       _outlineCircle(image, 225, 165, 38, dark, 10);
       break;
-    default: // purple backpack
+    default:
       _round(image, 82, 72, 238, 260, const [115, 70, 170]);
       _outlineCircle(image, 160, 120, 55, dark, 14);
       _fill(image, 108, 170, 212, 225, dark);
