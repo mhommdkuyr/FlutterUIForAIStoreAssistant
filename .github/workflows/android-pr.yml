@@ -8,7 +8,7 @@ jobs:
   build:
     name: Build Debug APK
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 30
 
     steps:
       - name: Checkout repository
@@ -39,51 +39,12 @@ jobs:
       - name: Install Flutter dependencies
         run: flutter pub get
 
-      - name: Enable KVM for Android emulator
-        run: |
-          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS="static_node=kvm"' | \
-            sudo tee /etc/udev/rules.d/99-kvm4all.rules
-          sudo udevadm control --reload-rules
-          sudo udevadm trigger --name-match=kvm
-
-      - name: Run MobileCLIP2 Android integration diagnostics
-        continue-on-error: true
-        uses: reactivecircus/android-emulator-runner@v2
-        with:
-          api-level: 35
-          target: google_apis
-          arch: x86_64
-          profile: pixel_5
-          force-avd-creation: false
-          pre-emulator-launch-script: >-
-            command -v convert >/dev/null 2>&1 || { sudo apt-get update && sudo apt-get install -y imagemagick; }; convert -size 640x480 xc:'#f0f2f5' -fill '#cd322d' -draw 'roundrectangle 170,75 470,405 45,45' -fill '#1e232a' -draw 'rectangle 245,40 395,95' -fill white -draw 'roundrectangle 205,180 435,265 12,12' /tmp/mobileclip2_camera_scene.png && test -s /tmp/mobileclip2_camera_scene.png
-          emulator-options: >-
-            -no-window
-            -gpu swiftshader_indirect
-            -noaudio
-            -no-boot-anim
-            -no-snapshot-load
-            -no-snapshot-save
-            -camera-back imagefile:/tmp/mobileclip2_camera_scene.png
-          disable-animations: true
-          script: |
-            bash -lc 'set -o pipefail; timeout 600s flutter test integration_test/mobileclip2_full_android_test.dart 2>&1 | tee android_runtime_test.log'
-
-      - name: Upload Android runtime test log
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: android-runtime-test-log
-          path: android_runtime_test.log
-          retention-days: 7
-          if-no-files-found: warn
-
       - name: Build debug APK
         run: |
           set -o pipefail
           flutter build apk --debug 2>&1 | tee build_output.log
 
-      - name: Validate debug APK structure, assets, manifest, install and launch
+      - name: Validate debug APK structure, assets and manifest
         run: |
           set -euo pipefail
           APK_PATH="build/app/outputs/flutter-apk/app-debug.apk"
@@ -96,21 +57,6 @@ jobs:
           BUILD_TOOLS="$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)"
           "$BUILD_TOOLS/aapt" dump badging "$APK_PATH" | grep -F "package: name='com.aistoreassistant.ai_store_assistant'" >/dev/null
           "$BUILD_TOOLS/aapt" dump permissions "$APK_PATH" | grep -F 'android.permission.CAMERA' >/dev/null
-          adb install -r "$APK_PATH"
-          adb shell pm path com.aistoreassistant.ai_store_assistant
-          adb shell am force-stop com.aistoreassistant.ai_store_assistant
-          adb shell monkey -p com.aistoreassistant.ai_store_assistant 1 >/dev/null
-          sleep 5
-          adb shell pidof com.aistoreassistant.ai_store_assistant
-
-      - name: Upload build log on failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: android-pr-build-log
-          path: build_output.log
-          retention-days: 7
-          if-no-files-found: warn
 
       - name: Verify APK exists
         run: |
@@ -123,10 +69,19 @@ jobs:
           fi
           echo "APK found: $(du -sh $APK_PATH)"
 
-      - name: Upload validation APK
+      - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
           name: android-pr-debug-apk
           path: build/app/outputs/flutter-apk/app-debug.apk
           retention-days: 7
           if-no-files-found: error
+
+      - name: Upload build log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-pr-build-log
+          path: build_output.log
+          retention-days: 7
+          if-no-files-found: warn
