@@ -41,6 +41,7 @@ class YemenCatalogImageHydrationService {
 
   String _safe(String value) {
     final cleaned = value.replaceAll(RegExp(r'[^a-zA-Z0-9_-]+'), '_');
-    return cleaned.isEmpty ? 'catalog_product' : cleaned.substring(0, cleaned.length.clamp(1, 90));
+    if (cleaned.isEmpty) return 'catalog_product';
+    return cleaned.length <= 90 ? cleaned : cleaned.substring(0, 90);
   }
 }
