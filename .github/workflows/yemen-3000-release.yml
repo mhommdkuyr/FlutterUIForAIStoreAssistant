@@ -1,4 +1,4 @@
-name: Yemen 3000 SKU Release Candidate
+name: Yemen Visual Catalog Enrollment
 
 on:
   workflow_dispatch:
@@ -19,20 +19,82 @@ permissions:
 
 env:
   OFF_SAMPLE_ROOT: '/tmp/off'
+  IMAGE_SOURCE: 'open_food_facts'
 
 jobs:
   prepare-source:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     steps:
       - name: Stream 150000 products from full Open Food Facts JSONL
         run: |
           mkdir -p /tmp/off
-          curl -L --fail --retry 3 --retry-all-errors --retry-delay 2 \
+          curl -L --fail --retry 5 --retry-all-errors --retry-delay 3 \
             https://openfoodfacts-ds.s3.eu-west-3.amazonaws.com/openfoodfacts-products.jsonl.gz \
             | gzip -dc \
             | head -n 150000 > /tmp/off/products.jsonl || true
           test "$(wc -l < /tmp/off/products.jsonl)" -ge 140000
+      - name: Preserve real image URLs and repair missing URLs
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          src=Path('/tmp/off/products.jsonl'); tmp=Path('/tmp/off/products.prepared.jsonl')
+          def find_url(v):
+              if isinstance(v,str):
+                  s=v.strip()
+                  if s.startswith('http') and ('.jpg' in s or '.jpeg' in s or '.png' in s or 'images/' in s):
+                      return s
+              if isinstance(v,list):
+                  for x in v:
+                      y=find_url(x)
+                      if y:return y
+              if isinstance(v,dict):
+                  for k in ('aws','off','url','image_front_url','image_front_small_url','image_front_thumb_url'):
+                      y=find_url(v.get(k))
+                      if y:return y
+                  for k in ('front','front_en','front_ar'):
+                      y=find_url(v.get(k))
+                      if y:return y
+                  for x in v.values():
+                      y=find_url(x)
+                      if y:return y
+              return ''
+          def find_imgid(v):
+              if isinstance(v,dict):
+                  for k in ('front','front_en','front_ar'):
+                      x=v.get(k)
+                      if isinstance(x,dict):
+                          for kk in ('imgid','imageid','id'):
+                              if x.get(kk): return str(x[kk])
+                  for x in v.values():
+                      y=find_imgid(x)
+                      if y:return y
+              if isinstance(v,list):
+                  for x in v:
+                      y=find_imgid(x)
+                      if y:return y
+              return ''
+          def folder(code):
+              d=''.join(c for c in str(code or '') if c.isdigit())
+              return d if len(d)<=8 else f'{d[:3]}/{d[3:6]}/{d[6:9]}/{d[9:]}'
+          n=0;with_images=0
+          with src.open('r',encoding='utf-8',errors='ignore') as fi, tmp.open('w',encoding='utf-8') as fo:
+              for line in fi:
+                  try:p=json.loads(line)
+                  except Exception:continue
+                  code=p.get('code') or p.get('_id')
+                  url=find_url(p.get('image_front_url')) or find_url(p.get('images'))
+                  if not url and code:
+                      iid=find_imgid(p.get('images'))
+                      if iid:
+                          url=f'https://openfoodfacts-images.s3.eu-west-3.amazonaws.com/data/{folder(code)}/{iid}.400.jpg'
+                  if url:
+                      p['image_front_url']=url;with_images+=1
+                  fo.write(json.dumps(p,ensure_ascii=False,separators=(',',':'))+'\n');n+=1
+          tmp.replace(src)
+          print(f'prepared records={n} records_with_image_reference={with_images}')
+          PY
       - uses: actions/upload-artifact@v4
         with:
           name: off-150k-source
@@ -66,7 +128,7 @@ jobs:
             start: 2500
             seed: false
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -80,67 +142,9 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install --no-cache-dir numpy pillow requests onnxruntime
-      - name: Normalize OFF image source to AWS S3
-        run: |
-          python - <<'PY'
-          import json
-          from pathlib import Path
-          src=Path('/tmp/off/products.jsonl'); tmp=Path('/tmp/off/products.aws.jsonl')
-          def first(v):
-              if isinstance(v,str):
-                  s=v.strip(); return s
-              if isinstance(v,list):
-                  for x in v:
-                      y=first(x)
-                      if y:return y
-              if isinstance(v,dict):
-                  for k in ('aws','off','url','image_front_url','image_front_small_url','image_front_thumb_url'):
-                      x=v.get(k)
-                      if isinstance(x,str) and x.strip().startswith('http'): return x.strip()
-                  for k in ('front_en','front','front_ar'):
-                      if k in v:
-                          y=first(v[k])
-                          if y:return y
-                  for x in v.values():
-                      y=first(x)
-                      if y:return y
-              return ''
-          def imgid(v):
-              if isinstance(v,dict):
-                  for k in ('front_en','front','front_ar'):
-                      x=v.get(k)
-                      if isinstance(x,dict):
-                          for kk in ('imgid','imageid','id'):
-                              if x.get(kk): return str(x[kk])
-                  for x in v.values():
-                      y=imgid(x)
-                      if y:return y
-              if isinstance(v,list):
-                  for x in v:
-                      y=imgid(x)
-                      if y:return y
-              return ''
-          def folder(code):
-              d=''.join(c for c in str(code or '') if c.isdigit())
-              return d if len(d)<=8 else f'{d[:3]}/{d[3:6]}/{d[6:9]}/{d[9:]}'
-          n=0
-          with src.open('r',encoding='utf-8',errors='ignore') as fi, tmp.open('w',encoding='utf-8') as fo:
-              for line in fi:
-                  try:p=json.loads(line)
-                  except Exception:continue
-                  code=p.get('code') or p.get('_id'); images=p.get('images') or {}
-                  url=first(images) or first(p.get('image_front_url') or '')
-                  iid=imgid(images)
-                  if code and not url and iid:
-                      url=f'https://openfoodfacts-images.s3.eu-west-3.amazonaws.com/data/{folder(code)}/{iid}.400.jpg'
-                  if url.startswith('http'): p['image_front_url']=url
-                  fo.write(json.dumps(p,ensure_ascii=False,separators=(',',':'))+'\n'); n+=1
-          tmp.replace(src)
-          print('normalized records:',n)
-          PY
       - name: Train 500-SKU batch ${{ matrix.batch }}
         run: |
-          args="--target-products 500 --start-index ${{ matrix.start }} --augments 8 --download-workers 24"
+          args="--target-products 500 --start-index ${{ matrix.start }} --augments 8 --download-workers 16"
           if [ "${{ matrix.seed }}" = "true" ]; then args="$args --include-seed"; fi
           python tools/build_yemen_3000_catalog.py $args
       - name: Validate batch
@@ -161,10 +165,10 @@ jobs:
           retention-days: 30
           if-no-files-found: error
 
-  assemble-3000:
+  assemble-catalog:
     needs: train-batches
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
@@ -172,7 +176,7 @@ jobs:
           pattern: yemen-batch-*
           path: build/batches
           merge-multiple: false
-      - name: Assemble and validate 3000 vectors
+      - name: Assemble and validate catalog
         run: |
           python - <<'PY'
           import json,numpy as np
@@ -188,26 +192,26 @@ jobs:
           assert len(catalog)==len(labels)==emb.shape[0]==3000 and emb.shape[1]==512
           assert len({x['id'] for x in catalog})==3000 and len(set(labels))==3000
           assert all(x.get('recognitionReady') for x in catalog)
-          (out/'catalog.json').write_text(json.dumps(catalog,ensure_ascii=False),encoding='utf-8');(out/'catalog_labels.json').write_text(json.dumps(labels,ensure_ascii=False),encoding='utf-8');emb.astype(np.float16).tofile(out/'catalog_centroids.f16');(out/'build_stats.json').write_text(json.dumps({'catalogProducts':3000,'trainedProducts':3000,'embeddingDimension':512,'storedVectors':3000,'batches':6,'referenceVariantsPerProduct':9,'encoder':'MobileCLIP2-S0 Vision ONNX'},indent=2),encoding='utf-8')
-          print('FINAL: 3000 products, 3000 embeddings, 512D')
+          (out/'catalog.json').write_text(json.dumps(catalog,ensure_ascii=False),encoding='utf-8');(out/'catalog_labels.json').write_text(json.dumps(labels,ensure_ascii=False),encoding='utf-8');emb.astype(np.float16).tofile(out/'catalog_centroids.f16');(out/'build_stats.json').write_text(json.dumps({'catalogProducts':3000,'trainedProducts':3000,'embeddingDimension':512,'storedVectors':3000,'batches':6,'referenceVariantsPerProduct':9,'encoder':'MobileCLIP2-S0 Vision ONNX','catalogMode':'cloud'},indent=2),encoding='utf-8')
           PY
       - uses: actions/upload-artifact@v4
         with:
-          name: yemen-3000-runtime-assets
+          name: yemen-3000-cloud-catalog
           path: build/yemen_food_catalog/
           retention-days: 30
           if-no-files-found: error
 
   release-apk:
-    needs: assemble-3000
+    needs: assemble-catalog
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - name: Download cloud-catalog artifact for verification only
+        uses: actions/download-artifact@v4
         with:
-          name: yemen-3000-runtime-assets
-          path: assets/generated
+          name: yemen-3000-cloud-catalog
+          path: /tmp/cloud-catalog
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.24.5'
@@ -225,22 +229,22 @@ jobs:
           flutter test test/recognition_pipeline_test.dart
           flutter test test/visual_recognition_integration_test.dart
           flutter test
-      - name: Verify final catalog
+      - name: Verify cloud catalog without bundling it in APK
         run: |
           python - <<'PY'
           import json,numpy as np
           from pathlib import Path
-          p=Path('assets/generated');s=json.loads((p/'build_stats.json').read_text());c=json.loads((p/'catalog.json').read_text());l=json.loads((p/'catalog_labels.json').read_text());e=np.fromfile(p/'catalog_centroids.f16',dtype=np.float16).reshape(-1,512);assert s['catalogProducts']==s['trainedProducts']==3000 and len(c)==len(l)==e.shape[0]==3000 and e.shape[1]==512
-          print('FINAL CATALOG VERIFIED: 3000/3000')
+          p=Path('/tmp/cloud-catalog');s=json.loads((p/'build_stats.json').read_text());c=json.loads((p/'catalog.json').read_text());l=json.loads((p/'catalog_labels.json').read_text());e=np.fromfile(p/'catalog_centroids.f16',dtype=np.float16).reshape(-1,512);assert s['catalogProducts']==s['trainedProducts']==3000 and len(c)==len(l)==e.shape[0]==3000 and e.shape[1]==512
+          print('CLOUD CATALOG VERIFIED: 3000/3000')
           PY
       - run: flutter build apk --release
-      - run: |
+      - name: Verify release APK contains runtime engine only
+        run: |
           test -s build/app/outputs/flutter-apk/app-release.apk
-          unzip -l build/app/outputs/flutter-apk/app-release.apk | grep -F 'assets/flutter_assets/assets/generated/yemen_food_catalog_3000.json'
-          unzip -l build/app/outputs/flutter-apk/app-release.apk | grep -F 'assets/flutter_assets/assets/generated/yemen_food_catalog_centroids.f16'
+          ! unzip -l build/app/outputs/flutter-apk/app-release.apk | grep -F 'yemen_food_catalog_3000.json'
       - uses: actions/upload-artifact@v4
         with:
-          name: ai-store-assistant-yemen-3000-release-apk
+          name: ai-store-assistant-cloud-catalog-release-apk
           path: build/app/outputs/flutter-apk/app-release.apk
           retention-days: 30
           if-no-files-found: error
