@@ -19,7 +19,6 @@ permissions:
 
 env:
   OFF_SAMPLE_ROOT: '/tmp/off'
-  IMAGE_SOURCE: 'open_food_facts'
 
 jobs:
   prepare-source:
@@ -34,67 +33,6 @@ jobs:
             | gzip -dc \
             | head -n 150000 > /tmp/off/products.jsonl || true
           test "$(wc -l < /tmp/off/products.jsonl)" -ge 140000
-      - name: Preserve real image URLs and repair missing URLs
-        run: |
-          python - <<'PY'
-          import json
-          from pathlib import Path
-          src=Path('/tmp/off/products.jsonl'); tmp=Path('/tmp/off/products.prepared.jsonl')
-          def find_url(v):
-              if isinstance(v,str):
-                  s=v.strip()
-                  if s.startswith('http') and ('.jpg' in s or '.jpeg' in s or '.png' in s or 'images/' in s):
-                      return s
-              if isinstance(v,list):
-                  for x in v:
-                      y=find_url(x)
-                      if y:return y
-              if isinstance(v,dict):
-                  for k in ('aws','off','url','image_front_url','image_front_small_url','image_front_thumb_url'):
-                      y=find_url(v.get(k))
-                      if y:return y
-                  for k in ('front','front_en','front_ar'):
-                      y=find_url(v.get(k))
-                      if y:return y
-                  for x in v.values():
-                      y=find_url(x)
-                      if y:return y
-              return ''
-          def find_imgid(v):
-              if isinstance(v,dict):
-                  for k in ('front','front_en','front_ar'):
-                      x=v.get(k)
-                      if isinstance(x,dict):
-                          for kk in ('imgid','imageid','id'):
-                              if x.get(kk): return str(x[kk])
-                  for x in v.values():
-                      y=find_imgid(x)
-                      if y:return y
-              if isinstance(v,list):
-                  for x in v:
-                      y=find_imgid(x)
-                      if y:return y
-              return ''
-          def folder(code):
-              d=''.join(c for c in str(code or '') if c.isdigit())
-              return d if len(d)<=8 else f'{d[:3]}/{d[3:6]}/{d[6:9]}/{d[9:]}'
-          n=0;with_images=0
-          with src.open('r',encoding='utf-8',errors='ignore') as fi, tmp.open('w',encoding='utf-8') as fo:
-              for line in fi:
-                  try:p=json.loads(line)
-                  except Exception:continue
-                  code=p.get('code') or p.get('_id')
-                  url=find_url(p.get('image_front_url')) or find_url(p.get('images'))
-                  if not url and code:
-                      iid=find_imgid(p.get('images'))
-                      if iid:
-                          url=f'https://openfoodfacts-images.s3.eu-west-3.amazonaws.com/data/{folder(code)}/{iid}.400.jpg'
-                  if url:
-                      p['image_front_url']=url;with_images+=1
-                  fo.write(json.dumps(p,ensure_ascii=False,separators=(',',':'))+'\n');n+=1
-          tmp.replace(src)
-          print(f'prepared records={n} records_with_image_reference={with_images}')
-          PY
       - uses: actions/upload-artifact@v4
         with:
           name: off-150k-source
