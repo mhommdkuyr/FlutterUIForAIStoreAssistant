@@ -87,16 +87,39 @@ jobs:
           from pathlib import Path
           src=Path('/tmp/off/products.jsonl'); tmp=Path('/tmp/off/products.aws.jsonl')
           def first(v):
-              if isinstance(v,str): return v.strip()
+              if isinstance(v,str):
+                  s=v.strip()
+                  return s if s.startswith('http') else s
               if isinstance(v,list):
                   for x in v:
                       y=first(x)
                       if y:return y
               if isinstance(v,dict):
-                  for k in ('imgid','imageid','id'):
-                      if v.get(k): return str(v[k])
+                  for k in ('aws','off','url','image_front_url','image_front_small_url','image_front_thumb_url'):
+                      x=v.get(k)
+                      if isinstance(x,str) and x.strip().startswith('http'):
+                          return x.strip()
+                  for k in ('front_en','front','front_ar','front_en.400','front'):
+                      if k in v:
+                          y=first(v[k])
+                          if y:return y
                   for x in v.values():
                       y=first(x)
+                      if y:return y
+              return ''
+          def imgid(v):
+              if isinstance(v,dict):
+                  for k in ('front_en','front','front_ar'):
+                      x=v.get(k)
+                      if isinstance(x,dict):
+                          for kk in ('imgid','imageid','id'):
+                              if x.get(kk):return str(x[kk])
+                  for x in v.values():
+                      y=imgid(x)
+                      if y:return y
+              if isinstance(v,list):
+                  for x in v:
+                      y=imgid(x)
                       if y:return y
               return ''
           def folder(code):
@@ -107,10 +130,12 @@ jobs:
               for line in fi:
                   try:p=json.loads(line)
                   except Exception:continue
-                  p.pop('image_front_url',None);p.pop('image_front_small_url',None);p.pop('image_front_thumb_url',None)
-                  code=p.get('code') or p.get('_id'); img=first(p.get('images'))
-                  if code and img:
-                      p['image_front_url']=f'https://openfoodfacts-images.s3.eu-west-3.amazonaws.com/data/{folder(code)}/{img}.400.jpg'
+                  code=p.get('code') or p.get('_id'); images=p.get('images') or {}
+                  url=first(images) or first(p.get('image_front_url') or '')
+                  iid=imgid(images)
+                  if code and not url and iid:
+                      url=f'https://openfoodfacts-images.s3.eu-west-3.amazonaws.com/data/{folder(code)}/{iid}.400.jpg'
+                  if url:p['image_front_url']=url
                   fo.write(json.dumps(p,ensure_ascii=False,separators=(',',':'))+'\n');n+=1
           tmp.replace(src)
           print('normalized records:',n)
