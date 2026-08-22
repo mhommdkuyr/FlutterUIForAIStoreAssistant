@@ -88,8 +88,7 @@ jobs:
           src=Path('/tmp/off/products.jsonl'); tmp=Path('/tmp/off/products.aws.jsonl')
           def first(v):
               if isinstance(v,str):
-                  s=v.strip()
-                  return s if s.startswith('http') else s
+                  s=v.strip(); return s
               if isinstance(v,list):
                   for x in v:
                       y=first(x)
@@ -97,9 +96,8 @@ jobs:
               if isinstance(v,dict):
                   for k in ('aws','off','url','image_front_url','image_front_small_url','image_front_thumb_url'):
                       x=v.get(k)
-                      if isinstance(x,str) and x.strip().startswith('http'):
-                          return x.strip()
-                  for k in ('front_en','front','front_ar','front_en.400','front'):
+                      if isinstance(x,str) and x.strip().startswith('http'): return x.strip()
+                  for k in ('front_en','front','front_ar'):
                       if k in v:
                           y=first(v[k])
                           if y:return y
@@ -113,7 +111,7 @@ jobs:
                       x=v.get(k)
                       if isinstance(x,dict):
                           for kk in ('imgid','imageid','id'):
-                              if x.get(kk):return str(x[kk])
+                              if x.get(kk): return str(x[kk])
                   for x in v.values():
                       y=imgid(x)
                       if y:return y
@@ -135,8 +133,8 @@ jobs:
                   iid=imgid(images)
                   if code and not url and iid:
                       url=f'https://openfoodfacts-images.s3.eu-west-3.amazonaws.com/data/{folder(code)}/{iid}.400.jpg'
-                  if url:p['image_front_url']=url
-                  fo.write(json.dumps(p,ensure_ascii=False,separators=(',',':'))+'\n');n+=1
+                  if url.startswith('http'): p['image_front_url']=url
+                  fo.write(json.dumps(p,ensure_ascii=False,separators=(',',':'))+'\n'); n+=1
           tmp.replace(src)
           print('normalized records:',n)
           PY
