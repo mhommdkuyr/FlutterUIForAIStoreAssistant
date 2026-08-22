@@ -1,0 +1,300 @@
+name: GroceryStoreDataset MobileCLIP2 Enrollment
+
+on:
+  push:
+    branches:
+      - feature/yemen-3000-runtime-catalog
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/grocery_store_dataset_embedding.yml'
+      - 'assets/models/mobileclip2/**'
+  workflow_dispatch:
+
+jobs:
+  enroll:
+    name: Embed 5,125 grocery images and evaluate 81 classes
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout repository with LFS assets
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install ML runtime
+        run: |
+          python -m pip install --upgrade pip
+          pip install --no-cache-dir numpy pillow onnxruntime scikit-learn
+
+      - name: Download GroceryStoreDataset
+        run: |
+          mkdir -p /tmp/grocery
+          curl -L --fail --retry 6 --retry-delay 3 \
+            -A 'AI-Store-Assistant-training/1.0' \
+            'https://github.com/marcusklasson/GroceryStoreDataset/archive/refs/heads/master.zip' \
+            -o /tmp/grocery/GroceryStoreDataset.zip
+          unzip -q /tmp/grocery/GroceryStoreDataset.zip -d /tmp/grocery
+          test -f /tmp/grocery/GroceryStoreDataset-master/dataset/train.txt
+          test -f /tmp/grocery/GroceryStoreDataset-master/dataset/test.txt
+          echo "Dataset downloaded."
+
+      - name: Build embeddings, prototypes, and evaluation
+        env:
+          MODEL_PATH: assets/models/mobileclip2/mobileclip2_s0_vision.onnx
+          METADATA_PATH: assets/models/mobileclip2/model_metadata.json
+        run: |
+          python - <<'PY'
+          import csv
+          import json
+          import math
+          import os
+          from pathlib import Path
+
+          import numpy as np
+          import onnxruntime as ort
+          from PIL import Image, ImageEnhance, ImageFilter
+          from sklearn.cluster import KMeans
+
+          root = Path('/tmp/grocery/GroceryStoreDataset-master/dataset')
+          out = Path('artifacts/grocery_store_mobileclip2')
+          out.mkdir(parents=True, exist_ok=True)
+
+          metadata = json.loads(Path(os.environ['METADATA_PATH']).read_text())
+          size = int(metadata['input_size'][0])
+          mean = np.array(metadata['normalization']['mean'], dtype=np.float32).reshape(1, 1, 3)
+          std = np.array(metadata['normalization']['std'], dtype=np.float32).reshape(1, 1, 3)
+          expected_dim = int(metadata['embedding_dimension'])
+
+          with open(root / 'classes.csv', newline='', encoding='utf-8') as f:
+              rows = list(csv.DictReader(f))
+          class_names = {int(r['Class ID (int)']): r['Class Name (str)'] for r in rows}
+          coarse_names = {int(r['Class ID (int)']): r['Coarse Class Name (str)'] for r in rows}
+
+          def read_split(name):
+              records = []
+              with open(root / f'{name}.txt', encoding='utf-8') as f:
+                  for line in f:
+                      parts = line.strip().split()
+                      if not parts:
+                          continue
+                      rel = Path(parts[0])
+                      label = int(parts[1])
+                      records.append((rel, label))
+              return records
+
+          train = read_split('train')
+          val = read_split('val')
+          test = read_split('test')
+          all_records = [('train',) + r for r in train] + [('val',) + r for r in val] + [('test',) + r for r in test]
+
+          providers = ['CPUExecutionProvider']
+          sess = ort.InferenceSession(os.environ['MODEL_PATH'], providers=providers)
+          input_name = sess.get_inputs()[0].name
+          output_name = sess.get_outputs()[0].name
+          input_shape = sess.get_inputs()[0].shape
+          output_shape = sess.get_outputs()[0].shape
+          print('ONNX input:', input_name, input_shape)
+          print('ONNX output:', output_name, output_shape)
+
+          def preprocess(path, variant='base'):
+              with Image.open(path) as im:
+                  im = im.convert('RGB').resize((size, size), Image.Resampling.BILINEAR)
+                  if variant == 'bright_up':
+                      im = ImageEnhance.Brightness(im).enhance(1.18)
+                  elif variant == 'bright_down':
+                      im = ImageEnhance.Brightness(im).enhance(0.82)
+                  elif variant == 'blur':
+                      im = im.filter(ImageFilter.GaussianBlur(radius=0.8))
+                  arr = np.asarray(im, dtype=np.float32) / 255.0
+                  arr = (arr - mean) / std
+                  if len(input_shape) == 4 and input_shape[-1] == 3:
+                      arr = arr[None, ...]
+                  else:
+                      arr = np.transpose(arr, (2, 0, 1))[None, ...]
+                  return arr.astype(np.float32)
+
+          def embed(path, variant='base'):
+              x = preprocess(path, variant)
+              y = sess.run([output_name], {input_name: x})[0]
+              y = np.asarray(y, dtype=np.float32).reshape(-1)
+              if y.shape[0] != expected_dim:
+                  raise RuntimeError(f'Unexpected embedding length {y.shape[0]} for {path}')
+              norm = np.linalg.norm(y)
+              if not np.isfinite(norm) or norm == 0:
+                  raise RuntimeError(f'Invalid embedding norm for {path}')
+              return y / norm
+
+          embeddings = []
+          labels = []
+          splits = []
+          paths = []
+          failures = []
+
+          for idx, (split, rel, label) in enumerate(all_records, start=1):
+              path = root / rel
+              try:
+                  vec = embed(path)
+                  embeddings.append(vec)
+                  labels.append(label)
+                  splits.append(split)
+                  paths.append(str(rel))
+              except Exception as exc:
+                  failures.append({'path': str(rel), 'label': label, 'split': split, 'error': repr(exc)})
+              if idx % 250 == 0:
+                  print(f'Processed {idx}/{len(all_records)} images; successful={len(embeddings)} failures={len(failures)}')
+
+          X = np.stack(embeddings).astype(np.float32)
+          y = np.asarray(labels, dtype=np.int32)
+          split_arr = np.asarray(splits)
+
+          # Build up to five normalized visual prototypes per fine-grained class from TRAIN only.
+          proto_vectors = []
+          proto_labels = []
+          class_stats = []
+          train_mask = split_arr == 'train'
+          for class_id in sorted(class_names):
+              mask = train_mask & (y == class_id)
+              samples = X[mask]
+              if samples.shape[0] == 0:
+                  continue
+              k = min(5, samples.shape[0])
+              if samples.shape[0] <= k:
+                  centers = samples.copy()
+              else:
+                  km = KMeans(n_clusters=k, random_state=42, n_init=10)
+                  km.fit(samples)
+                  centers = km.cluster_centers_.astype(np.float32)
+              centers /= np.linalg.norm(centers, axis=1, keepdims=True)
+              proto_vectors.append(centers)
+              proto_labels.extend([class_id] * len(centers))
+              class_stats.append({
+                  'class_id': class_id,
+                  'class_name': class_names[class_id],
+                  'coarse_name': coarse_names[class_id],
+                  'train_images': int(samples.shape[0]),
+                  'prototype_count': int(len(centers)),
+              })
+
+          P = np.concatenate(proto_vectors, axis=0).astype(np.float32)
+          PL = np.asarray(proto_labels, dtype=np.int32)
+
+          def evaluate(mask):
+              q = X[mask]
+              qy = y[mask]
+              if len(q) == 0:
+                  return {'count': 0, 'top1': 0.0, 'top3': 0.0}
+              correct1 = correct3 = 0
+              for vec, truth in zip(q, qy):
+                  scores = P @ vec
+                  order = np.argsort(-scores)
+                  ranked = []
+                  for oi in order:
+                      lab = int(PL[oi])
+                      if lab not in ranked:
+                          ranked.append(lab)
+                      if len(ranked) >= 3:
+                          break
+                  correct1 += int(ranked[0] == int(truth))
+                  correct3 += int(int(truth) in ranked[:3])
+              return {
+                  'count': int(len(q)),
+                  'top1': correct1 / len(q),
+                  'top3': correct3 / len(q),
+              }
+
+          val_metrics = evaluate(split_arr == 'val')
+          test_metrics = evaluate(split_arr == 'test')
+
+          # Robustness smoke test: brightness shifts on a deterministic subset of TEST.
+          robust_records = []
+          test_pairs = [(p, lab) for (split, p, lab) in all_records if split == 'test'][:200]
+          correct = 0
+          total = 0
+          for rel, truth in test_pairs:
+              for variant in ('bright_up', 'bright_down', 'blur'):
+                  try:
+                      vec = embed(root / rel, variant)
+                      scores = P @ vec
+                      pred = int(PL[int(np.argmax(scores))])
+                      correct += int(pred == truth)
+                      total += 1
+                  except Exception as exc:
+                      robust_records.append({'path': str(rel), 'variant': variant, 'error': repr(exc)})
+          robust_metrics = {'count': total, 'top1': (correct / total) if total else 0.0}
+
+          np.save(out / 'prototype_embeddings_512d.npy', P)
+          np.save(out / 'prototype_labels.npy', PL)
+          np.savez_compressed(out / 'image_embeddings_512d.npz', embeddings=X, labels=y, splits=split_arr, paths=np.asarray(paths))
+
+          catalog = {
+              'source': 'marcusklasson/GroceryStoreDataset',
+              'source_license': 'MIT',
+              'model': metadata,
+              'fine_grained_class_count': len(class_stats),
+              'image_count_requested': len(all_records),
+              'image_count_embedded': int(len(X)),
+              'failed_image_count': int(len(failures)),
+              'prototype_count': int(len(P)),
+              'classes': class_stats,
+          }
+          (out / 'catalog.json').write_text(json.dumps(catalog, ensure_ascii=False, indent=2), encoding='utf-8')
+          metrics = {
+              'model': metadata,
+              'dataset': {
+                  'train_requested': len(train),
+                  'val_requested': len(val),
+                  'test_requested': len(test),
+                  'embedded_images': int(len(X)),
+                  'failed_images': int(len(failures)),
+              },
+              'catalog': {
+                  'trained_fine_grained_classes': int(len(class_stats)),
+                  'prototypes': int(len(P)),
+              },
+              'validation': val_metrics,
+              'test': test_metrics,
+              'robustness_smoke': robust_metrics,
+          }
+          (out / 'metrics.json').write_text(json.dumps(metrics, ensure_ascii=False, indent=2), encoding='utf-8')
+          (out / 'failures.json').write_text(json.dumps(failures[:500], ensure_ascii=False, indent=2), encoding='utf-8')
+
+          print(json.dumps(metrics, ensure_ascii=False, indent=2))
+
+          if len(class_stats) < 81:
+              raise SystemExit(f'Expected 81 classes, got {len(class_stats)}')
+          if len(X) < 5000:
+              raise SystemExit(f'Expected roughly 5125 embedded images, got {len(X)}')
+          if not (test_metrics['top1'] >= 0.70):
+              raise SystemExit(f'Test Top-1 below release threshold: {test_metrics["top1"]:.4f}')
+          PY
+
+      - name: Validate artifacts and print final result
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p = Path('artifacts/grocery_store_mobileclip2')
+          metrics = json.loads((p / 'metrics.json').read_text())
+          print('FINAL TRAINED FINE-GRAINED CLASSES =', metrics['catalog']['trained_fine_grained_classes'])
+          print('FINAL EMBEDDED IMAGES =', metrics['dataset']['embedded_images'])
+          print('FINAL PROTOTYPES =', metrics['catalog']['prototypes'])
+          print('FINAL TEST TOP1 =', metrics['test']['top1'])
+          print('FINAL ROBUSTNESS TOP1 =', metrics['robustness_smoke']['top1'])
+          PY
+
+      - name: Upload trained grocery catalog
+        uses: actions/upload-artifact@v4
+        with:
+          name: grocery-store-mobileclip2-catalog
+          path: artifacts/grocery_store_mobileclip2
+          retention-days: 30
+          compression-level: 6
