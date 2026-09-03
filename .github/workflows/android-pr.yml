@@ -99,20 +99,21 @@ jobs:
             -camera-back imagefile:/tmp/mobileclip2_camera_scene.png
           disable-animations: true
           script: |
-            set -e
             echo "=== REAL MobileCLIP2 Android runtime test ==="
-            timeout 600s flutter test integration_test/mobileclip2_full_android_test.dart > mobileclip2_android_e2e.log 2>&1
-            rc=$?
-            cat mobileclip2_android_e2e.log
-            if [ "$rc" -ne 0 ]; then
+            if timeout 600s flutter test integration_test/mobileclip2_full_android_test.dart > mobileclip2_android_e2e.log 2>&1; then
+              cat mobileclip2_android_e2e.log
+            else
+              rc=$?
+              cat mobileclip2_android_e2e.log
               echo "❌ REAL MobileCLIP2 Android runtime test failed with exit code $rc"
               exit "$rc"
             fi
             echo "=== REAL live camera scanner E2E ==="
-            timeout 300s flutter test integration_test/live_scanner_camera_e2e_test.dart > android_camera_e2e.log 2>&1
-            rc=$?
-            cat android_camera_e2e.log
-            if [ "$rc" -ne 0 ]; then
+            if timeout 300s flutter test integration_test/live_scanner_camera_e2e_test.dart > android_camera_e2e.log 2>&1; then
+              cat android_camera_e2e.log
+            else
+              rc=$?
+              cat android_camera_e2e.log
               echo "❌ REAL live camera scanner E2E failed with exit code $rc"
               exit "$rc"
             fi
