@@ -101,9 +101,21 @@ jobs:
           script: |
             set -e
             echo "=== REAL MobileCLIP2 Android runtime test ==="
-            timeout 600s flutter test integration_test/mobileclip2_full_android_test.dart 2>&1 | tee mobileclip2_android_e2e.log
+            timeout 600s flutter test integration_test/mobileclip2_full_android_test.dart > mobileclip2_android_e2e.log 2>&1
+            rc=$?
+            cat mobileclip2_android_e2e.log
+            if [ "$rc" -ne 0 ]; then
+              echo "❌ REAL MobileCLIP2 Android runtime test failed with exit code $rc"
+              exit "$rc"
+            fi
             echo "=== REAL live camera scanner E2E ==="
-            timeout 300s flutter test integration_test/live_scanner_camera_e2e_test.dart 2>&1 | tee android_camera_e2e.log
+            timeout 300s flutter test integration_test/live_scanner_camera_e2e_test.dart > android_camera_e2e.log 2>&1
+            rc=$?
+            cat android_camera_e2e.log
+            if [ "$rc" -ne 0 ]; then
+              echo "❌ REAL live camera scanner E2E failed with exit code $rc"
+              exit "$rc"
+            fi
             APK_PATH="build/app/outputs/flutter-apk/app-debug.apk"
             adb install -r "$APK_PATH"
             adb shell pm path com.aistoreassistant.ai_store_assistant
