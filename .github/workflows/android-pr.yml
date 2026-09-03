@@ -79,7 +79,7 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
-      - name: Run real MobileCLIP2 runtime + camera recognition on Android emulator
+      - name: Run real MobileCLIP2 + camera + exact APK launch on Android emulator
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 35
@@ -99,23 +99,23 @@ jobs:
             -camera-back imagefile:/tmp/mobileclip2_camera_scene.png
           disable-animations: true
           script: >-
-            echo "=== REAL MobileCLIP2 Android smoke ==="; timeout 240s flutter test integration_test/mobileclip2_android_smoke_test.dart > mobileclip2_android_e2e.log 2>&1; rc=$?; cat mobileclip2_android_e2e.log; test "$rc" -eq 0 || { echo "❌ REAL MobileCLIP2 Android smoke failed with exit code $rc"; exit "$rc"; }; echo "✅ REAL MOBILECLIP2 ANDROID SMOKE PASS"; echo "=== REAL live scanner app E2E ==="; timeout 240s flutter test integration_test/live_scanner_camera_e2e_test.dart > android_camera_e2e.log 2>&1; rc=$?; cat android_camera_e2e.log; test "$rc" -eq 0 || { echo "❌ REAL live scanner app E2E failed with exit code $rc"; exit "$rc"; }; echo "✅ REAL LIVE SCANNER APP E2E PASS"; APK_PATH="build/app/outputs/flutter-apk/app-debug.apk"; adb install -r "$APK_PATH"; adb shell pm path com.aistoreassistant.ai_store_assistant; adb shell am force-stop com.aistoreassistant.ai_store_assistant; adb shell monkey -p com.aistoreassistant.ai_store_assistant 1 >/dev/null; sleep 8; pid="$(adb shell pidof com.aistoreassistant.ai_store_assistant | tr -d '\r')"; test -n "$pid"; echo "✅ EXACT APK INSTALL/LAUNCH PASS: pid=$pid"
+            set -eu; APK_PATH="build/app/outputs/flutter-apk/app-debug.apk"; PKG="com.aistoreassistant.ai_store_assistant"; echo "=== EXACT APK ADB LAUNCH PRECHECK ==="; adb install -r "$APK_PATH"; adb shell pm grant "$PKG" android.permission.CAMERA || true; adb shell am force-stop "$PKG"; adb shell monkey -p "$PKG" 1 >/dev/null; sleep 8; pid="$(adb shell pidof "$PKG" | tr -d '\r')"; test -n "$pid"; echo "✅ EXACT APK ADB LAUNCH PASS: pid=$pid"; echo "=== COMBINED REAL ANDROID VISION E2E ==="; timeout 420s flutter test --device-timeout 120 integration_test/android_vision_e2e_test.dart > android_vision_e2e.log 2>&1; rc=$?; cat android_vision_e2e.log; test "$rc" -eq 0 || { echo "❌ REAL Android vision E2E failed with exit code $rc"; exit "$rc"; }; echo "✅ REAL ANDROID VISION E2E PASS"; adb shell pidof "$PKG" | tr -d '\r' || true; adb logcat -d -t 300 > android_logcat.txt; echo "✅ POST-E2E ADB LOG CAPTURED"
 
-      - name: Upload MobileCLIP2 Android E2E log
+      - name: Upload Android vision E2E log
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: mobileclip2-android-e2e-log
-          path: mobileclip2_android_e2e.log
+          name: android-vision-e2e-log
+          path: android_vision_e2e.log
           retention-days: 7
           if-no-files-found: warn
 
-      - name: Upload camera E2E log
+      - name: Upload Android logcat
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: android-camera-e2e-log
-          path: android_camera_e2e.log
+          name: android-logcat
+          path: android_logcat.txt
           retention-days: 7
           if-no-files-found: warn
 
