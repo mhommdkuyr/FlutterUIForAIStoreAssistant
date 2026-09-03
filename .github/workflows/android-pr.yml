@@ -8,6 +8,7 @@ jobs:
   build:
     name: Build Debug APK
     runs-on: ubuntu-latest
+    timeout-minutes: 60
 
     steps:
       - name: Checkout repository
@@ -16,7 +17,7 @@ jobs:
           lfs: true
 
       - name: Set up Java 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           java-version: '17'
           distribution: 'temurin'
@@ -41,7 +42,100 @@ jobs:
       - name: Build debug APK
         run: |
           set -o pipefail
+          echo "BUILD CHECKPOINT: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          git rev-parse HEAD
+          flutter --version
           flutter build apk --debug 2>&1 | tee build_output.log
+
+      - name: Validate debug APK structure, assets and manifest
+        run: |
+          set -euo pipefail
+          APK_PATH="build/app/outputs/flutter-apk/app-debug.apk"
+          test -s "$APK_PATH"
+          unzip -t "$APK_PATH" >/dev/null
+          echo "APK size: $(du -h "$APK_PATH" | cut -f1)"
+          unzip -l "$APK_PATH" | grep -F 'flutter_assets/assets/models/mobileclip2/mobileclip2_s0_vision.onnx' >/dev/null
+          unzip -l "$APK_PATH" | grep -F 'flutter_assets/assets/models/mobileclip2/mobileclip2_s0_vision.onnx.data' >/dev/null
+          unzip -l "$APK_PATH" | grep -F 'flutter_assets/assets/models/mobileclip2/model_metadata.json' >/dev/null
+          BUILD_TOOLS="$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)"
+          "$BUILD_TOOLS/aapt" dump badging "$APK_PATH" | grep -F "package: name='com.aistoreassistant.ai_store_assistant'" >/dev/null
+          "$BUILD_TOOLS/aapt" dump permissions "$APK_PATH" | grep -F 'android.permission.CAMERA' >/dev/null
+
+      - name: Verify APK exists
+        run: |
+          echo "=== flutter-apk output directory ==="
+          ls -R build/app/outputs/flutter-apk || true
+          APK_PATH="build/app/outputs/flutter-apk/app-debug.apk"
+          if [ ! -f "$APK_PATH" ]; then
+            echo "ERROR: APK not found at $APK_PATH"
+            exit 1
+          fi
+          echo "APK found: $(du -sh "$APK_PATH")"
+
+      - name: Enable KVM for Android emulator
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS="static_node=kvm"' | \
+            sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Run real MobileCLIP2 + camera + exact APK validation on Android emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_5
+          force-avd-creation: false
+          pre-emulator-launch-script: >-
+            command -v convert >/dev/null 2>&1 || { sudo apt-get update && sudo apt-get install -y imagemagick; }; convert -size 640x480 xc:'#f0f2f5' -fill '#cd322d' -draw 'roundrectangle 170,75 470,405 45,45' -fill '#1e232a' -draw 'rectangle 245,40 395,95' -fill white -draw 'roundrectangle 205,180 435,265 12,12' /tmp/mobileclip2_camera_scene.png && test -s /tmp/mobileclip2_camera_scene.png
+          emulator-options: >-
+            -no-window
+            -gpu swiftshader_indirect
+            -noaudio
+            -no-boot-anim
+            -no-snapshot-load
+            -no-snapshot-save
+            -camera-back imagefile:/tmp/mobileclip2_camera_scene.png
+          disable-animations: true
+          script: >-
+            set -eu; APK_PATH="build/app/outputs/flutter-apk/app-debug.apk"; PKG="com.aistoreassistant.ai_store_assistant"; rm -f android_logcat.txt android_launch_screen.png; echo "=== COMBINED REAL ANDROID VISION E2E ==="; timeout 420s flutter test integration_test/android_vision_e2e_test.dart > android_vision_e2e.log 2>&1; rc=$?; cat android_vision_e2e.log; test "$rc" -eq 0 || { echo "❌ REAL Android vision E2E failed with exit code $rc"; exit "$rc"; }; echo "✅ REAL ANDROID VISION E2E PASS"; echo "=== EXACT APK INSTALL / LAUNCH / FOREGROUND CHECK ==="; adb install -r "$APK_PATH"; adb shell pm grant "$PKG" android.permission.CAMERA || true; adb shell am force-stop "$PKG"; adb shell monkey -p "$PKG" 1 >/dev/null; sleep 8; pid="$(adb shell pidof "$PKG" | tr -d '\r')"; test -n "$pid"; echo "✅ EXACT APK ADB LAUNCH PASS: pid=$pid"; adb shell dumpsys activity activities | grep -F "$PKG" | head -n 5 || true; adb exec-out screencap -p > android_launch_screen.png; test -s android_launch_screen.png; echo "✅ EXACT APK SCREENSHOT CAPTURE PASS: $(stat -c%s android_launch_screen.png) bytes"; adb logcat -d -t 500 > android_logcat.txt; test -s android_logcat.txt; echo "✅ POST-E2E ADB LOGCAPTURE PASS"
+
+      - name: Upload Android vision E2E log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-vision-e2e-log
+          path: android_vision_e2e.log
+          retention-days: 7
+          if-no-files-found: warn
+
+      - name: Upload Android logcat
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-logcat
+          path: android_logcat.txt
+          retention-days: 7
+          if-no-files-found: warn
+
+      - name: Upload exact APK launch screenshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-exact-apk-screen
+          path: android_launch_screen.png
+          retention-days: 7
+          if-no-files-found: warn
+
+      - name: Upload debug APK
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-pr-debug-apk
+          path: build/app/outputs/flutter-apk/app-debug.apk
+          retention-days: 7
+          if-no-files-found: warn
 
       - name: Upload build log on failure
         if: failure()
@@ -50,22 +144,4 @@ jobs:
           name: android-pr-build-log
           path: build_output.log
           retention-days: 7
-
-      - name: Verify APK exists
-        run: |
-          echo "=== flutter-apk output directory ==="
-          ls -R build/app/outputs/flutter-apk || true
-          APK_PATH="build/app/outputs/flutter-apk/app-debug.apk"
-          if [ ! -f "$APK_PATH" ]; then
-            echo "ERROR: APK not found at $APK_PATH — build step must have failed silently."
-            exit 1
-          fi
-          echo "APK found: $(du -sh $APK_PATH)"
-
-      - name: Upload validation APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: android-pr-debug-apk
-          path: build/app/outputs/flutter-apk/app-debug.apk
-          retention-days: 7
-          if-no-files-found: error
+          if-no-files-found: warn
