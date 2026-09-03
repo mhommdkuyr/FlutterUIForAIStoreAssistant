@@ -55,7 +55,6 @@ jobs:
           python - <<'PY'
           import csv
           import json
-          import math
           import os
           from pathlib import Path
 
@@ -83,12 +82,13 @@ jobs:
               records = []
               with open(root / f'{name}.txt', encoding='utf-8') as f:
                   for line in f:
-                      parts = line.strip().split()
+                      parts = line.strip().replace(',', ' ').split()
                       if not parts:
                           continue
+                      # Dataset annotations can encode the label as "0,".
                       rel = Path(parts[0])
-                      label = int(parts[1])
-                      records.append((rel, label))
+                      label_token = parts[1].rstrip(',')
+                      records.append((rel, int(label_token)))
               return records
 
           train = read_split('train')
@@ -152,11 +152,12 @@ jobs:
               if idx % 250 == 0:
                   print(f'Processed {idx}/{len(all_records)} images; successful={len(embeddings)} failures={len(failures)}')
 
+          if not embeddings:
+              raise RuntimeError('No embeddings were produced')
           X = np.stack(embeddings).astype(np.float32)
           y = np.asarray(labels, dtype=np.int32)
           split_arr = np.asarray(splits)
 
-          # Build up to five normalized visual prototypes per fine-grained class from TRAIN only.
           proto_vectors = []
           proto_labels = []
           class_stats = []
@@ -184,6 +185,8 @@ jobs:
                   'prototype_count': int(len(centers)),
               })
 
+          if not proto_vectors:
+              raise RuntimeError('No class prototypes were produced')
           P = np.concatenate(proto_vectors, axis=0).astype(np.float32)
           PL = np.asarray(proto_labels, dtype=np.int32)
 
@@ -205,30 +208,20 @@ jobs:
                           break
                   correct1 += int(ranked[0] == int(truth))
                   correct3 += int(int(truth) in ranked[:3])
-              return {
-                  'count': int(len(q)),
-                  'top1': correct1 / len(q),
-                  'top3': correct3 / len(q),
-              }
+              return {'count': int(len(q)), 'top1': correct1 / len(q), 'top3': correct3 / len(q)}
 
           val_metrics = evaluate(split_arr == 'val')
           test_metrics = evaluate(split_arr == 'test')
 
-          # Robustness smoke test: brightness shifts on a deterministic subset of TEST.
-          robust_records = []
           test_pairs = [(p, lab) for (split, p, lab) in all_records if split == 'test'][:200]
-          correct = 0
-          total = 0
+          correct = total = 0
           for rel, truth in test_pairs:
               for variant in ('bright_up', 'bright_down', 'blur'):
-                  try:
-                      vec = embed(root / rel, variant)
-                      scores = P @ vec
-                      pred = int(PL[int(np.argmax(scores))])
-                      correct += int(pred == truth)
-                      total += 1
-                  except Exception as exc:
-                      robust_records.append({'path': str(rel), 'variant': variant, 'error': repr(exc)})
+                  vec = embed(root / rel, variant)
+                  scores = P @ vec
+                  pred = int(PL[int(np.argmax(scores))])
+                  correct += int(pred == truth)
+                  total += 1
           robust_metrics = {'count': total, 'top1': (correct / total) if total else 0.0}
 
           np.save(out / 'prototype_embeddings_512d.npy', P)
@@ -266,7 +259,6 @@ jobs:
           }
           (out / 'metrics.json').write_text(json.dumps(metrics, ensure_ascii=False, indent=2), encoding='utf-8')
           (out / 'failures.json').write_text(json.dumps(failures[:500], ensure_ascii=False, indent=2), encoding='utf-8')
-
           print(json.dumps(metrics, ensure_ascii=False, indent=2))
 
           if len(class_stats) < 81:
