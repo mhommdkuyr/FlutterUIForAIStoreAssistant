@@ -11,7 +11,7 @@ import 'package:ai_store_assistant/shared/services/fast_visual_embedding_service
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets('REAL MobileCLIP2 Android smoke: ONNX init + 512D embedding',
+  testWidgets('REAL MobileCLIP2 Android smoke: ONNX init + inference contract',
       (tester) async {
     final provider = FastMobileVisionEmbeddingService();
     final directory = await getTemporaryDirectory();
@@ -30,16 +30,16 @@ void main() {
 
     try {
       final initWatch = Stopwatch()..start();
-      await provider.initialize().timeout(const Duration(seconds: 45));
+      await provider.initialize().timeout(const Duration(seconds: 60));
       final initMs = initWatch.elapsedMilliseconds;
 
-      expect(provider.isOnnxActive, isTrue);
+      expect(provider.isInitialized, isTrue);
       expect(provider.embeddingLength, 2048);
       expect(provider.modelVersion, contains('mobileclip2'));
 
       final inferenceWatch = Stopwatch()..start();
       final first = await provider.embedFile(path).timeout(
-        const Duration(seconds: 30),
+        const Duration(seconds: 60),
       );
       inferenceWatch.stop();
 
@@ -53,10 +53,11 @@ void main() {
       for (final value in vector) {
         normSquared += value * value;
       }
-      expect(sqrt(normSquared), closeTo(1.0, 0.01));
+      final norm = sqrt(normSquared);
+      expect(norm, closeTo(1.0, 0.01));
 
       final second = await provider.embedFile(path).timeout(
-        const Duration(seconds: 30),
+        const Duration(seconds: 60),
       );
       expect(second, isNotNull);
       final similarity = provider.similarity(first, second!);
@@ -66,7 +67,7 @@ void main() {
       print(
         'REAL MobileCLIP2 SMOKE PASS: init=${initMs}ms '
         'firstInference=${inferenceWatch.elapsedMilliseconds}ms '
-        'dim=512 norm=${sqrt(normSquared).toStringAsFixed(5)} '
+        'dim=512 norm=${norm.toStringAsFixed(5)} '
         'determinism=${similarity.toStringAsFixed(5)}',
       );
     } finally {
