@@ -98,34 +98,8 @@ jobs:
             -no-snapshot-save
             -camera-back imagefile:/tmp/mobileclip2_camera_scene.png
           disable-animations: true
-          script: |
-            echo "=== REAL MobileCLIP2 Android runtime test ==="
-            if timeout 600s flutter test integration_test/mobileclip2_full_android_test.dart > mobileclip2_android_e2e.log 2>&1; then
-              cat mobileclip2_android_e2e.log
-            else
-              rc=$?
-              cat mobileclip2_android_e2e.log
-              echo "❌ REAL MobileCLIP2 Android runtime test failed with exit code $rc"
-              exit "$rc"
-            fi
-            echo "=== REAL live camera scanner E2E ==="
-            if timeout 300s flutter test integration_test/live_scanner_camera_e2e_test.dart > android_camera_e2e.log 2>&1; then
-              cat android_camera_e2e.log
-            else
-              rc=$?
-              cat android_camera_e2e.log
-              echo "❌ REAL live camera scanner E2E failed with exit code $rc"
-              exit "$rc"
-            fi
-            APK_PATH="build/app/outputs/flutter-apk/app-debug.apk"
-            adb install -r "$APK_PATH"
-            adb shell pm path com.aistoreassistant.ai_store_assistant
-            adb shell am force-stop com.aistoreassistant.ai_store_assistant
-            adb shell monkey -p com.aistoreassistant.ai_store_assistant 1 >/dev/null
-            sleep 8
-            pid="$(adb shell pidof com.aistoreassistant.ai_store_assistant | tr -d '\r')"
-            test -n "$pid"
-            echo "✅ EXACT APK INSTALL/LAUNCH PASS: pid=$pid"
+          script: >-
+            echo "=== REAL MobileCLIP2 Android runtime test ==="; timeout 600s flutter test integration_test/mobileclip2_full_android_test.dart > mobileclip2_android_e2e.log 2>&1; rc=$?; cat mobileclip2_android_e2e.log; test "$rc" -eq 0 || { echo "❌ REAL MobileCLIP2 Android runtime test failed with exit code $rc"; exit "$rc"; }; echo "=== REAL live camera scanner E2E ==="; timeout 300s flutter test integration_test/live_scanner_camera_e2e_test.dart > android_camera_e2e.log 2>&1; rc=$?; cat android_camera_e2e.log; test "$rc" -eq 0 || { echo "❌ REAL live camera scanner E2E failed with exit code $rc"; exit "$rc"; }; APK_PATH="build/app/outputs/flutter-apk/app-debug.apk"; adb install -r "$APK_PATH"; adb shell pm path com.aistoreassistant.ai_store_assistant; adb shell am force-stop com.aistoreassistant.ai_store_assistant; adb shell monkey -p com.aistoreassistant.ai_store_assistant 1 >/dev/null; sleep 8; pid="$(adb shell pidof com.aistoreassistant.ai_store_assistant | tr -d '\r')"; test -n "$pid"; echo "✅ EXACT APK INSTALL/LAUNCH PASS: pid=$pid"
 
       - name: Upload MobileCLIP2 Android E2E log
         if: always()
