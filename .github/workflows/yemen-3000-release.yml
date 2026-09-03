@@ -1,0 +1,225 @@
+name: Yemen Visual Catalog Enrollment
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [feature/yemen-3000-runtime-catalog]
+  pull_request:
+    branches: [main]
+    paths:
+      - 'tools/build_yemen_3000_catalog.py'
+      - 'data/yemen_food_catalog_seed.json'
+      - 'assets/models/mobileclip2/**'
+      - 'lib/**'
+      - 'pubspec.yaml'
+      - '.github/workflows/yemen-3000-release.yml'
+
+permissions:
+  contents: read
+
+env:
+  OFF_SAMPLE_ROOT: '/tmp/off'
+  IMAGE_SOURCE: 'open_food_facts'
+
+jobs:
+  prepare-source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Install DuckDB
+        run: python -m pip install --no-cache-dir duckdb==1.3.2
+      - name: Query cloud Parquet for image-backed products
+        run: |
+          mkdir -p /tmp/off
+          python - <<'PY'
+          import duckdb, json
+          con=duckdb.connect()
+          url='https://huggingface.co/datasets/openfoodfacts/product-database/resolve/main/food.parquet'
+          q="""
+          SELECT code, product_name, brands, categories_tags, quantity, images, countries_tags
+          FROM read_parquet(?)
+          WHERE product_name IS NOT NULL AND images IS NOT NULL
+          """
+          rows=con.execute(q,[url]).fetchall()
+          def url_from_images(v):
+              if isinstance(v,str) and v.startswith('http'):
+                  return v
+              if isinstance(v,list):
+                  for x in v:
+                      y=url_from_images(x)
+                      if y:return y
+              if isinstance(v,dict):
+                  for k in ('front_en','front','front_ar'):
+                      x=v.get(k)
+                      y=url_from_images(x)
+                      if y:return y
+                  for k in ('sizes','url','aws','off'):
+                      if k in v:
+                          y=url_from_images(v[k])
+                          if y:return y
+                  for x in v.values():
+                      y=url_from_images(x)
+                      if y:return y
+              return ''
+          out=[]; seen=set()
+          # Yemen first, then global
+          rows=sorted(rows,key=lambda r: 0 if (r[6] and 'en:yemen' in r[6]) else 1)
+          for code,name,brands,cats,qty,images,countries in rows:
+              code=str(code or '').strip()
+              if not code or code in seen: continue
+              img=url_from_images(images)
+              if not img: continue
+              seen.add(code)
+              out.append({'code':code,'product_name':name,'brands':brands,'categories_tags':cats or [],'quantity':qty,'image_front_url':img,'countries_tags':countries or []})
+              if len(out)>=30000: break
+          with open('/tmp/off/products.jsonl','w',encoding='utf-8') as f:
+              for p in out:f.write(json.dumps(p,ensure_ascii=False,separators=(',',':'))+'\n')
+          print('image-backed candidates:',len(out))
+          print('yemen candidates:',sum('en:yemen' in (p.get('countries_tags') or []) for p in out))
+          PY
+          test "$(wc -l < /tmp/off/products.jsonl)" -ge 5000
+      - uses: actions/upload-artifact@v4
+        with:
+          name: off-candidates
+          path: /tmp/off/products.jsonl
+          retention-days: 2
+          compression-level: 0
+          if-no-files-found: error
+
+  train-batches:
+    needs: prepare-source
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - batch: 0
+            start: 0
+            seed: true
+          - batch: 1
+            start: 500
+            seed: false
+          - batch: 2
+            start: 1000
+            seed: false
+          - batch: 3
+            start: 1500
+            seed: false
+          - batch: 4
+            start: 2000
+            seed: false
+          - batch: 5
+            start: 2500
+            seed: false
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: actions/download-artifact@v4
+        with:
+          name: off-candidates
+          path: /tmp/off
+      - name: Install ML dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install --no-cache-dir numpy pillow requests onnxruntime
+      - name: Train 500-SKU batch ${{ matrix.batch }}
+        run: |
+          args="--target-products 500 --start-index ${{ matrix.start }} --augments 8 --download-workers 16"
+          if [ "${{ matrix.seed }}" = "true" ]; then args="$args --include-seed"; fi
+          python tools/build_yemen_3000_catalog.py $args
+      - name: Validate batch
+        run: |
+          python - <<'PY'
+          import json,numpy as np
+          from pathlib import Path
+          r=Path('build/yemen_food_catalog');s=json.loads((r/'build_stats.json').read_text());c=json.loads((r/'catalog.json').read_text());l=json.loads((r/'catalog_labels.json').read_text());e=np.fromfile(r/'catalog_centroids.f16',dtype=np.float16).reshape(-1,512)
+          assert s['trainedProducts']==500 and len(c)==len(l)==e.shape[0]==500 and e.shape[1]==512
+          assert len({x['id'] for x in c})==500 and all(x.get('recognitionReady') for x in c)
+          print(json.dumps(s,indent=2))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: yemen-batch-${{ matrix.batch }}
+          path: build/yemen_food_catalog/
+          retention-days: 30
+          if-no-files-found: error
+
+  assemble-catalog:
+    needs: train-batches
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: yemen-batch-*
+          path: build/batches
+          merge-multiple: false
+      - name: Assemble cloud catalog
+        run: |
+          python - <<'PY'
+          import json,numpy as np
+          from pathlib import Path
+          out=Path('build/yemen_food_catalog');out.mkdir(parents=True,exist_ok=True);catalog=[];labels=[];parts=[]
+          for d in sorted(Path('build/batches').glob('yemen-batch-*')):
+           c=json.loads((d/'catalog.json').read_text());l=json.loads((d/'catalog_labels.json').read_text());e=np.fromfile(d/'catalog_centroids.f16',dtype=np.float16).reshape(-1,512)
+           assert len(c)==len(l)==e.shape[0]==500 and e.shape[1]==512
+           catalog+=c;labels+=l;parts.append(e)
+          emb=np.concatenate(parts)
+          assert len(catalog)==len(labels)==emb.shape[0]==3000 and emb.shape[1]==512
+          assert len({x['id'] for x in catalog})==3000 and len(set(labels))==3000
+          assert all(x.get('recognitionReady') for x in catalog)
+          (out/'catalog.json').write_text(json.dumps(catalog,ensure_ascii=False),encoding='utf-8');(out/'catalog_labels.json').write_text(json.dumps(labels,ensure_ascii=False),encoding='utf-8');emb.astype(np.float16).tofile(out/'catalog_centroids.f16');(out/'build_stats.json').write_text(json.dumps({'catalogProducts':3000,'trainedProducts':3000,'embeddingDimension':512,'storedVectors':3000,'batches':6,'referenceVariantsPerProduct':9,'encoder':'MobileCLIP2-S0 Vision ONNX','catalogMode':'cloud'},indent=2),encoding='utf-8')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: yemen-3000-cloud-catalog
+          path: build/yemen_food_catalog/
+          retention-days: 30
+          if-no-files-found: error
+
+  release-apk:
+    needs: assemble-catalog
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: yemen-3000-cloud-catalog
+          path: /tmp/cloud-catalog
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.5'
+          channel: stable
+          cache: true
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - run: flutter pub get
+      - run: flutter analyze
+      - run: |
+          flutter test test/mobileclip2_model_contract_test.dart
+          flutter test test/local_product_index_service_test.dart
+          flutter test test/recognition_pipeline_test.dart
+          flutter test test/visual_recognition_integration_test.dart
+          flutter test
+      - name: Verify cloud catalog
+        run: |
+          python - <<'PY'
+          import json,numpy as np
+          from pathlib import Path
+          p=Path('/tmp/cloud-catalog');s=json.loads((p/'build_stats.json').read_text());c=json.loads((p/'catalog.json').read_text());l=json.loads((p/'catalog_labels.json').read_text());e=np.fromfile(p/'catalog_centroids.f16',dtype=np.float16).reshape(-1,512);assert s['catalogProducts']==s['trainedProducts']==3000 and len(c)==len(l)==e.shape[0]==3000 and e.shape[1]==512
+          print('CLOUD CATALOG VERIFIED: 3000/3000')
+          PY
+      - run: flutter build apk --release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ai-store-assistant-cloud-catalog-release-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
+          retention-days: 30
+          if-no-files-found: error

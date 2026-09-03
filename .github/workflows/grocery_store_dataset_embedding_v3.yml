@@ -1,0 +1,141 @@
+name: GroceryStoreDataset MobileCLIP2 Enrollment v3
+
+on:
+  push:
+    branches:
+      - feature/yemen-3000-runtime-catalog
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/grocery_store_dataset_embedding_v3.yml'
+      - 'assets/models/mobileclip2/**'
+  workflow_dispatch:
+
+jobs:
+  enroll:
+    name: Parallel MobileCLIP2 grocery enrollment
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install ML runtime
+        run: |
+          python -m pip install --upgrade pip
+          pip install --no-cache-dir numpy pillow onnxruntime scikit-learn
+      - name: Download dataset
+        run: |
+          mkdir -p /tmp/grocery
+          curl -L --fail --retry 6 --retry-delay 3 -A 'AI-Store-Assistant-training/1.0' \
+            'https://github.com/marcusklasson/GroceryStoreDataset/archive/refs/heads/master.zip' \
+            -o /tmp/grocery/dataset.zip
+          unzip -q /tmp/grocery/dataset.zip -d /tmp/grocery
+      - name: Parallel embed and evaluate
+        env:
+          MODEL_PATH: assets/models/mobileclip2/mobileclip2_s0_vision.onnx
+          METADATA_PATH: assets/models/mobileclip2/model_metadata.json
+        run: |
+          python - <<'PY'
+          import csv, json, os
+          from pathlib import Path
+          from concurrent.futures import ThreadPoolExecutor, as_completed
+          import threading
+          import numpy as np
+          import onnxruntime as ort
+          from PIL import Image, ImageEnhance, ImageFilter
+          from sklearn.cluster import KMeans
+
+          root=Path('/tmp/grocery/GroceryStoreDataset-master/dataset'); out=Path('artifacts/grocery_store_mobileclip2_v3'); out.mkdir(parents=True,exist_ok=True)
+          meta=json.loads(Path(os.environ['METADATA_PATH']).read_text()); size=int(meta['input_size'][0]); mean=np.array(meta['normalization']['mean'],np.float32).reshape(1,1,3); std=np.array(meta['normalization']['std'],np.float32).reshape(1,1,3); dim=int(meta['embedding_dimension'])
+          with open(root/'classes.csv',encoding='utf-8') as f: rows=list(csv.DictReader(f))
+          names={int(r['Class ID (int)']):r['Class Name (str)'] for r in rows}; coarse={int(r['Class ID (int)']):r['Coarse Class Name (str)'] for r in rows}
+
+          def split(name):
+              rec=[]
+              for line in (root/f'{name}.txt').read_text(encoding='utf-8').splitlines():
+                  tok=line.replace(',',' ').split()
+                  if len(tok)>=2: rec.append((Path(tok[0]),int(tok[1])))
+              return rec
+          train,val,test=split('train'),split('val'),split('test')
+          records=[('train',p,l) for p,l in train]+[('val',p,l) for p,l in val]+[('test',p,l) for p,l in test]
+
+          tls=threading.local()
+          def get_session():
+              if not hasattr(tls,'sess'):
+                  so=ort.SessionOptions(); so.intra_op_num_threads=2; so.inter_op_num_threads=1
+                  tls.sess=ort.InferenceSession(os.environ['MODEL_PATH'],sess_options=so,providers=['CPUExecutionProvider'])
+                  tls.in_name=tls.sess.get_inputs()[0].name; tls.out_name=tls.sess.get_outputs()[0].name; tls.shape=tls.sess.get_inputs()[0].shape
+              return tls.sess
+          def embed(item):
+              split_name,rel,label,variant=item; p=root/rel; sess=get_session()
+              with Image.open(p) as im:
+                  im=im.convert('RGB').resize((size,size),Image.Resampling.BILINEAR)
+                  if variant=='bright_up': im=ImageEnhance.Brightness(im).enhance(1.18)
+                  elif variant=='bright_down': im=ImageEnhance.Brightness(im).enhance(0.82)
+                  elif variant=='blur': im=im.filter(ImageFilter.GaussianBlur(0.8))
+                  a=np.asarray(im,np.float32)/255.0; a=(a-mean)/std
+                  if len(sess.get_inputs()[0].shape)==4 and sess.get_inputs()[0].shape[-1]==3: a=a[None,...]
+                  else: a=np.transpose(a,(2,0,1))[None,...]
+                  y=np.asarray(sess.run([sess.get_outputs()[0].name],{sess.get_inputs()[0].name:a})[0],np.float32).reshape(-1)
+                  if len(y)!=dim: raise RuntimeError(f'bad embedding {len(y)}')
+                  y/=np.linalg.norm(y)
+                  return split_name,rel,label,variant,y
+
+          base=[(s,p,l,'base') for s,p,l in records]
+          results=[]; failures=[]
+          with ThreadPoolExecutor(max_workers=4) as ex:
+              futs={ex.submit(embed,x):x for x in base}
+              for i,f in enumerate(as_completed(futs),1):
+                  try: results.append(f.result())
+                  except Exception as e: failures.append({'item':str(futs[f]),'error':repr(e)})
+                  if i%250==0: print(f'embedded {i}/{len(base)} successful={len(results)} failures={len(failures)}',flush=True)
+
+          X=np.stack([r[4] for r in results]).astype(np.float32); y=np.array([r[2] for r in results],np.int32); sp=np.array([r[0] for r in results]); paths=[str(r[1]) for r in results]
+          train_mask=sp=='train'; pv=[]; pl=[]; stats=[]
+          for cid in sorted(names):
+              s=X[train_mask&(y==cid)]
+              if len(s)==0: continue
+              k=min(5,len(s)); centers=s if len(s)<=k else KMeans(n_clusters=k,random_state=42,n_init=10).fit(s).cluster_centers_.astype(np.float32)
+              centers=np.asarray(centers,np.float32); centers/=np.linalg.norm(centers,axis=1,keepdims=True); pv.append(centers); pl.extend([cid]*len(centers)); stats.append({'class_id':cid,'class_name':names[cid],'coarse_name':coarse[cid],'train_images':int(len(s)),'prototype_count':int(len(centers))})
+          P=np.concatenate(pv,0); PL=np.array(pl,np.int32)
+
+          def score(mask):
+              q=X[mask]; truth=y[mask]; c1=c3=0
+              for v,t in zip(q,truth):
+                  order=np.argsort(-(P@v)); seen=[]
+                  for oi in order:
+                      lab=int(PL[oi]);
+                      if lab not in seen: seen.append(lab)
+                      if len(seen)>=3: break
+                  c1+=int(seen[0]==int(t)); c3+=int(int(t) in seen[:3])
+              return {'count':int(len(q)),'top1':c1/len(q),'top3':c3/len(q)} if len(q) else {'count':0,'top1':0.0,'top3':0.0}
+          val_m=score(sp=='val'); test_m=score(sp=='test')
+
+          # Robustness subset: rerun 100 test images through 3 perturbations in parallel.
+          smoke=[('test',p,l,v) for s,p,l in records if s=='test' for v in ('bright_up','bright_down','blur')][:300]
+          rc=rt=0
+          with ThreadPoolExecutor(max_workers=4) as ex:
+              for s,p,l,v,yv in ex.map(embed,smoke): rc+=int(int(PL[int(np.argmax(P@yv))])==l); rt+=1
+          robust={'count':rt,'top1':rc/rt if rt else 0.0}
+
+          np.save(out/'prototype_embeddings_512d.npy',P); np.save(out/'prototype_labels.npy',PL)
+          catalog={'source':'marcusklasson/GroceryStoreDataset','source_license':'MIT','model':meta,'trained_fine_grained_classes':len(stats),'embedded_images':len(X),'failed_images':len(failures),'prototype_count':len(P),'classes':stats}
+          metrics={'dataset':{'train_requested':len(train),'val_requested':len(val),'test_requested':len(test),'embedded_images':len(X),'failed_images':len(failures)},'catalog':{'trained_fine_grained_classes':len(stats),'prototypes':len(P)},'validation':val_m,'test':test_m,'robustness_smoke':robust}
+          (out/'catalog.json').write_text(json.dumps(catalog,ensure_ascii=False,indent=2)); (out/'metrics.json').write_text(json.dumps(metrics,ensure_ascii=False,indent=2)); (out/'failures.json').write_text(json.dumps(failures[:500],ensure_ascii=False,indent=2))
+          print(json.dumps(metrics,ensure_ascii=False,indent=2))
+          if len(stats)<81: raise SystemExit(f'classes={len(stats)}')
+          if len(X)<5000: raise SystemExit(f'embedded={len(X)}')
+          PY
+      - name: Print final result
+        run: cat artifacts/grocery_store_mobileclip2_v3/metrics.json
+      - name: Upload trained catalog artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: grocery-store-mobileclip2-catalog-v3
+          path: artifacts/grocery_store_mobileclip2_v3
+          retention-days: 30
