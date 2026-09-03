@@ -8,7 +8,7 @@ jobs:
   build:
     name: Build Debug APK
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 60
 
     steps:
       - name: Checkout repository
@@ -79,7 +79,7 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
-      - name: Run real application camera E2E and validate exact APK
+      - name: Run real MobileCLIP2 runtime + camera recognition on Android emulator
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 35
@@ -99,7 +99,10 @@ jobs:
             -camera-back imagefile:/tmp/mobileclip2_camera_scene.png
           disable-animations: true
           script: |
-            set -euo pipefail
+            set -e
+            echo "=== REAL MobileCLIP2 Android runtime test ==="
+            timeout 600s flutter test integration_test/mobileclip2_full_android_test.dart 2>&1 | tee mobileclip2_android_e2e.log
+            echo "=== REAL live camera scanner E2E ==="
             timeout 300s flutter test integration_test/live_scanner_camera_e2e_test.dart 2>&1 | tee android_camera_e2e.log
             APK_PATH="build/app/outputs/flutter-apk/app-debug.apk"
             adb install -r "$APK_PATH"
@@ -110,6 +113,15 @@ jobs:
             pid="$(adb shell pidof com.aistoreassistant.ai_store_assistant | tr -d '\r')"
             test -n "$pid"
             echo "✅ EXACT APK INSTALL/LAUNCH PASS: pid=$pid"
+
+      - name: Upload MobileCLIP2 Android E2E log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mobileclip2-android-e2e-log
+          path: mobileclip2_android_e2e.log
+          retention-days: 7
+          if-no-files-found: warn
 
       - name: Upload camera E2E log
         if: always()
