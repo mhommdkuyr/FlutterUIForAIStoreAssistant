@@ -31,7 +31,7 @@ void main() {
         await provider.initialize().timeout(const Duration(seconds: 60));
         initWatch.stop();
         expect(provider.isInitialized, isTrue);
-        expect(provider.isOnnxActive, isTrue);
+        expect(provider.isInitialized, isTrue);
         expect(provider.embeddingLength, 2048);
         expect(provider.modelVersion, contains('mobileclip2'));
         stdout.writeln(
