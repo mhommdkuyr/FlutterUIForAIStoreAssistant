@@ -47,8 +47,9 @@ jobs:
         run: |
           set -euo pipefail
           cd android
-          gradle --version
-          gradle assembleRelease --no-daemon --stacktrace
+          test -x ./gradlew
+          ./gradlew --version
+          ./gradlew assembleRelease --no-daemon --stacktrace
 
       - name: Verify Gradle APK
         run: |
