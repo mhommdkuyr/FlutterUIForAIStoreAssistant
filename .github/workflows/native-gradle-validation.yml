@@ -1,0 +1,71 @@
+name: Native Gradle Release Validation
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  gradle-release:
+    name: Gradle assembleRelease validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v5
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.32.0'
+          channel: stable
+          cache: true
+
+      - name: Install Android NDK 27.0.12077973
+        run: |
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses >/dev/null 2>&1 || true
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "ndk;27.0.12077973" --channel=0
+
+      - name: Prepare local.properties and Flutter dependencies
+        run: |
+          set -euo pipefail
+          printf 'sdk.dir=%s\n' "$ANDROID_HOME" > android/local.properties
+          printf 'flutter.sdk=%s\n' "$FLUTTER_ROOT" >> android/local.properties
+          flutter pub get
+
+      - name: Build release with the same native Gradle command as Codemagic
+        run: |
+          set -euo pipefail
+          cd android
+          gradle --version
+          gradle assembleRelease --no-daemon --stacktrace
+
+      - name: Verify Gradle APK
+        run: |
+          set -euo pipefail
+          APK_PATH="android/app/build/outputs/apk/release/app-release.apk"
+          test -s "$APK_PATH"
+          unzip -t "$APK_PATH" >/dev/null
+          unzip -l "$APK_PATH" | grep -F 'flutter_assets/assets/models/mobileclip2/mobileclip2_s0_vision.onnx' >/dev/null
+          unzip -l "$APK_PATH" | grep -F 'flutter_assets/assets/models/mobileclip2/mobileclip2_s0_vision.onnx.data' >/dev/null
+          sha256sum "$APK_PATH" | tee native_gradle_apk_sha256.txt
+          echo "NATIVE GRADLE APK READY: $(du -h "$APK_PATH" | cut -f1)"
+
+      - name: Upload native Gradle APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-gradle-release-apk
+          path: |
+            android/app/build/outputs/apk/release/app-release.apk
+            native_gradle_apk_sha256.txt
+          retention-days: 30

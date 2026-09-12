@@ -7,6 +7,11 @@ plugins {
 import java.util.Properties
 import java.io.FileInputStream
 
+val keystorePropertiesFile = rootProject.file("app/key.properties")
+val codemagicKeystorePath = System.getenv("CM_KEYSTORE_PATH")
+val hasCodemagicSigning = !codemagicKeystorePath.isNullOrBlank()
+val hasLocalSigning = keystorePropertiesFile.exists()
+
 android {
     namespace = "com.aistoreassistant.ai_store_assistant"
     compileSdk = 36
@@ -31,8 +36,12 @@ android {
 
     signingConfigs {
         create("release") {
-            val keystorePropertiesFile = rootProject.file("app/key.properties")
-            if (keystorePropertiesFile.exists()) {
+            if (hasCodemagicSigning) {
+                storeFile = file(codemagicKeystorePath!!)
+                storePassword = System.getenv("CM_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("CM_KEY_ALIAS")
+                keyPassword = System.getenv("CM_KEY_PASSWORD")
+            } else if (hasLocalSigning) {
                 val keystoreProperties = Properties()
                 keystoreProperties.load(FileInputStream(keystorePropertiesFile))
                 keyAlias = keystoreProperties["keyAlias"] as String
@@ -45,8 +54,7 @@ android {
 
     buildTypes {
         release {
-            val keystorePropertiesFile = rootProject.file("app/key.properties")
-            signingConfig = if (keystorePropertiesFile.exists()) {
+            signingConfig = if (hasCodemagicSigning || hasLocalSigning) {
                 signingConfigs.getByName("release")
             } else {
                 signingConfigs.getByName("debug")
