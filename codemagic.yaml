@@ -1,0 +1,41 @@
+workflows:
+  android-gradle-release:
+    name: Android Gradle Release
+    max_build_duration: 120
+    instance_type: linux_x2
+    environment:
+      flutter: 3.32.0
+      java: 17
+    scripts:
+      - name: Prepare Android and Flutter local.properties
+        script: |
+          set -euo pipefail
+          printf 'sdk.dir=%s\n' "$ANDROID_SDK_ROOT" > "$CM_BUILD_DIR/android/local.properties"
+          printf 'flutter.sdk=%s\n' "$FLUTTER_ROOT" >> "$CM_BUILD_DIR/android/local.properties"
+          flutter pub get
+
+      - name: Install Android NDK 27.0.12077973
+        script: |
+          set -euo pipefail
+          yes | sdkmanager --licenses >/dev/null 2>&1 || true
+          sdkmanager "ndk;27.0.12077973"
+
+      - name: Build release APK with native Gradle
+        script: |
+          set -euo pipefail
+          cd "$CM_BUILD_DIR/android"
+          gradle --version
+          gradle assembleRelease --no-daemon --stacktrace
+
+      - name: Verify release APK
+        script: |
+          set -euo pipefail
+          APK_PATH="$CM_BUILD_DIR/android/app/build/outputs/apk/release/app-release.apk"
+          test -s "$APK_PATH"
+          unzip -t "$APK_PATH" >/dev/null
+          sha256sum "$APK_PATH" | tee "$CM_BUILD_DIR/final_apk_sha256.txt"
+          echo "FINAL GRADLE APK: $(du -h "$APK_PATH" | cut -f1)"
+
+    artifacts:
+      - android/app/build/outputs/**/*.apk
+      - final_apk_sha256.txt

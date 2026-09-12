@@ -17,7 +17,7 @@ void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
   testWidgets(
-    'REAL Android vision E2E: MobileCLIP2 + camera stream + product confirmation',
+    'REAL Android vision E2E: MobileCLIP2 + camera stream + accessibility-driven sale command',
     (tester) async {
       CameraController? referenceController;
       ProductRepository? repository;
@@ -30,7 +30,6 @@ void main() {
         final initWatch = Stopwatch()..start();
         await provider.initialize().timeout(const Duration(seconds: 60));
         initWatch.stop();
-        expect(provider.isInitialized, isTrue);
         expect(provider.isInitialized, isTrue);
         expect(provider.embeddingLength, 2048);
         expect(provider.modelVersion, contains('mobileclip2'));
@@ -140,7 +139,32 @@ void main() {
           '✅ REAL APP CAMERA E2E PASS: camera stream -> MobileCLIP2 -> product confirmation',
         );
 
-        stdout.writeln('E2E STEP 6: explicitly unmount scanner and dispose native resources');
+        stdout.writeln('E2E STEP 6: activate Done through the app semantics/accessibility tree');
+        final doneSemantics = find.bySemanticsLabel('Done');
+        expect(doneSemantics, findsOneWidget);
+        stdout.writeln('✅ ACCESSIBILITY NODE FOUND: Done');
+        await tester.ensureVisible(doneSemantics);
+        await tester.tap(doneSemantics);
+        await tester.pumpAndSettle(const Duration(milliseconds: 500));
+        expect(find.text('Invoice'), findsOneWidget);
+        stdout.writeln(
+          '✅ ACCESSIBILITY UI ACTION PASS: Done -> Invoice via semantic control',
+        );
+
+        stdout.writeln('E2E STEP 7: execute real sale command through the accessibility target');
+        final completeSaleSemantics = find.bySemanticsLabel('Complete Sale');
+        expect(completeSaleSemantics, findsOneWidget);
+        stdout.writeln('✅ ACCESSIBILITY NODE FOUND: Complete Sale');
+        await tester.ensureVisible(completeSaleSemantics);
+        await tester.tap(completeSaleSemantics);
+        await tester.pumpAndSettle(const Duration(seconds: 2));
+        expect(find.text('Sale saved successfully!'), findsOneWidget);
+        expect(find.text('AI Store Assistant'), findsOneWidget);
+        stdout.writeln(
+          '✅ REAL UI COMMAND PASS: Accessibility semantic action -> Complete Sale -> persisted sale -> AI Store Assistant',
+        );
+
+        stdout.writeln('E2E STEP 8: explicitly unmount scanner and dispose native resources');
         await tester.pumpWidget(const SizedBox.shrink());
         await tester.pumpAndSettle();
         stdout.writeln('✅ REAL ANDROID VISION E2E PASS');

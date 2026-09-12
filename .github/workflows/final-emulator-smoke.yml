@@ -3,7 +3,7 @@ name: Final Emulator Cloud Smoke
 on:
   push:
     branches:
-      - hotfix/mobileclip2-fast-scan-engine
+      - main
   workflow_dispatch:
 
 jobs:
