@@ -1,0 +1,124 @@
+name: Final Emulator Cloud Smoke
+
+on:
+  push:
+    branches:
+      - hotfix/mobileclip2-fast-scan-engine
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    name: Final Android emulator smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v5
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.32.0'
+          channel: stable
+          cache: true
+
+      - name: Install Android NDK 27.0.12077973
+        run: |
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null 2>&1 || true
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "ndk;27.0.12077973" --channel=0
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build debug APK
+        run: |
+          set -o pipefail
+          flutter build apk --debug 2>&1 | tee build_output.log
+
+      - name: Validate debug APK structure and MobileCLIP2 assets
+        run: |
+          set -euo pipefail
+          APK_PATH="build/app/outputs/flutter-apk/app-debug.apk"
+          test -s "$APK_PATH"
+          unzip -t "$APK_PATH" >/dev/null
+          unzip -l "$APK_PATH" | grep -F 'flutter_assets/assets/models/mobileclip2/mobileclip2_s0_vision.onnx' >/dev/null
+          unzip -l "$APK_PATH" | grep -F 'flutter_assets/assets/models/mobileclip2/mobileclip2_s0_vision.onnx.data' >/dev/null
+          unzip -l "$APK_PATH" | grep -F 'flutter_assets/assets/models/mobileclip2/model_metadata.json' >/dev/null
+          BUILD_TOOLS="$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)"
+          "$BUILD_TOOLS/aapt" dump badging "$APK_PATH" | grep -F "package: name='com.aistoreassistant.ai_store_assistant'" >/dev/null
+          "$BUILD_TOOLS/aapt" dump permissions "$APK_PATH" | grep -F 'android.permission.CAMERA' >/dev/null
+          echo "DEBUG APK READY: $(du -h "$APK_PATH" | cut -f1)"
+
+      - name: Enable KVM for Android emulator
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Run real MobileCLIP2 camera E2E and exact APK launch smoke
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_5
+          force-avd-creation: false
+          pre-emulator-launch-script: >-
+            command -v convert >/dev/null 2>&1 || { sudo apt-get update && sudo apt-get install -y imagemagick; }; convert -size 640x480 xc:'#f0f2f5' -fill '#cd322d' -draw 'roundrectangle 170,75 470,405 45,45' -fill '#1e232a' -draw 'rectangle 245,40 395,95' -fill white -draw 'roundrectangle 205,180 435,265 12,12' /tmp/mobileclip2_camera_scene.png && test -s /tmp/mobileclip2_camera_scene.png
+          emulator-options: >-
+            -no-window
+            -gpu swiftshader_indirect
+            -noaudio
+            -no-boot-anim
+            -no-snapshot-load
+            -no-snapshot-save
+            -camera-back imagefile:/tmp/mobileclip2_camera_scene.png
+          disable-animations: true
+          script: >-
+            set -eu; APK_PATH="build/app/outputs/flutter-apk/app-debug.apk"; PKG="com.aistoreassistant.ai_store_assistant"; rm -f android_vision_e2e.log android_logcat.txt android_launch_screen.png; timeout 420s flutter test integration_test/android_vision_e2e_test.dart > android_vision_e2e.log 2>&1; rc=$?; cat android_vision_e2e.log; test "$rc" -eq 0 || { echo "REAL Android vision E2E failed with exit code $rc"; exit "$rc"; }; echo "REAL ANDROID VISION E2E PASS"; adb install -r "$APK_PATH"; adb shell pm grant "$PKG" android.permission.CAMERA || true; adb shell am force-stop "$PKG"; adb shell monkey -p "$PKG" 1 >/dev/null; sleep 8; pid="$(adb shell pidof "$PKG" | tr -d '\r')"; test -n "$pid"; echo "EXACT APK ADB LAUNCH PASS: pid=$pid"; adb shell dumpsys activity activities | grep -F "$PKG" | head -n 5 || true; adb exec-out screencap -p > android_launch_screen.png; test -s android_launch_screen.png; echo "EXACT APK SCREENSHOT PASS: $(stat -c%s android_launch_screen.png) bytes"; adb logcat -d -t 500 > android_logcat.txt; test -s android_logcat.txt; echo "POST-E2E LOGCAPTURE PASS"
+
+      - name: Build release APK
+        run: |
+          set -o pipefail
+          flutter build apk --release 2>&1 | tee release_build_output.log
+
+      - name: Verify and package final release APK
+        run: |
+          set -euo pipefail
+          APK_PATH="build/app/outputs/flutter-apk/app-release.apk"
+          test -s "$APK_PATH"
+          unzip -t "$APK_PATH" >/dev/null
+          sha256sum "$APK_PATH" | tee final_apk_sha256.txt
+          echo "FINAL RELEASE APK: $(du -h "$APK_PATH" | cut -f1)"
+
+      - name: Upload final release APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: final-release-apk
+          path: |
+            build/app/outputs/flutter-apk/app-release.apk
+            final_apk_sha256.txt
+          retention-days: 30
+
+      - name: Upload smoke diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: final-emulator-smoke-diagnostics
+          path: |
+            android_vision_e2e.log
+            android_logcat.txt
+            android_launch_screen.png
+            build_output.log
+            release_build_output.log
+          retention-days: 14
+          if-no-files-found: warn
