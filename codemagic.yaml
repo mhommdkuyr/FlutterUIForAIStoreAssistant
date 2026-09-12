@@ -20,12 +20,13 @@ workflows:
           yes | sdkmanager --licenses >/dev/null 2>&1 || true
           sdkmanager "ndk;27.0.12077973"
 
-      - name: Build release APK with native Gradle
+      - name: Build release APK with the repository Gradle wrapper
         script: |
           set -euo pipefail
           cd "$CM_BUILD_DIR/android"
-          gradle --version
-          gradle assembleRelease --no-daemon --stacktrace
+          test -x ./gradlew
+          ./gradlew --version
+          ./gradlew assembleRelease --no-daemon --stacktrace
 
       - name: Verify release APK
         script: |
