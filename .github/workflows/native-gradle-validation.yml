@@ -43,6 +43,12 @@ jobs:
           printf 'flutter.sdk=%s\n' "$FLUTTER_ROOT" >> android/local.properties
           flutter pub get
 
+      - name: Exclude integration_test from production plugin registration
+        run: |
+          set -euo pipefail
+          flutter pub remove integration_test
+          flutter pub get
+
       - name: Install and run Gradle 8.12 directly
         run: |
           set -euo pipefail
