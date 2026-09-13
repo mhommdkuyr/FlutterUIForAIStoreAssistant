@@ -69,7 +69,7 @@ jobs:
       - name: Verify Gradle APK
         run: |
           set -euo pipefail
-          APK_PATH="android/app/build/outputs/apk/release/app-release.apk"
+          APK_PATH="build/app/outputs/flutter-apk/app-release.apk"
           test -s "$APK_PATH"
           unzip -t "$APK_PATH" >/dev/null
           unzip -l "$APK_PATH" | grep -F 'flutter_assets/assets/models/mobileclip2/mobileclip2_s0_vision.onnx' >/dev/null
@@ -82,6 +82,6 @@ jobs:
         with:
           name: native-gradle-release-apk
           path: |
-            android/app/build/outputs/apk/release/app-release.apk
+            build/app/outputs/flutter-apk/app-release.apk
             native_gradle_apk_sha256.txt
           retention-days: 30
