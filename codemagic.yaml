@@ -20,14 +20,23 @@ workflows:
           yes | sdkmanager --licenses >/dev/null 2>&1 || true
           sdkmanager "ndk;27.0.12077973"
 
-      - name: Build release APK with the repository Gradle wrapper
+      - name: Install and run Gradle 8.12 directly
         script: |
           set -euo pipefail
+          GRADLE_VERSION='8.12'
+          GRADLE_HOME="$CM_BUILD_DIR/.gradle-$GRADLE_VERSION"
+          if [ ! -x "$GRADLE_HOME/bin/gradle" ]; then
+            mkdir -p "$CM_BUILD_DIR"
+            curl -fsSL "https://services.gradle.org/distributions/gradle-${GRADLE_VERSION}-bin.zip" -o "$CM_BUILD_DIR/gradle.zip"
+            rm -rf "$GRADLE_HOME"
+            unzip -q "$CM_BUILD_DIR/gradle.zip" -d "$CM_BUILD_DIR"
+            mv "$CM_BUILD_DIR/gradle-${GRADLE_VERSION}" "$GRADLE_HOME"
+          fi
+          export GRADLE_HOME
+          export PATH="$GRADLE_HOME/bin:$PATH"
           cd "$CM_BUILD_DIR/android"
-          test -f ./gradlew
-          chmod +x ./gradlew
-          ./gradlew --version
-          ./gradlew assembleRelease --no-daemon --stacktrace
+          gradle --version
+          gradle assembleRelease --no-daemon --stacktrace
 
       - name: Verify release APK
         script: |
@@ -35,6 +44,8 @@ workflows:
           APK_PATH="$CM_BUILD_DIR/android/app/build/outputs/apk/release/app-release.apk"
           test -s "$APK_PATH"
           unzip -t "$APK_PATH" >/dev/null
+          unzip -l "$APK_PATH" | grep -F 'flutter_assets/assets/models/mobileclip2/mobileclip2_s0_vision.onnx' >/dev/null
+          unzip -l "$APK_PATH" | grep -F 'flutter_assets/assets/models/mobileclip2/mobileclip2_s0_vision.onnx.data' >/dev/null
           sha256sum "$APK_PATH" | tee "$CM_BUILD_DIR/final_apk_sha256.txt"
           echo "FINAL GRADLE APK: $(du -h "$APK_PATH" | cut -f1)"
 
