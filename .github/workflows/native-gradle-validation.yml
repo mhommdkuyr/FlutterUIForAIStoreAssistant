@@ -43,14 +43,22 @@ jobs:
           printf 'flutter.sdk=%s\n' "$FLUTTER_ROOT" >> android/local.properties
           flutter pub get
 
-      - name: Build release with the same native Gradle command as Codemagic
+      - name: Install and run Gradle 8.12 directly
         run: |
           set -euo pipefail
+          GRADLE_VERSION='8.12'
+          GRADLE_HOME="$RUNNER_TEMP/gradle-$GRADLE_VERSION"
+          if [ ! -x "$GRADLE_HOME/bin/gradle" ]; then
+            mkdir -p "$RUNNER_TEMP"
+            curl -fsSL "https://services.gradle.org/distributions/gradle-${GRADLE_VERSION}-bin.zip" -o "$RUNNER_TEMP/gradle.zip"
+            rm -rf "$GRADLE_HOME"
+            unzip -q "$RUNNER_TEMP/gradle.zip" -d "$RUNNER_TEMP"
+          fi
+          export GRADLE_HOME
+          export PATH="$GRADLE_HOME/bin:$PATH"
           cd android
-          test -f ./gradlew
-          chmod +x ./gradlew
-          ./gradlew --version
-          ./gradlew assembleRelease --no-daemon --stacktrace
+          gradle --version
+          gradle assembleRelease --no-daemon --stacktrace
 
       - name: Verify Gradle APK
         run: |
