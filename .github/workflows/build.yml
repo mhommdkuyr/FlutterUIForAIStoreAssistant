@@ -39,6 +39,12 @@ jobs:
       - name: Install Flutter dependencies
         run: flutter pub get
 
+      - name: Remove integration_test from production build
+        run: |
+          set -euo pipefail
+          flutter pub remove integration_test
+          flutter pub get
+
       - name: Analyze (non-fatal warnings)
         run: flutter analyze --no-fatal-warnings || true
 
@@ -80,12 +86,18 @@ jobs:
             echo "ERROR: APK not found at $APK_PATH — build step must have failed silently."
             exit 1
           fi
-          echo "APK found: $(du -sh $APK_PATH)"
+          echo "APK found: $(du -sh "$APK_PATH")"
+          unzip -t "$APK_PATH" >/dev/null
+          unzip -l "$APK_PATH" | grep -F 'flutter_assets/assets/models/mobileclip2/mobileclip2_s0_vision.onnx' >/dev/null
+          unzip -l "$APK_PATH" | grep -F 'flutter_assets/assets/models/mobileclip2/mobileclip2_s0_vision.onnx.data' >/dev/null
+          sha256sum "$APK_PATH" | tee final_release_apk_sha256.txt
 
       - name: Upload release APK
         uses: actions/upload-artifact@v4
         with:
           name: release-apk
-          path: build/app/outputs/flutter-apk/app-release.apk
+          path: |
+            build/app/outputs/flutter-apk/app-release.apk
+            final_release_apk_sha256.txt
           retention-days: 30
           if-no-files-found: error
