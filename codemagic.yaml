@@ -47,7 +47,7 @@ workflows:
       - name: Verify release APK
         script: |
           set -euo pipefail
-          APK_PATH="$CM_BUILD_DIR/android/app/build/outputs/apk/release/app-release.apk"
+          APK_PATH="$CM_BUILD_DIR/build/app/outputs/flutter-apk/app-release.apk"
           test -s "$APK_PATH"
           unzip -t "$APK_PATH" >/dev/null
           unzip -l "$APK_PATH" | grep -F 'flutter_assets/assets/models/mobileclip2/mobileclip2_s0_vision.onnx' >/dev/null
@@ -56,5 +56,5 @@ workflows:
           echo "FINAL GRADLE APK: $(du -h "$APK_PATH" | cut -f1)"
 
     artifacts:
-      - android/app/build/outputs/**/*.apk
+      - build/app/outputs/**/*.apk
       - final_apk_sha256.txt
