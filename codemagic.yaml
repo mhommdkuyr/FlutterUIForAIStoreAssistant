@@ -14,6 +14,12 @@ workflows:
           printf 'flutter.sdk=%s\n' "$FLUTTER_ROOT" >> "$CM_BUILD_DIR/android/local.properties"
           flutter pub get
 
+      - name: Remove integration_test from production build
+        script: |
+          set -euo pipefail
+          flutter pub remove integration_test
+          flutter pub get
+
       - name: Install Android NDK 27.0.12077973
         script: |
           set -euo pipefail
