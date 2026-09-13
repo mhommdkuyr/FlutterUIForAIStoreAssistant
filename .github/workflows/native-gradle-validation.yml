@@ -47,7 +47,8 @@ jobs:
         run: |
           set -euo pipefail
           cd android
-          test -x ./gradlew
+          test -f ./gradlew
+          chmod +x ./gradlew
           ./gradlew --version
           ./gradlew assembleRelease --no-daemon --stacktrace
 
