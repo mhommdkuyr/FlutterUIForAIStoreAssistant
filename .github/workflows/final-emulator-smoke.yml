@@ -84,15 +84,17 @@ jobs:
             -camera-back imagefile:/tmp/mobileclip2_camera_scene.png
           disable-animations: true
           script: >-
-            set -eu
+            set -u
             APK_PATH="build/app/outputs/flutter-apk/app-debug.apk"
             PKG="com.aistoreassistant.ai_store_assistant"
             rm -f android_vision_e2e.log android_logcat.txt android_launch_screen.png
             adb -s emulator-5554 wait-for-device
             adb -s emulator-5554 shell getprop sys.boot_completed
             adb -s emulator-5554 shell pm grant "$PKG" android.permission.CAMERA || true
+            set +e
             timeout 900s flutter test --no-pub -d emulator-5554 integration_test/android_vision_e2e_test.dart > android_vision_e2e.log 2>&1
             rc=$?
+            set -e
             cat android_vision_e2e.log
             test "$rc" -eq 0 || { echo "REAL Android vision E2E failed with exit code $rc"; exit "$rc"; }
             echo "REAL ANDROID VISION E2E PASS"
