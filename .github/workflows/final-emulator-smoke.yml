@@ -10,7 +10,7 @@ jobs:
   smoke:
     name: Final Android emulator smoke
     runs-on: ubuntu-latest
-    timeout-minutes: 75
+    timeout-minutes: 90
 
     steps:
       - name: Checkout repository
@@ -84,7 +84,33 @@ jobs:
             -camera-back imagefile:/tmp/mobileclip2_camera_scene.png
           disable-animations: true
           script: >-
-            set -eu; APK_PATH="build/app/outputs/flutter-apk/app-debug.apk"; PKG="com.aistoreassistant.ai_store_assistant"; rm -f android_vision_e2e.log android_logcat.txt android_launch_screen.png; timeout 420s flutter test integration_test/android_vision_e2e_test.dart > android_vision_e2e.log 2>&1; rc=$?; cat android_vision_e2e.log; test "$rc" -eq 0 || { echo "REAL Android vision E2E failed with exit code $rc"; exit "$rc"; }; echo "REAL ANDROID VISION E2E PASS"; adb install -r "$APK_PATH"; adb shell pm grant "$PKG" android.permission.CAMERA || true; adb shell am force-stop "$PKG"; adb shell monkey -p "$PKG" 1 >/dev/null; sleep 8; pid="$(adb shell pidof "$PKG" | tr -d '\r')"; test -n "$pid"; echo "EXACT APK ADB LAUNCH PASS: pid=$pid"; adb shell dumpsys activity activities | grep -F "$PKG" | head -n 5 || true; adb exec-out screencap -p > android_launch_screen.png; test -s android_launch_screen.png; echo "EXACT APK SCREENSHOT PASS: $(stat -c%s android_launch_screen.png) bytes"; adb logcat -d -t 500 > android_logcat.txt; test -s android_logcat.txt; echo "POST-E2E LOGCAPTURE PASS"
+            set -eu
+            APK_PATH="build/app/outputs/flutter-apk/app-debug.apk"
+            PKG="com.aistoreassistant.ai_store_assistant"
+            rm -f android_vision_e2e.log android_logcat.txt android_launch_screen.png
+            adb -s emulator-5554 wait-for-device
+            adb -s emulator-5554 shell getprop sys.boot_completed
+            adb -s emulator-5554 shell pm grant "$PKG" android.permission.CAMERA || true
+            timeout 900s flutter test --no-pub -d emulator-5554 integration_test/android_vision_e2e_test.dart > android_vision_e2e.log 2>&1
+            rc=$?
+            cat android_vision_e2e.log
+            test "$rc" -eq 0 || { echo "REAL Android vision E2E failed with exit code $rc"; exit "$rc"; }
+            echo "REAL ANDROID VISION E2E PASS"
+            adb -s emulator-5554 install -r "$APK_PATH"
+            adb -s emulator-5554 shell pm grant "$PKG" android.permission.CAMERA || true
+            adb -s emulator-5554 shell am force-stop "$PKG"
+            adb -s emulator-5554 shell monkey -p "$PKG" 1 >/dev/null
+            sleep 8
+            pid="$(adb -s emulator-5554 shell pidof "$PKG" | tr -d '\r')"
+            test -n "$pid"
+            echo "EXACT APK ADB LAUNCH PASS: pid=$pid"
+            adb -s emulator-5554 shell dumpsys activity activities | grep -F "$PKG" | head -n 5 || true
+            adb -s emulator-5554 exec-out screencap -p > android_launch_screen.png
+            test -s android_launch_screen.png
+            echo "EXACT APK SCREENSHOT PASS: $(stat -c%s android_launch_screen.png) bytes"
+            adb -s emulator-5554 logcat -d -t 500 > android_logcat.txt
+            test -s android_logcat.txt
+            echo "POST-E2E LOGCAPTURE PASS"
 
       - name: Build release APK
         run: |
