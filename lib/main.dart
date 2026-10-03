@@ -9,6 +9,8 @@ import 'core/theme/app_theme.dart';
 import 'core/utilities/app_date_utils.dart';
 import 'shared/services/auth_service.dart';
 import 'shared/services/storage_service.dart';
+import 'shared/services/supabase_service.dart';
+import 'features/market/services/market_backend.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -26,8 +28,15 @@ void main() async {
   );
 
   await StorageService.instance.initialize();
+  await SupabaseService.instance.initialize();
   await AuthService.instance.initialize();
   await AppDatabase.instance.ensureSeeded();
+
+  MarketBackend.instance.configure(
+    supabaseUrl: const String.fromEnvironment('SUPABASE_URL'),
+    supabasePublishableKey:
+        const String.fromEnvironment('SUPABASE_PUBLISHABLE_KEY'),
+  );
 
   runApp(const AiStoreAssistantApp());
 }
@@ -78,7 +87,7 @@ class _AiStoreAssistantAppState extends State<AiStoreAssistantApp> {
     final localeProvider = LocaleProvider.instance;
 
     return MaterialApp.router(
-      title: 'AI Store Assistant',
+      title: 'محرك السوق اليمني',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
       darkTheme: AppTheme.dark,

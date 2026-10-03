@@ -1,0 +1,25 @@
+name: Ibb Google Places Grid Plan
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r tools/ibb_google_places_collector/requirements.txt
+      - name: Generate and print grid plan only
+        working-directory: tools/ibb_google_places_collector
+        run: |
+          python collector.py --config ibb_city_box.json --dry-run
+          echo "Google Maps content scraping/export is intentionally disabled."

@@ -1,0 +1,73 @@
+name: Market Engine CI
+
+on:
+  push:
+    branches:
+      - main
+      - ibb-google-places-collector
+  pull_request:
+    branches:
+      - main
+      - ibb-google-places-collector
+
+jobs:
+  flutter:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.35.0
+          channel: stable
+          cache: true
+      - name: Flutter dependencies
+        run: flutter pub get
+      - name: Analyze
+        shell: bash
+        run: |
+          set +e
+          flutter analyze --no-fatal-warnings > flutter_analyze.txt 2>&1
+          status=$?
+          set -e
+          cat flutter_analyze.txt
+          if grep -Eq '^ *error •' flutter_analyze.txt; then
+            echo 'Flutter analyzer reported error diagnostics; failing CI.'
+            exit 1
+          fi
+          echo "Flutter analyzer reported no error diagnostics (tool exit code: $status)."
+      - name: Test
+        run: flutter test
+
+  python-tools:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install tooling dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r tools/osm_ibb_collector/requirements.txt
+          pip install -r tools/openfoodfacts_enricher/requirements.txt
+          pip install -r tools/market_data_pipeline/requirements.txt
+          pip install -r tools/ibb_google_places_collector/requirements.txt
+      - name: Compile Python tools
+        run: python -m compileall tools
+      - name: OSM dry run
+        working-directory: tools/osm_ibb_collector
+        run: python collector.py --dry-run
+      - name: Google Places dry run
+        working-directory: tools/ibb_google_places_collector
+        run: python collector.py --config ibb_city_box.json --dry-run
+
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
