@@ -1,4 +1,4 @@
-name: Ibb OSM Coverage Collection
+name: Ibb OSM 300m Grid Coverage Collection
 
 on:
   push:
@@ -30,14 +30,15 @@ jobs:
         working-directory: tools/osm_ibb_collector
         run: python collector.py --bbox-json ../ibb_google_places_collector/ibb_city_box.json --dry-run
 
-      - name: Collect Ibb mapped businesses
+      - name: Collect Ibb 300m grid
         working-directory: tools/osm_ibb_collector
+        timeout-minutes: 220
         run: |
-          python collector.py             --bbox-json ../ibb_google_places_collector/ibb_city_box.json             --output-dir output             --tile-km 3.0             --pause-seconds 1.5
+          python collector.py             --bbox-json ibb_city_box.json             --output-dir output             --tile-km 0.3             --grid-step-m 300             --pause-seconds 0.8
 
       - name: Upload collection artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ibb-osm-coverage
+          name: ibb-osm-grid-coverage
           path: tools/osm_ibb_collector/output/
           retention-days: 7
