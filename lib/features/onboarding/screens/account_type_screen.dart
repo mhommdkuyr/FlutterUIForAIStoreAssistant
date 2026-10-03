@@ -104,6 +104,14 @@ class AccountTypeScreen extends StatelessWidget {
               }),
               const SizedBox(height: 16),
               Center(
+                child: TextButton.icon(
+                  onPressed: () => context.go('/market'),
+                  icon: const Icon(Icons.storefront_rounded),
+                  label: const Text('استكشاف السوق بدون حساب'),
+                ),
+              ),
+              const SizedBox(height: 4),
+              Center(
                 child: TextButton(
                   onPressed: () => context.go('/login'),
                   child: Text(context.tr.alreadyHaveAccount),

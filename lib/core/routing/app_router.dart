@@ -8,6 +8,10 @@ import '../../features/authentication/screens/register_screen.dart';
 import '../../features/merchant/screens/merchant_dashboard_screen.dart';
 import '../../features/worker/screens/worker_dashboard_screen.dart';
 import '../../features/customer/screens/customer_search_screen.dart';
+import '../../features/market/models/market_models.dart';
+import '../../features/market/screens/market_home_screen.dart';
+import '../../features/market/screens/store_details_screen.dart';
+import '../../features/merchant/screens/merchant_location_screen.dart';
 import '../../features/inventory/screens/inventory_screen.dart';
 import '../../features/product_scanner/screens/scanner_screen.dart';
 import '../../features/product_scanner/screens/live_scanner_screen.dart';
@@ -56,10 +60,38 @@ class AppRouter {
         },
       ),
 
+      // ── Market Engine ───────────────────────────────────────────────────
+      GoRoute(
+        path: '/market',
+        builder: (context, state) => const MarketHomeScreen(),
+      ),
+      GoRoute(
+        path: '/market/store',
+        builder: (context, state) {
+          final extra = state.extra as Map<String, dynamic>?;
+          final store = extra?['store'];
+          final rawOffers = extra?['offers'] as List<dynamic>?;
+          if (store is! MarketStore) {
+            return const Scaffold(
+              body: Center(child: Text('المتجر غير متاح.')),
+            );
+          }
+          final offers =
+              rawOffers?.whereType<MarketOffer>().toList() ??
+              const <MarketOffer>[];
+          return StoreDetailsScreen(store: store, offers: offers);
+        },
+      ),
+
       // ── Merchant ────────────────────────────────────────────────────────
       GoRoute(
         path: '/merchant/dashboard',
         builder: (context, state) => const MerchantDashboardScreen(),
+      ),
+
+      GoRoute(
+        path: '/merchant/location',
+        builder: (context, state) => const MerchantLocationScreen(),
       ),
 
       // ── Worker ──────────────────────────────────────────────────────────
