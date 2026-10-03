@@ -1,4 +1,5 @@
 create extension if not exists postgis;
+create extension if not exists pgcrypto;
 
 create table if not exists public.market_stores (
   id uuid primary key default gen_random_uuid(),
@@ -75,13 +76,24 @@ create table if not exists public.merchant_store_claims (
 );
 
 create table if not exists public.market_favorites (
+  id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
   store_id uuid references public.market_stores(id) on delete cascade,
   product_id uuid references public.market_products(id) on delete cascade,
   created_at timestamptz not null default now(),
-  check (store_id is not null or product_id is not null),
-  primary key (user_id, store_id, product_id)
+  check (
+    (store_id is not null and product_id is null)
+    or (store_id is null and product_id is not null)
+  )
 );
+
+create unique index if not exists market_favorites_store_unique
+  on public.market_favorites (user_id, store_id)
+  where store_id is not null;
+
+create unique index if not exists market_favorites_product_unique
+  on public.market_favorites (user_id, product_id)
+  where product_id is not null;
 
 create index if not exists market_stores_location_gix
   on public.market_stores using gist (location);
