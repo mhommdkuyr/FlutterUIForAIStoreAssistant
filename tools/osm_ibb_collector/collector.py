@@ -167,11 +167,12 @@ def main() -> int:
     parser.add_argument("--output-dir", type=Path, default=Path("output"))
     parser.add_argument("--tile-km", type=float, default=0.3)
     parser.add_argument("--pause-seconds", type=float, default=0.8)
-    parser.add_argument("--grid-step-m", type=int, default=300)\n    parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--grid-step-m", type=int, default=300)
+    parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
 
     bbox = bbox_from_file(args.bbox_json)
-    tiles = list(tile_boxes(bbox, max(0.5, args.tile_km)))
+    tiles = list(tile_boxes(bbox, max(0.1, args.tile_km)))
     if args.dry_run:
         print(json.dumps({
             "bbox": bbox,
@@ -248,7 +249,7 @@ def main() -> int:
         "license": "ODbL 1.0",
         "tiles_downloaded": False,
         "collected_at": collected_at,
-        "note": "This is a mapped-feature coverage indicator, not proof of complete real-world discovery.",
+        "note": "Mapped-feature occupancy is a coverage signal, not proof of complete real-world discovery. OSM does not guarantee every real business is mapped.",
     }
     (out / "run_audit.json").write_text(
         json.dumps(audit, ensure_ascii=False, indent=2),
