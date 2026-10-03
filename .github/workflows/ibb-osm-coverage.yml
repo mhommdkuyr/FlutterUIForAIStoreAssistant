@@ -6,6 +6,10 @@ on:
       - ibb-google-places-collector
   workflow_dispatch:
 
+concurrency:
+  group: ibb-osm-300m-scan
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
