@@ -1,11 +1,11 @@
 {
   "name": "Ibb City Study Box",
-  "south": 13.92,
+  "south": 13.93,
   "north": 14.03,
-  "west": 44.12,
-  "east": 44.25,
-  "grid_step_km": 0.65,
-  "search_radius_m": 600,
+  "west": 44.13,
+  "east": 44.22,
+  "grid_step_km": 0.3,
+  "search_radius_m": 300,
   "max_pages": 3,
   "language_code": "ar",
   "region_code": "YE",
@@ -42,7 +42,5 @@
     "شركات وخدمات في إب اليمن",
     "shopping in Ibb Yemen",
     "businesses in Ibb Yemen"
-  ],
-  "fetch_details": false,
-  "fetch_photos": false
+  ]
 }
