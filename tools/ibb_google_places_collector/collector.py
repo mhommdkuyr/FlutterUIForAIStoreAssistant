@@ -1,0 +1,144 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+import argparse, json, math, os, sys, time
+from pathlib import Path
+from typing import Any, Dict, Iterable, List, Tuple
+import pandas as pd
+import requests
+
+SEARCH_URL="https://places.googleapis.com/v1/places:searchText"
+DETAILS_URL="https://places.googleapis.com/v1/places"
+
+SEARCH_MASK="places.id,places.displayName,places.formattedAddress,places.nationalPhoneNumber,places.internationalPhoneNumber,places.websiteUri,places.location,places.primaryType,places.types,places.businessStatus,places.regularOpeningHours,places.googleMapsUri,places.photos,nextPageToken"
+DETAILS_MASK="id,displayName,formattedAddress,nationalPhoneNumber,internationalPhoneNumber,websiteUri,location,primaryType,types,businessStatus,regularOpeningHours,googleMapsUri,photos"
+
+def grid_centers(south:float,north:float,west:float,east:float,step_km:float)->Iterable[Tuple[float,float]]:
+    lat_step=step_km/111.32
+    mid=(south+north)/2
+    lon_step=step_km/(111.32*math.cos(math.radians(mid)))
+    lat=south
+    while lat<=north+1e-9:
+        lon=west
+        while lon<=east+1e-9:
+            yield round(lat,6),round(lon,6)
+            lon+=lon_step
+        lat+=lat_step
+
+def post_json(session:requests.Session,headers:Dict[str,str],payload:Dict[str,Any],retries:int=5)->Dict[str,Any]:
+    delay=1.5
+    for attempt in range(retries):
+        try:
+            r=session.post(SEARCH_URL,headers=headers,json=payload,timeout=45)
+            if r.status_code==200:
+                return r.json()
+            if r.status_code in (429,500,502,503,504) and attempt<retries-1:
+                time.sleep(delay); delay=min(delay*2,30); continue
+            raise RuntimeError(f"Places API error {r.status_code}: {r.text[:1200]}")
+        except requests.RequestException as exc:
+            if attempt==retries-1: raise RuntimeError(str(exc)) from exc
+            time.sleep(delay); delay=min(delay*2,30)
+    raise RuntimeError("request failed")
+
+def get_details(session:requests.Session,key:str,pid:str,mask:str)->Dict[str,Any]:
+    url=f"{DETAILS_URL}/{pid}"
+    headers={"X-Goog-Api-Key":key,"X-Goog-FieldMask":mask}
+    delay=1.5
+    for attempt in range(5):
+        try:
+            r=session.get(url,headers=headers,timeout=45)
+            if r.status_code==200: return r.json()
+            if r.status_code in (429,500,502,503,504) and attempt<4:
+                time.sleep(delay); delay=min(delay*2,30); continue
+            raise RuntimeError(f"Place Details error {r.status_code}: {r.text[:1200]}")
+        except requests.RequestException as exc:
+            if attempt==4: raise RuntimeError(str(exc)) from exc
+            time.sleep(delay); delay=min(delay*2,30)
+    raise RuntimeError("details failed")
+
+def flatten(p:Dict[str,Any],q:str,clat:float,clon:float)->Dict[str,Any]:
+    d=p.get("displayName") or {}
+    loc=p.get("location") or {}
+    hours=p.get("regularOpeningHours") or {}
+    return {
+        "place_id":p.get("id"),
+        "name":d.get("text"),
+        "address":p.get("formattedAddress"),
+        "national_phone":p.get("nationalPhoneNumber"),
+        "international_phone":p.get("internationalPhoneNumber"),
+        "website":p.get("websiteUri"),
+        "latitude":loc.get("latitude"),
+        "longitude":loc.get("longitude"),
+        "primary_type":p.get("primaryType"),
+        "types":"|".join(p.get("types") or []),
+        "business_status":p.get("businessStatus"),
+        "google_maps_url":p.get("googleMapsUri"),
+        "has_photos":bool(p.get("photos")),
+        "opening_period_count":len(hours.get("periods") or []),
+        "search_query":q,
+        "search_cell_lat":clat,
+        "search_cell_lon":clon,
+    }
+
+def search(session,headers,q,lat,lon,radius,max_pages,lang,region)->List[Dict[str,Any]]:
+    out=[]; token=None
+    for _ in range(max_pages):
+        body={"textQuery":q,"pageSize":20,"languageCode":lang,"regionCode":region,
+              "locationBias":{"circle":{"center":{"latitude":lat,"longitude":lon},"radius":radius}}}
+        if token: body["pageToken"]=token
+        data=post_json(session,headers,body)
+        out.extend(data.get("places") or [])
+        token=data.get("nextPageToken")
+        if not token: break
+        time.sleep(2)
+    return out
+
+def main()->int:
+    ap=argparse.ArgumentParser()
+    ap.add_argument("--config",type=Path,default=Path("ibb_city_box.json"))
+    ap.add_argument("--output-dir",type=Path,default=Path("output"))
+    ap.add_argument("--dry-run",action="store_true")
+    args=ap.parse_args()
+    cfg=json.loads(args.config.read_text(encoding="utf-8"))
+    cells=list(grid_centers(cfg["south"],cfg["north"],cfg["west"],cfg["east"],cfg["grid_step_km"]))
+    estimate={"cells":len(cells),"queries":len(cfg["queries"]),"max_text_calls":len(cells)*len(cfg["queries"])*cfg["max_pages"]}
+    print(json.dumps(estimate,ensure_ascii=False,indent=2))
+    if args.dry_run: return 0
+    key=os.getenv("GOOGLE_MAPS_API_KEY")
+    if not key: raise SystemExit("GOOGLE_MAPS_API_KEY is required")
+    mask=os.getenv("GOOGLE_FIELD_MASK",SEARCH_MASK)
+    details_mask=os.getenv("GOOGLE_DETAILS_FIELD_MASK",DETAILS_MASK)
+    headers={"Content-Type":"application/json","X-Goog-Api-Key":key,"X-Goog-FieldMask":mask}
+    session=requests.Session()
+    unique:Dict[str,Dict[str,Any]]={}
+    raw=0
+    for ci,(lat,lon) in enumerate(cells,1):
+        for qi,q in enumerate(cfg["queries"],1):
+            print(f"[{ci}/{len(cells)}|{qi}/{len(cfg['queries'])}] {q}",flush=True)
+            for p in search(session,headers,q,lat,lon,cfg["search_radius_m"],cfg["max_pages"],cfg.get("language_code","ar"),cfg.get("region_code","YE")):
+                raw+=1
+                pid=p.get("id")
+                if not pid: continue
+                if pid in unique:
+                    unique[pid]["discovery_count"]=unique[pid].get("discovery_count",1)+1
+                    continue
+                row=flatten(p,q,lat,lon); row["discovery_count"]=1
+                if cfg.get("fetch_details"):
+                    try:
+                        detail=get_details(session,key,pid,details_mask)
+                        row.update(flatten(detail,q,lat,lon))
+                    except RuntimeError as exc:
+                        print(f"details warning {pid}: {exc}",file=sys.stderr)
+                unique[pid]=row
+    out=args.output_dir; out.mkdir(parents=True,exist_ok=True)
+    df=pd.DataFrame(unique.values())
+    if not df.empty: df=df.sort_values(["primary_type","name"],na_position="last")
+    df.to_csv(out/"ibb_places.csv",index=False,encoding="utf-8-sig")
+    df.to_excel(out/"ibb_places.xlsx",index=False)
+    (out/"ibb_places.json").write_text(json.dumps(list(unique.values()),ensure_ascii=False,indent=2),encoding="utf-8")
+    audit={"raw_discoveries":raw,"unique_place_ids":len(unique),"cells":len(cells),"queries":len(cfg["queries"]),"max_pages_per_query":cfg["max_pages"],"details_enabled":bool(cfg.get("fetch_details"))}
+    (out/"run_audit.json").write_text(json.dumps(audit,ensure_ascii=False,indent=2),encoding="utf-8")
+    print(json.dumps(audit,ensure_ascii=False,indent=2))
+    return 0
+
+if __name__=="__main__":
+    raise SystemExit(main())
