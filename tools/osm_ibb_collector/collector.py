@@ -129,6 +129,38 @@ def normalize(element: dict[str, Any], collected_at: str) -> dict[str, Any]:
         "collected_at": collected_at,
     }
 
+
+def coverage_cells(rows: list[dict[str, Any]], bbox: tuple[float, float, float, float], step_m: int = 250) -> tuple[int, int, list[dict[str, int]]]:
+    south, west, north, east = bbox
+    lat_step = step_m / 111_320
+    cells: set[tuple[int, int]] = set()
+    occupied: set[tuple[int, int]] = set()
+    lat = south
+    while lat <= north:
+        lon_step = step_m / (111_320 * max(math.cos(math.radians(lat)), 0.1))
+        lon = west
+        row_index = math.floor((lat - south) / lat_step)
+        while lon <= east:
+            col_index = math.floor((lon - west) / lon_step)
+            cells.add((row_index, col_index))
+            lon += lon_step
+        lat += lat_step
+    for row in rows:
+        if row.get("latitude") is None or row.get("longitude") is None:
+            continue
+        rlat = float(row["latitude"])
+        rlon = float(row["longitude"])
+        lon_step = step_m / (111_320 * max(math.cos(math.radians(rlat)), 0.1))
+        occupied.add((
+            math.floor((rlat - south) / lat_step),
+            math.floor((rlon - west) / lon_step),
+        ))
+    empty = [
+        {"cell_row": r, "cell_col": c}
+        for r, c in sorted(cells - occupied)
+    ]
+    return len(occupied), len(cells), empty
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--bbox-json", type=Path)
@@ -179,6 +211,19 @@ def main() -> int:
         )
     frame.to_csv(out / "ibb_osm_stores.csv", index=False, encoding="utf-8-sig")
     frame.to_excel(out / "ibb_osm_stores.xlsx", index=False)
+    occupied_cells, total_cells, empty_cells = coverage_cells(rows, bbox)
+    with (out / "ibb_empty_coverage_cells.csv").open(
+        "w",
+        encoding="utf-8-sig",
+        newline="",
+    ) as handle:
+        writer = csv.DictWriter(
+            handle,
+            fieldnames=["cell_row", "cell_col"],
+        )
+        writer.writeheader()
+        writer.writerows(empty_cells)
+
     (out / "ibb_osm_stores.json").write_text(
         json.dumps(rows, ensure_ascii=False, indent=2),
         encoding="utf-8",
@@ -196,6 +241,10 @@ def main() -> int:
         "tile_count": len(tiles),
         "endpoint_counts": endpoint_counts,
         "feature_count": len(rows),
+        "coverage_cells_250m": occupied_cells,
+        "total_cells_250m": total_cells,
+        "empty_cells_250m": len(empty_cells),
+        "coverage_percent": round((occupied_cells / total_cells) * 100, 2) if total_cells else 0,
         "license": "ODbL 1.0",
         "tiles_downloaded": False,
         "collected_at": collected_at,

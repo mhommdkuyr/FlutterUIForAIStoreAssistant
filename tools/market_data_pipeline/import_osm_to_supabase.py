@@ -36,6 +36,7 @@ def store_row(row: dict[str, Any]) -> dict[str, Any] | None:
         "source_ref": "osm:" + str(row["osm_type"]) + ":" + str(row["osm_id"]),
         "is_verified": False,
         "is_active": True,
+        "last_data_refresh": row.get("collected_at"),
     }
 
 
