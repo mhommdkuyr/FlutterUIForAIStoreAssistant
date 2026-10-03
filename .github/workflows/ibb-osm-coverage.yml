@@ -28,7 +28,7 @@ jobs:
 
       - name: Dry run
         working-directory: tools/osm_ibb_collector
-        run: python collector.py --bbox-json ../ibb_google_places_collector/ibb_city_box.json --dry-run
+        run: python collector.py --bbox-json ibb_city_box.json --tile-km 0.3 --grid-step-m 300 --pause-seconds 0.8 --dry-run
 
       - name: Collect Ibb 300m grid
         working-directory: tools/osm_ibb_collector
@@ -37,6 +37,7 @@ jobs:
           python collector.py             --bbox-json ibb_city_box.json             --output-dir output             --tile-km 0.3             --grid-step-m 300             --pause-seconds 0.8
 
       - name: Upload collection artifact
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: ibb-osm-grid-coverage
