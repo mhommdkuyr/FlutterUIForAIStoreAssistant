@@ -2,12 +2,13 @@
 from __future__ import annotations
 
 import argparse
+import csv
 import json
 import math
 import os
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 
 import pandas as pd
 import requests
@@ -21,17 +22,15 @@ USER_AGENT = os.getenv(
     "MARKET_ENGINE_USER_AGENT",
     "YemeniMarketEngine/0.1 (OSM collection; replace-with-contact)",
 )
-
-QUERY = """
-[out:json][timeout:120];
+QUERY_TEMPLATE = """
+[out:json][timeout:180];
 (
-  nwr["shop"](BBOX);
-  nwr["amenity"~"marketplace|restaurant|cafe|fast_food|pharmacy|fuel"](BBOX);
-  nwr["craft"](BBOX);
+  nwr["shop"]({bbox});
+  nwr["amenity"~"marketplace|restaurant|cafe|fast_food|pharmacy|fuel"]({bbox});
+  nwr["craft"]({bbox});
 );
 out center tags;
 """
-
 
 def bbox_from_file(path: Path | None) -> tuple[float, float, float, float]:
     if path is None:
@@ -44,40 +43,51 @@ def bbox_from_file(path: Path | None) -> tuple[float, float, float, float]:
         float(data["east"]),
     )
 
+def tile_boxes(bbox: tuple[float, float, float, float], tile_km: float) -> Iterator[tuple[float, float, float, float]]:
+    south, west, north, east = bbox
+    lat_step = tile_km / 111.32
+    lat = south
+    while lat < north:
+        next_lat = min(north, lat + lat_step)
+        mid_lat = (lat + next_lat) / 2
+        lon_step = tile_km / (111.32 * max(math.cos(math.radians(mid_lat)), 0.1))
+        lon = west
+        while lon < east:
+            next_lon = min(east, lon + lon_step)
+            yield (lat, lon, next_lat, next_lon)
+            lon = next_lon
+        lat = next_lat
 
 def make_query(bbox: tuple[float, float, float, float]) -> str:
-    return QUERY.replace("BBOX", ",".join(str(v) for v in bbox))
+    return QUERY_TEMPLATE.format(bbox=",".join(str(x) for x in bbox))
 
-
-def request(endpoint: str, query: str) -> dict[str, Any]:
-    response = requests.post(
+def request(session: requests.Session, endpoint: str, query: str) -> dict[str, Any]:
+    response = session.post(
         endpoint,
         data=query.encode("utf-8"),
         headers={
             "User-Agent": USER_AGENT,
             "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
         },
-        timeout=180,
+        timeout=240,
     )
     response.raise_for_status()
     return response.json()
 
-
-def collect(query: str) -> tuple[dict[str, Any], str]:
-    failures = []
+def collect_tile(session: requests.Session, query: str) -> tuple[dict[str, Any], str]:
+    failures: list[str] = []
     for endpoint in ENDPOINTS:
         delay = 2.0
-        for attempt in range(3):
+        for attempt in range(4):
             try:
-                return request(endpoint, query), endpoint
+                return request(session, endpoint, query), endpoint
             except (requests.RequestException, ValueError) as exc:
                 failures.append(f"{endpoint}: {exc}")
-                if attempt < 2:
+                if attempt < 3:
                     time.sleep(delay)
-                    delay = min(delay * 2, 20)
+                    delay = min(delay * 2, 30)
         time.sleep(2)
     raise RuntimeError("All Overpass endpoints failed: " + " | ".join(failures))
-
 
 def location(element: dict[str, Any]) -> tuple[float | None, float | None]:
     if element.get("type") == "node":
@@ -85,10 +95,10 @@ def location(element: dict[str, Any]) -> tuple[float | None, float | None]:
     center = element.get("center") or {}
     return center.get("lat"), center.get("lon")
 
-
-def normalize(element: dict[str, Any]) -> dict[str, Any]:
+def normalize(element: dict[str, Any], collected_at: str) -> dict[str, Any]:
     tags = element.get("tags") or {}
     lat, lon = location(element)
+    ref = f"osm:{element.get('type')}:{element.get('id')}"
     return {
         "osm_type": element.get("type"),
         "osm_id": element.get("id"),
@@ -114,76 +124,89 @@ def normalize(element: dict[str, Any]) -> dict[str, Any]:
         "latitude": lat,
         "longitude": lon,
         "source": "openstreetmap",
+        "source_ref": ref,
         "source_license": "ODbL 1.0",
+        "collected_at": collected_at,
     }
-
-
-def coverage_cells(rows: list[dict[str, Any]], step_m: int = 250) -> int:
-    cells = set()
-    for row in rows:
-        lat = row.get("latitude")
-        lon = row.get("longitude")
-        if lat is None or lon is None:
-            continue
-        lat_step = step_m / 111_320
-        lon_step = step_m / (111_320 * max(math.cos(math.radians(lat)), 0.1))
-        cells.add((math.floor(lat / lat_step), math.floor(lon / lon_step)))
-    return len(cells)
-
 
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--bbox-json", type=Path)
     parser.add_argument("--output-dir", type=Path, default=Path("output"))
+    parser.add_argument("--tile-km", type=float, default=3.0)
+    parser.add_argument("--pause-seconds", type=float, default=1.5)
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
 
     bbox = bbox_from_file(args.bbox_json)
-    query = make_query(bbox)
-
+    tiles = list(tile_boxes(bbox, max(0.5, args.tile_km)))
     if args.dry_run:
-        print(json.dumps(
-            {"bbox": bbox, "endpoints": ENDPOINTS, "query_bytes": len(query.encode())},
-            indent=2,
-        ))
+        print(json.dumps({
+            "bbox": bbox,
+            "tile_count": len(tiles),
+            "tile_km": args.tile_km,
+            "endpoints": ENDPOINTS,
+        }, indent=2))
         return 0
 
-    data, endpoint = collect(query)
-    rows = []
-    seen = set()
-    for element in data.get("elements") or []:
-        key = (element.get("type"), element.get("id"))
-        if key in seen:
-            continue
-        seen.add(key)
-        rows.append(normalize(element))
+    session = requests.Session()
+    collected_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    unique: dict[tuple[str, int], dict[str, Any]] = {}
+    endpoint_counts: dict[str, int] = {}
 
-    args.output_dir.mkdir(parents=True, exist_ok=True)
-    df = pd.DataFrame(rows)
-    if not df.empty:
-        df = df.sort_values(["shop", "amenity", "name"], na_position="last")
-    df.to_csv(args.output_dir / "ibb_osm_stores.csv", index=False, encoding="utf-8-sig")
-    df.to_excel(args.output_dir / "ibb_osm_stores.xlsx", index=False)
-    (args.output_dir / "ibb_osm_stores.json").write_text(
+    for index, tile in enumerate(tiles, start=1):
+        print(
+            f"[tile {index}/{len(tiles)}] "
+            f"bbox={','.join(f'{value:.6f}' for value in tile)}",
+            flush=True,
+        )
+        data, endpoint = collect_tile(session, make_query(tile))
+        endpoint_counts[endpoint] = endpoint_counts.get(endpoint, 0) + 1
+        for element in data.get("elements") or []:
+            key = (str(element.get("type")), int(element.get("id")))
+            unique.setdefault(key, normalize(element, collected_at))
+        if index < len(tiles):
+            time.sleep(max(0.0, args.pause_seconds))
+
+    rows = list(unique.values())
+    out = args.output_dir
+    out.mkdir(parents=True, exist_ok=True)
+    frame = pd.DataFrame(rows)
+    if not frame.empty:
+        frame = frame.sort_values(
+            ["shop", "amenity", "craft", "name"],
+            na_position="last",
+        )
+    frame.to_csv(out / "ibb_osm_stores.csv", index=False, encoding="utf-8-sig")
+    frame.to_excel(out / "ibb_osm_stores.xlsx", index=False)
+    (out / "ibb_osm_stores.json").write_text(
         json.dumps(rows, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
+
     audit = {
         "source": "OpenStreetMap via Overpass",
-        "endpoint": endpoint,
-        "bbox": bbox,
+        "bbox": dict(
+            south=bbox[0],
+            west=bbox[1],
+            north=bbox[2],
+            east=bbox[3],
+        ),
+        "tile_km": args.tile_km,
+        "tile_count": len(tiles),
+        "endpoint_counts": endpoint_counts,
         "feature_count": len(rows),
-        "coverage_cells_250m": coverage_cells(rows),
         "license": "ODbL 1.0",
         "tiles_downloaded": False,
+        "collected_at": collected_at,
+        "note": "This is a mapped-feature coverage indicator, not proof of complete real-world discovery.",
     }
-    (args.output_dir / "run_audit.json").write_text(
+    (out / "run_audit.json").write_text(
         json.dumps(audit, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
     print(json.dumps(audit, ensure_ascii=False, indent=2))
     return 0
-
 
 if __name__ == "__main__":
     raise SystemExit(main())

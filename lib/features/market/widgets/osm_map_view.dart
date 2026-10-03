@@ -33,7 +33,7 @@ class OsmMapView extends StatelessWidget {
         children: [
           TileLayer(
             urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-            userAgentPackageName: 'com.yemeni.market.engine',
+            userAgentPackageName: 'com.aistoreassistant',
             maxZoom: 19,
           ),
           MarkerLayer(

@@ -1,12 +1,15 @@
 import 'dart:convert';
+
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
 import '../models/user_model.dart';
 import '../../core/constants/app_constants.dart';
+import 'supabase_service.dart';
 
-/// Authentication service — interface prepared for backend integration.
-/// Currently uses SharedPreferences as a local session store.
 class AuthService {
   AuthService._();
+
   static final AuthService instance = AuthService._();
 
   UserModel? _currentUser;
@@ -17,19 +20,30 @@ class AuthService {
   String? get currentRole => _currentUser?.role;
   String? get currentUserId => _currentUser?.id;
 
-  // ── Session ───────────────────────────────────────────────────────────────
-
   Future<void> initialize() async {
     final prefs = await SharedPreferences.getInstance();
-    final userJson = prefs.getString('_current_user');
-    if (userJson != null) {
-      try {
-        _currentUser =
-            UserModel.fromJson(jsonDecode(userJson) as Map<String, dynamic>);
-        _isAuthenticated = true;
-      } catch (_) {
+    final supabase = SupabaseService.instance.client;
+
+    if (supabase != null) {
+      final user = supabase.auth.currentUser;
+      if (user != null) {
+        _setSupabaseUser(user);
+        await _persistSession(_currentUser!);
+      } else {
         await _clearSession(prefs);
       }
+      return;
+    }
+
+    final userJson = prefs.getString('_current_user');
+    if (userJson == null) return;
+
+    try {
+      _currentUser =
+          UserModel.fromJson(jsonDecode(userJson) as Map<String, dynamic>);
+      _isAuthenticated = true;
+    } catch (_) {
+      await _clearSession(prefs);
     }
   }
 
@@ -49,18 +63,28 @@ class AuthService {
     _isAuthenticated = false;
   }
 
-  // ── Auth operations ───────────────────────────────────────────────────────
-
-  /// Login — replace body with real API call when backend is ready.
-  Future<AuthResult> login(
-      {required String email, required String password}) async {
+  Future<AuthResult> login({
+    required String email,
+    required String password,
+  }) async {
     try {
-      // TODO: Replace with real API call
-      // final response = await ApiService.instance.post('/auth/login', { 'email': email, 'password': password });
-      await Future.delayed(
-          const Duration(milliseconds: 800)); // simulate network
+      final supabase = SupabaseService.instance.client;
+      if (supabase != null) {
+        final response = await supabase.auth.signInWithPassword(
+          email: email,
+          password: password,
+        );
+        final user = response.user;
+        if (user == null) {
+          return AuthResult.failure('تعذر تسجيل الدخول.');
+        }
 
-      // Demo: accept any credentials and map to merchant role
+        _setSupabaseUser(user);
+        await _persistSession(_currentUser!);
+        return AuthResult.success(_currentUser!);
+      }
+
+      await Future.delayed(const Duration(milliseconds: 300));
       final user = UserModel(
         id: 'demo-merchant-001',
         fullName: 'Store Owner',
@@ -75,12 +99,13 @@ class AuthService {
       _isAuthenticated = true;
       await _persistSession(user);
       return AuthResult.success(user);
-    } catch (e) {
-      return AuthResult.failure(e.toString());
+    } on AuthException catch (error) {
+      return AuthResult.failure(error.message);
+    } catch (error) {
+      return AuthResult.failure(error.toString());
     }
   }
 
-  /// Register — replace body with real API call when backend is ready.
   Future<AuthResult> register({
     required String fullName,
     required String email,
@@ -90,11 +115,38 @@ class AuthService {
     String? storeName,
   }) async {
     try {
-      // TODO: Replace with real API call
-      await Future.delayed(const Duration(milliseconds: 1000));
+      final supabase = SupabaseService.instance.client;
+      if (supabase != null) {
+        final response = await supabase.auth.signUp(
+          email: email,
+          password: password,
+          data: {
+            'full_name': fullName,
+            'phone': phone,
+            'role': role,
+            'store_name': storeName,
+          },
+        );
 
+        final user = response.user;
+        if (user == null) {
+          return AuthResult.failure('لم يتم إنشاء الحساب.');
+        }
+
+        if (response.session == null) {
+          return AuthResult.failure(
+            'تم إنشاء الحساب. تحقق من البريد الإلكتروني ثم سجّل الدخول.',
+          );
+        }
+
+        _setSupabaseUser(user);
+        await _persistSession(_currentUser!);
+        return AuthResult.success(_currentUser!);
+      }
+
+      await Future.delayed(const Duration(milliseconds: 500));
       final user = UserModel(
-        id: 'new-user-${DateTime.now().millisecondsSinceEpoch}',
+        id: 'new-user-' + DateTime.now().millisecondsSinceEpoch.toString(),
         fullName: fullName,
         email: email,
         phone: phone,
@@ -107,14 +159,40 @@ class AuthService {
       _isAuthenticated = true;
       await _persistSession(user);
       return AuthResult.success(user);
-    } catch (e) {
-      return AuthResult.failure(e.toString());
+    } on AuthException catch (error) {
+      return AuthResult.failure(error.message);
+    } catch (error) {
+      return AuthResult.failure(error.toString());
     }
   }
 
   Future<void> logout() async {
+    final supabase = SupabaseService.instance.client;
+    if (supabase != null) {
+      await supabase.auth.signOut();
+    }
+
     final prefs = await SharedPreferences.getInstance();
     await _clearSession(prefs);
+  }
+
+  void _setSupabaseUser(User user) {
+    final metadata = user.userMetadata ?? const <String, dynamic>{};
+    final roleValue =
+        metadata['role']?.toString() ?? AppConstants.roleCustomer;
+
+    _currentUser = UserModel(
+      id: user.id,
+      fullName: metadata['full_name']?.toString() ??
+          user.email?.split('@').first ??
+          'مستخدم السوق',
+      email: user.email ?? '',
+      phone: metadata['phone']?.toString() ?? '',
+      role: roleValue,
+      storeName: metadata['store_name']?.toString(),
+      createdAt: DateTime.tryParse(user.createdAt) ?? DateTime.now(),
+    );
+    _isAuthenticated = true;
   }
 }
 
@@ -123,7 +201,11 @@ class AuthResult {
   final UserModel? user;
   final String? errorMessage;
 
-  const AuthResult._({required this.success, this.user, this.errorMessage});
+  const AuthResult._({
+    required this.success,
+    this.user,
+    this.errorMessage,
+  });
 
   factory AuthResult.success(UserModel user) =>
       AuthResult._(success: true, user: user);

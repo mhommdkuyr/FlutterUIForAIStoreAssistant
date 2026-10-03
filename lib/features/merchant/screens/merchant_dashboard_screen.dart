@@ -167,6 +167,11 @@ class _DashboardTabState extends State<_DashboardTab> {
                 onPressed: () {},
               ),
               IconButton(
+                icon: const Icon(Icons.storefront_rounded, color: Colors.white),
+                tooltip: 'كتالوج السوق',
+                onPressed: () => context.push('/merchant/catalog'),
+              ),
+              IconButton(
                 icon: const Icon(Icons.settings_outlined, color: Colors.white),
                 onPressed: () => context.push('/settings'),
               ),

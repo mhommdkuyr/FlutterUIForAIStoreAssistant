@@ -85,7 +85,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       case AppConstants.roleWorker:
         context.go('/worker/dashboard');
       default:
-        context.go('/customer/search');
+        context.go('/market');
     }
   }
 

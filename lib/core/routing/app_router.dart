@@ -6,12 +6,14 @@ import '../../features/onboarding/screens/account_type_screen.dart';
 import '../../features/authentication/screens/login_screen.dart';
 import '../../features/authentication/screens/register_screen.dart';
 import '../../features/merchant/screens/merchant_dashboard_screen.dart';
+import '../../features/merchant/screens/merchant_location_screen.dart';
 import '../../features/worker/screens/worker_dashboard_screen.dart';
 import '../../features/customer/screens/customer_search_screen.dart';
 import '../../features/market/models/market_models.dart';
+import '../../features/market/screens/market_admin_screen.dart';
 import '../../features/market/screens/market_home_screen.dart';
+import '../../features/market/screens/market_merchant_catalog_screen.dart';
 import '../../features/market/screens/store_details_screen.dart';
-import '../../features/merchant/screens/merchant_location_screen.dart';
 import '../../features/inventory/screens/inventory_screen.dart';
 import '../../features/product_scanner/screens/scanner_screen.dart';
 import '../../features/product_scanner/screens/live_scanner_screen.dart';
@@ -32,7 +34,6 @@ class AppRouter {
     initialLocation: '/splash',
     debugLogDiagnostics: false,
     routes: [
-      // ── Onboarding ──────────────────────────────────────────────────────
       GoRoute(
         path: '/splash',
         builder: (context, state) => const SplashScreen(),
@@ -45,8 +46,6 @@ class AppRouter {
         path: '/account-type',
         builder: (context, state) => const AccountTypeScreen(),
       ),
-
-      // ── Authentication ──────────────────────────────────────────────────
       GoRoute(
         path: '/login',
         builder: (context, state) => const LoginScreen(),
@@ -60,7 +59,7 @@ class AppRouter {
         },
       ),
 
-      // ── Market Engine ───────────────────────────────────────────────────
+      // Market Engine
       GoRoute(
         path: '/market',
         builder: (context, state) => const MarketHomeScreen(),
@@ -76,37 +75,41 @@ class AppRouter {
               body: Center(child: Text('المتجر غير متاح.')),
             );
           }
-          final offers =
-              rawOffers?.whereType<MarketOffer>().toList() ??
+          final offers = rawOffers?.whereType<MarketOffer>().toList() ??
               const <MarketOffer>[];
           return StoreDetailsScreen(store: store, offers: offers);
         },
       ),
+      GoRoute(
+        path: '/market/admin',
+        builder: (context, state) => const MarketAdminScreen(),
+      ),
 
-      // ── Merchant ────────────────────────────────────────────────────────
+      // Merchant
       GoRoute(
         path: '/merchant/dashboard',
         builder: (context, state) => const MerchantDashboardScreen(),
       ),
-
       GoRoute(
         path: '/merchant/location',
         builder: (context, state) => const MerchantLocationScreen(),
       ),
+      GoRoute(
+        path: '/merchant/catalog',
+        builder: (context, state) =>
+            const MarketMerchantCatalogScreen(),
+      ),
 
-      // ── Worker ──────────────────────────────────────────────────────────
+      // Worker and existing customer CRM
       GoRoute(
         path: '/worker/dashboard',
         builder: (context, state) => const WorkerDashboardScreen(),
       ),
-
-      // ── Customer ────────────────────────────────────────────────────────
       GoRoute(
         path: '/customer/search',
         builder: (context, state) => const CustomerSearchScreen(),
       ),
 
-      // ── Shared features ─────────────────────────────────────────────────
       GoRoute(
         path: '/inventory',
         builder: (context, state) => const InventoryScreen(),
@@ -127,8 +130,10 @@ class AppRouter {
         builder: (context, state) {
           final extra = state.extra as Map<String, dynamic>?;
           final rawItems = extra?['cartItems'] as List<dynamic>?;
-          final items =
-              rawItems?.map((e) => e as Map<String, dynamic>).toList() ?? [];
+          final items = rawItems
+                  ?.map((e) => e as Map<String, dynamic>)
+                  .toList() ??
+              [];
           return InvoiceScreen(initialItems: items);
         },
       ),
@@ -167,8 +172,6 @@ class AppRouter {
         builder: (context, state) => const SettingsScreen(),
       ),
     ],
-
-    // Global error page
     errorBuilder: (context, state) => Scaffold(
       body: Center(
         child: Column(
@@ -176,10 +179,15 @@ class AppRouter {
           children: [
             const Icon(Icons.error_outline_rounded, size: 64),
             const SizedBox(height: 16),
-            Text(context.tr.pageNotFound,
-                style: Theme.of(context).textTheme.titleLarge),
+            Text(
+              context.tr.pageNotFound,
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
             const SizedBox(height: 8),
-            Text(state.uri.path, style: Theme.of(context).textTheme.bodySmall),
+            Text(
+              state.uri.path,
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
             const SizedBox(height: 24),
             ElevatedButton(
               onPressed: () => context.go('/splash'),

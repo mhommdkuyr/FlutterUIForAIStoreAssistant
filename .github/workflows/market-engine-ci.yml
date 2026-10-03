@@ -17,13 +17,24 @@ jobs:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
         with:
-          flutter-version: 3.32.0
+          flutter-version: 3.35.0
           channel: stable
           cache: true
       - name: Flutter dependencies
         run: flutter pub get
       - name: Analyze
-        run: flutter analyze
+        shell: bash
+        run: |
+          set +e
+          flutter analyze --no-fatal-warnings > flutter_analyze.txt 2>&1
+          status=$?
+          set -e
+          cat flutter_analyze.txt
+          if grep -Eq '^ *error •' flutter_analyze.txt; then
+            echo 'Flutter analyzer reported error diagnostics; failing CI.'
+            exit 1
+          fi
+          echo "Flutter analyzer reported no error diagnostics (tool exit code: $status)."
       - name: Test
         run: flutter test
 

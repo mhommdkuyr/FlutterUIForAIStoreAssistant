@@ -11,8 +11,14 @@ Tools:
 - ../ibb_google_places_collector/collector.py
 - ../openfoodfacts_enricher/enrich.py
 - coverage_audit.py
+- dedupe_stores.py
 - import_osm_to_supabase.py
 
-A coverage cell is a QA unit, not a promise that every meter or every business is represented. Dense overlapping queries and merchant onboarding are required for high recall.
+dedupe_stores.py combines OSM and authorized Google Places exports using normalized
+phone/name plus a configurable distance threshold. It does not scrape Google Maps
+web pages or copy restricted Google-only fields.
+
+A coverage cell is a QA unit, not a promise that every meter or every business is represented.
+Dense mapping data plus merchant onboarding and field collection are required for high recall.
 
 Never ship Google API keys or Supabase service-role keys in the mobile application or repository.
