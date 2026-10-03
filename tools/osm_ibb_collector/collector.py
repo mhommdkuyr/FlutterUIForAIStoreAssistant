@@ -13,7 +13,7 @@ from typing import Any, Iterator
 import pandas as pd
 import requests
 
-DEFAULT_BBOX = (13.92, 44.12, 14.03, 44.25)
+DEFAULT_BBOX = (13.93, 44.13, 14.03, 44.22)
 ENDPOINTS = [
     "https://overpass-api.de/api/interpreter",
     "https://overpass.kumi.systems/api/interpreter",
@@ -130,7 +130,7 @@ def normalize(element: dict[str, Any], collected_at: str) -> dict[str, Any]:
     }
 
 
-def coverage_cells(rows: list[dict[str, Any]], bbox: tuple[float, float, float, float], step_m: int = 250) -> tuple[int, int, list[dict[str, int]]]:
+def coverage_cells(rows: list[dict[str, Any]], bbox: tuple[float, float, float, float], step_m: int = 300) -> tuple[int, int, list[dict[str, int]]]:
     south, west, north, east = bbox
     lat_step = step_m / 111_320
     cells: set[tuple[int, int]] = set()
@@ -165,9 +165,9 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--bbox-json", type=Path)
     parser.add_argument("--output-dir", type=Path, default=Path("output"))
-    parser.add_argument("--tile-km", type=float, default=3.0)
-    parser.add_argument("--pause-seconds", type=float, default=1.5)
-    parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--tile-km", type=float, default=0.3)
+    parser.add_argument("--pause-seconds", type=float, default=0.8)
+    parser.add_argument("--grid-step-m", type=int, default=300)\n    parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
 
     bbox = bbox_from_file(args.bbox_json)
@@ -211,7 +211,7 @@ def main() -> int:
         )
     frame.to_csv(out / "ibb_osm_stores.csv", index=False, encoding="utf-8-sig")
     frame.to_excel(out / "ibb_osm_stores.xlsx", index=False)
-    occupied_cells, total_cells, empty_cells = coverage_cells(rows, bbox)
+    occupied_cells, total_cells, empty_cells = coverage_cells(rows, bbox, step_m=args.grid_step_m)
     with (out / "ibb_empty_coverage_cells.csv").open(
         "w",
         encoding="utf-8-sig",
@@ -241,9 +241,9 @@ def main() -> int:
         "tile_count": len(tiles),
         "endpoint_counts": endpoint_counts,
         "feature_count": len(rows),
-        "coverage_cells_250m": occupied_cells,
-        "total_cells_250m": total_cells,
-        "empty_cells_250m": len(empty_cells),
+        "coverage_cells_300m": occupied_cells,
+        "total_cells_300m": total_cells,
+        "empty_cells_300m": len(empty_cells),
         "coverage_percent": round((occupied_cells / total_cells) * 100, 2) if total_cells else 0,
         "license": "ODbL 1.0",
         "tiles_downloaded": False,
