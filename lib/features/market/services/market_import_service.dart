@@ -218,6 +218,8 @@ class MarketImportService {
     final row = <String>[];
     final field = StringBuffer();
     var quoted = false;
+    final lf = String.fromCharCode(10);
+    final cr = String.fromCharCode(13);
 
     void finishField() {
       row.add(field.toString());
@@ -241,12 +243,10 @@ class MarketImportService {
         }
       } else if (char == ',' && !quoted) {
         finishField();
-      } else if ((char == '
-' || char == '') && !quoted) {
-        if (char == '' &&
+      } else if ((char == lf || char == cr) && !quoted) {
+        if (char == cr &&
             i + 1 < source.length &&
-            source[i + 1] == '
-') {
+            source[i + 1] == lf) {
           i++;
         }
         finishRow();

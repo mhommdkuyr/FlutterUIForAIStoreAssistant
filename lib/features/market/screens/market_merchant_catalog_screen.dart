@@ -426,8 +426,7 @@ class _MarketMerchantCatalogScreenState
     if (result.rows.isEmpty) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(result.errors.join('
-'))),
+        SnackBar(content: Text(result.errors.join(String.fromCharCode(10)))),
       );
       return;
     }
