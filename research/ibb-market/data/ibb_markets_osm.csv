@@ -1,0 +1,5 @@
+market_id,name,lat,lon,osm_reference,source_url,source_type,license_note
+M01,سوق إب,13.97469,44.17703,node 10148862617,https://ye.geoview.info/swq_ab%2C10148862617n,OpenStreetMap-derived,ODbL source; verify current status
+M02,سوق الظهار,13.97199,44.17129,node 4367944813,https://mapcarta.com/N4367944813,OpenStreetMap-derived,ODbL source; verify exact market boundary
+M03,سوق الوراق,13.77821,44.14471,node 5760521421,https://mapcarta.com/N5760521421,OpenStreetMap-derived,ODbL source; verify current status
+M04,سوق الثلوث,13.91388,44.25909,GeoNames/Open data locality,https://mapcarta.com/12486312,Open geographic data,Not a direct business listing; market/locality anchor
