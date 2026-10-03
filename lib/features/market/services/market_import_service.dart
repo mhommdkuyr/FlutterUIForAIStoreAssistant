@@ -40,7 +40,7 @@ class MarketImportService {
   const MarketImportService();
 
   Future<MarketImportResult?> pickAndParse() async {
-    final result = await FilePicker.platform.pickFiles(
+    final result = await FilePicker.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['csv', 'json'],
       withData: true,
