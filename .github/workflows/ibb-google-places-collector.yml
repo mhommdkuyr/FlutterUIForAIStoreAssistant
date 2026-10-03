@@ -1,41 +1,25 @@
-name: Ibb Google Places Collector
+name: Ibb Google Places Grid Plan
 
 on:
-  push:
-    branches:
-      - ibb-google-places-collector
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
-  collect:
+  plan:
     runs-on: ubuntu-latest
-    env:
-      GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version: "3.12"
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r tools/ibb_google_places_collector/requirements.txt
-      - name: Dry run
+      - name: Generate and print grid plan only
+        working-directory: tools/ibb_google_places_collector
         run: |
-          cd tools/ibb_google_places_collector
           python collector.py --config ibb_city_box.json --dry-run
-      - name: Collect
-        if: env.GOOGLE_MAPS_API_KEY != ''
-        run: |
-          cd tools/ibb_google_places_collector
-          python collector.py --config ibb_city_box.json --output-dir output
-      - name: Google collection skipped without API secret
-        if: env.GOOGLE_MAPS_API_KEY == ''
-        run: echo "GOOGLE_MAPS_API_KEY is not configured; public Google Maps pages are not scraped."
-      - name: Upload temporary artifact
-        if: env.GOOGLE_MAPS_API_KEY != ''
-        uses: actions/upload-artifact@v4
-        with:
-          name: ibb-google-places-output
-          path: tools/ibb_google_places_collector/output/
-          retention-days: 1
+          echo "Google Maps content scraping/export is intentionally disabled."
