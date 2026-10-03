@@ -9,6 +9,8 @@ on:
 jobs:
   collect:
     runs-on: ubuntu-latest
+    env:
+      GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -23,17 +25,15 @@ jobs:
           cd tools/ibb_google_places_collector
           python collector.py --config ibb_city_box.json --dry-run
       - name: Collect
-        if: ${{ secrets.GOOGLE_MAPS_API_KEY != '' }}
-        env:
-          GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
+        if: env.GOOGLE_MAPS_API_KEY != ''
         run: |
           cd tools/ibb_google_places_collector
           python collector.py --config ibb_city_box.json --output-dir output
       - name: Google collection skipped without API secret
-        if: ${{ secrets.GOOGLE_MAPS_API_KEY == '' }}
+        if: env.GOOGLE_MAPS_API_KEY == ''
         run: echo "GOOGLE_MAPS_API_KEY is not configured; public Google Maps pages are not scraped."
       - name: Upload temporary artifact
-        if: ${{ secrets.GOOGLE_MAPS_API_KEY != '' }}
+        if: env.GOOGLE_MAPS_API_KEY != ''
         uses: actions/upload-artifact@v4
         with:
           name: ibb-google-places-output
