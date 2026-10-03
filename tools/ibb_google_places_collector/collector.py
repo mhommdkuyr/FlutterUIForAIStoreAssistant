@@ -9,8 +9,7 @@ import requests
 SEARCH_URL="https://places.googleapis.com/v1/places:searchText"
 DETAILS_URL="https://places.googleapis.com/v1/places"
 
-SEARCH_MASK="places.id,places.displayName,places.formattedAddress,places.nationalPhoneNumber,places.internationalPhoneNumber,places.websiteUri,places.location,places.primaryType,places.types,places.businessStatus,places.regularOpeningHours,places.googleMapsUri,places.photos,nextPageToken"
-DETAILS_MASK="id,displayName,formattedAddress,nationalPhoneNumber,internationalPhoneNumber,websiteUri,location,primaryType,types,businessStatus,regularOpeningHours,googleMapsUri,photos"
+SEARCH_MASK="places.id,nextPageToken"
 
 def grid_centers(south:float,north:float,west:float,east:float,step_km:float)->Iterable[Tuple[float,float]]:
     lat_step=step_km/111.32
@@ -38,22 +37,6 @@ def post_json(session:requests.Session,headers:Dict[str,str],payload:Dict[str,An
             if attempt==retries-1: raise RuntimeError(str(exc)) from exc
             time.sleep(delay); delay=min(delay*2,30)
     raise RuntimeError("request failed")
-
-def get_details(session:requests.Session,key:str,pid:str,mask:str)->Dict[str,Any]:
-    url=f"{DETAILS_URL}/{pid}"
-    headers={"X-Goog-Api-Key":key,"X-Goog-FieldMask":mask}
-    delay=1.5
-    for attempt in range(5):
-        try:
-            r=session.get(url,headers=headers,timeout=45)
-            if r.status_code==200: return r.json()
-            if r.status_code in (429,500,502,503,504) and attempt<4:
-                time.sleep(delay); delay=min(delay*2,30); continue
-            raise RuntimeError(f"Place Details error {r.status_code}: {r.text[:1200]}")
-        except requests.RequestException as exc:
-            if attempt==4: raise RuntimeError(str(exc)) from exc
-            time.sleep(delay); delay=min(delay*2,30)
-    raise RuntimeError("details failed")
 
 def flatten(p:Dict[str,Any],q:str,clat:float,clon:float)->Dict[str,Any]:
     d=p.get("displayName") or {}
@@ -105,11 +88,9 @@ def main()->int:
     if args.dry_run: return 0
     key=os.getenv("GOOGLE_MAPS_API_KEY")
     if not key: raise SystemExit("GOOGLE_MAPS_API_KEY is required")
-    mask=os.getenv("GOOGLE_FIELD_MASK",SEARCH_MASK)
-    details_mask=os.getenv("GOOGLE_DETAILS_FIELD_MASK",DETAILS_MASK)
-    headers={"Content-Type":"application/json","X-Goog-Api-Key":key,"X-Goog-FieldMask":mask}
+    headers={"Content-Type":"application/json","X-Goog-Api-Key":key,"X-Goog-FieldMask":SEARCH_MASK}
     session=requests.Session()
-    unique:Dict[str,Dict[str,Any]]={}
+    unique:set[str]=set()
     raw=0
     for ci,(lat,lon) in enumerate(cells,1):
         for qi,q in enumerate(cfg["queries"],1):
@@ -118,24 +99,11 @@ def main()->int:
                 raw+=1
                 pid=p.get("id")
                 if not pid: continue
-                if pid in unique:
-                    unique[pid]["discovery_count"]=unique[pid].get("discovery_count",1)+1
-                    continue
-                row=flatten(p,q,lat,lon); row["discovery_count"]=1
-                if cfg.get("fetch_details"):
-                    try:
-                        detail=get_details(session,key,pid,details_mask)
-                        row.update(flatten(detail,q,lat,lon))
-                    except RuntimeError as exc:
-                        print(f"details warning {pid}: {exc}",file=sys.stderr)
-                unique[pid]=row
+                if pid:
+                    unique.add(pid)
     out=args.output_dir; out.mkdir(parents=True,exist_ok=True)
-    df=pd.DataFrame(unique.values())
-    if not df.empty: df=df.sort_values(["primary_type","name"],na_position="last")
-    df.to_csv(out/"ibb_places.csv",index=False,encoding="utf-8-sig")
-    df.to_excel(out/"ibb_places.xlsx",index=False)
-    (out/"ibb_places.json").write_text(json.dumps(list(unique.values()),ensure_ascii=False,indent=2),encoding="utf-8")
-    audit={"raw_discoveries":raw,"unique_place_ids":len(unique),"cells":len(cells),"queries":len(cfg["queries"]),"max_pages_per_query":cfg["max_pages"],"details_enabled":bool(cfg.get("fetch_details"))}
+    out=args.output_dir; out.mkdir(parents=True,exist_ok=True)
+    audit={"raw_discoveries":raw,"place_id_count":len(unique),"cells":len(cells),"queries":len(cfg["queries"]),"max_pages_per_query":cfg["max_pages"],"mode":"audit-only","google_content_export":False}
     (out/"run_audit.json").write_text(json.dumps(audit,ensure_ascii=False,indent=2),encoding="utf-8")
     print(json.dumps(audit,ensure_ascii=False,indent=2))
     return 0
