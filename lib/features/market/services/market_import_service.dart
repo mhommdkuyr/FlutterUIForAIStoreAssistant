@@ -56,21 +56,28 @@ class MarketImportService {
       );
     }
 
-    final source = utf8.decode(file.bytes!, allowMalformed: true);
+    return parseBytes(fileName: file.name, bytes: file.bytes!);
+  }
+
+  MarketImportResult parseBytes({
+    required String fileName,
+    required List<int> bytes,
+  }) {
+    final source = utf8.decode(bytes, allowMalformed: true);
     try {
-      final parsed = file.name.toLowerCase().endsWith('.json')
+      final parsed = fileName.toLowerCase().endsWith('.json')
           ? _parseJson(source)
           : _parseCsv(source);
       return MarketImportResult(
         rows: parsed.rows,
         errors: parsed.errors,
-        fileName: file.name,
+        fileName: fileName,
       );
     } catch (error) {
       return MarketImportResult(
         rows: const [],
         errors: ['تعذر تحليل الملف: ' + error.toString()],
-        fileName: file.name,
+        fileName: fileName,
       );
     }
   }
