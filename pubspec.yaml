@@ -28,7 +28,7 @@ dependencies:
   google_fonts: ^6.2.1
   fl_chart: ^0.70.2
   flutter_map: ^8.3.2
-  geolocator: ^14.1.1
+  geolocator: ^14.0.2
   http: ^1.5.0
   latlong2: ^0.10.1
   url_launcher: ^6.3.1
