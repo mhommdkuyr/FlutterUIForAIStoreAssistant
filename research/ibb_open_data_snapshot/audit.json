@@ -2,7 +2,7 @@
   "retrieved_at": "2026-10-15",
   "source": "OpenStreetMap contributors via Overpass API",
   "endpoint": "https://overpass-api.de/api/interpreter",
-  "osm_base_timestamp": "2026-10-15T00:38:19Z",
+  "osm_base_timestamp": "2026-10-15T00:39:20Z",
   "bbox_south_west_north_east": [
     13.935,
     44.135,
@@ -384,5 +384,20 @@
     "Way/relation coordinates are approximate centers; not verified store entrances.",
     "No Google Maps content was scraped.",
     "This snapshot returns hundreds at most, not thousands of verified establishments."
-  ]
+  ],
+  "named_objects": 217,
+  "unnamed_objects": 8,
+  "named_pct": 96.4,
+  "phone_pct": 12.4,
+  "website_pct": 6.2,
+  "address_pct": 43.1,
+  "tag_counts_overlapping": {
+    "amenity": 101,
+    "healthcare": 6,
+    "craft": 1,
+    "leisure": 5,
+    "office": 11,
+    "shop": 66,
+    "tourism": 41
+  }
 }
