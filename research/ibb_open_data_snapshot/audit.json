@@ -1,0 +1,388 @@
+{
+  "retrieved_at": "2026-10-15",
+  "source": "OpenStreetMap contributors via Overpass API",
+  "endpoint": "https://overpass-api.de/api/interpreter",
+  "osm_base_timestamp": "2026-10-15T00:38:19Z",
+  "bbox_south_west_north_east": [
+    13.935,
+    44.135,
+    14.005,
+    44.195
+  ],
+  "bbox_note": "Approximate rectangular study envelope, not an authoritative urban or administrative boundary.",
+  "query_tags": [
+    "shop",
+    "amenity",
+    "office",
+    "craft",
+    "tourism",
+    "healthcare",
+    "leisure"
+  ],
+  "total_unique_osm_objects": 225,
+  "named": 217,
+  "unnamed": 8,
+  "phone_present": 28,
+  "website_present": 14,
+  "opening_hours_present": 49,
+  "address_present": 97,
+  "street_present": 94,
+  "district_present": 0,
+  "named_percent": 96.4,
+  "phone_percent": 12.4,
+  "website_percent": 6.2,
+  "address_percent": 43.1,
+  "near_duplicate_candidates_within_250m": 11,
+  "coverage_grid": {
+    "step_degrees": 0.01,
+    "total_cells": 42,
+    "empty_cells": 21,
+    "cells": [
+      {
+        "south": 13.935,
+        "west": 44.135,
+        "north": 13.945,
+        "east": 44.145,
+        "count": 0,
+        "named": 0
+      },
+      {
+        "south": 13.935,
+        "west": 44.145,
+        "north": 13.945,
+        "east": 44.155,
+        "count": 0,
+        "named": 0
+      },
+      {
+        "south": 13.935,
+        "west": 44.155,
+        "north": 13.945,
+        "east": 44.165,
+        "count": 0,
+        "named": 0
+      },
+      {
+        "south": 13.935,
+        "west": 44.165,
+        "north": 13.945,
+        "east": 44.175,
+        "count": 1,
+        "named": 1
+      },
+      {
+        "south": 13.935,
+        "west": 44.175,
+        "north": 13.945,
+        "east": 44.185,
+        "count": 3,
+        "named": 3
+      },
+      {
+        "south": 13.935,
+        "west": 44.185,
+        "north": 13.945,
+        "east": 44.195,
+        "count": 0,
+        "named": 0
+      },
+      {
+        "south": 13.945,
+        "west": 44.135,
+        "north": 13.955,
+        "east": 44.145,
+        "count": 0,
+        "named": 0
+      },
+      {
+        "south": 13.945,
+        "west": 44.145,
+        "north": 13.955,
+        "east": 44.155,
+        "count": 0,
+        "named": 0
+      },
+      {
+        "south": 13.945,
+        "west": 44.155,
+        "north": 13.955,
+        "east": 44.165,
+        "count": 1,
+        "named": 1
+      },
+      {
+        "south": 13.945,
+        "west": 44.165,
+        "north": 13.955,
+        "east": 44.175,
+        "count": 6,
+        "named": 6
+      },
+      {
+        "south": 13.945,
+        "west": 44.175,
+        "north": 13.955,
+        "east": 44.185,
+        "count": 22,
+        "named": 21
+      },
+      {
+        "south": 13.945,
+        "west": 44.185,
+        "north": 13.955,
+        "east": 44.195,
+        "count": 2,
+        "named": 2
+      },
+      {
+        "south": 13.955,
+        "west": 44.135,
+        "north": 13.965,
+        "east": 44.145,
+        "count": 0,
+        "named": 0
+      },
+      {
+        "south": 13.955,
+        "west": 44.145,
+        "north": 13.965,
+        "east": 44.155,
+        "count": 3,
+        "named": 3
+      },
+      {
+        "south": 13.955,
+        "west": 44.155,
+        "north": 13.965,
+        "east": 44.165,
+        "count": 3,
+        "named": 3
+      },
+      {
+        "south": 13.955,
+        "west": 44.165,
+        "north": 13.965,
+        "east": 44.175,
+        "count": 8,
+        "named": 7
+      },
+      {
+        "south": 13.955,
+        "west": 44.175,
+        "north": 13.965,
+        "east": 44.185,
+        "count": 24,
+        "named": 23
+      },
+      {
+        "south": 13.955,
+        "west": 44.185,
+        "north": 13.965,
+        "east": 44.195,
+        "count": 6,
+        "named": 6
+      },
+      {
+        "south": 13.965,
+        "west": 44.135,
+        "north": 13.975,
+        "east": 44.145,
+        "count": 6,
+        "named": 6
+      },
+      {
+        "south": 13.965,
+        "west": 44.145,
+        "north": 13.975,
+        "east": 44.155,
+        "count": 9,
+        "named": 9
+      },
+      {
+        "south": 13.965,
+        "west": 44.155,
+        "north": 13.975,
+        "east": 44.165,
+        "count": 29,
+        "named": 28
+      },
+      {
+        "south": 13.965,
+        "west": 44.165,
+        "north": 13.975,
+        "east": 44.175,
+        "count": 22,
+        "named": 20
+      },
+      {
+        "south": 13.965,
+        "west": 44.175,
+        "north": 13.975,
+        "east": 44.185,
+        "count": 33,
+        "named": 33
+      },
+      {
+        "south": 13.965,
+        "west": 44.185,
+        "north": 13.975,
+        "east": 44.195,
+        "count": 0,
+        "named": 0
+      },
+      {
+        "south": 13.975,
+        "west": 44.135,
+        "north": 13.985,
+        "east": 44.145,
+        "count": 0,
+        "named": 0
+      },
+      {
+        "south": 13.975,
+        "west": 44.145,
+        "north": 13.985,
+        "east": 44.155,
+        "count": 0,
+        "named": 0
+      },
+      {
+        "south": 13.975,
+        "west": 44.155,
+        "north": 13.985,
+        "east": 44.165,
+        "count": 14,
+        "named": 13
+      },
+      {
+        "south": 13.975,
+        "west": 44.165,
+        "north": 13.985,
+        "east": 44.175,
+        "count": 9,
+        "named": 9
+      },
+      {
+        "south": 13.975,
+        "west": 44.175,
+        "north": 13.985,
+        "east": 44.185,
+        "count": 18,
+        "named": 17
+      },
+      {
+        "south": 13.975,
+        "west": 44.185,
+        "north": 13.985,
+        "east": 44.195,
+        "count": 5,
+        "named": 5
+      },
+      {
+        "south": 13.985,
+        "west": 44.135,
+        "north": 13.995,
+        "east": 44.145,
+        "count": 0,
+        "named": 0
+      },
+      {
+        "south": 13.985,
+        "west": 44.145,
+        "north": 13.995,
+        "east": 44.155,
+        "count": 0,
+        "named": 0
+      },
+      {
+        "south": 13.985,
+        "west": 44.155,
+        "north": 13.995,
+        "east": 44.165,
+        "count": 0,
+        "named": 0
+      },
+      {
+        "south": 13.985,
+        "west": 44.165,
+        "north": 13.995,
+        "east": 44.175,
+        "count": 1,
+        "named": 1
+      },
+      {
+        "south": 13.985,
+        "west": 44.175,
+        "north": 13.995,
+        "east": 44.185,
+        "count": 0,
+        "named": 0
+      },
+      {
+        "south": 13.985,
+        "west": 44.185,
+        "north": 13.995,
+        "east": 44.195,
+        "count": 0,
+        "named": 0
+      },
+      {
+        "south": 13.995,
+        "west": 44.135,
+        "north": 14.005,
+        "east": 44.145,
+        "count": 0,
+        "named": 0
+      },
+      {
+        "south": 13.995,
+        "west": 44.145,
+        "north": 14.005,
+        "east": 44.155,
+        "count": 0,
+        "named": 0
+      },
+      {
+        "south": 13.995,
+        "west": 44.155,
+        "north": 14.005,
+        "east": 44.165,
+        "count": 0,
+        "named": 0
+      },
+      {
+        "south": 13.995,
+        "west": 44.165,
+        "north": 14.005,
+        "east": 44.175,
+        "count": 0,
+        "named": 0
+      },
+      {
+        "south": 13.995,
+        "west": 44.175,
+        "north": 14.005,
+        "east": 44.185,
+        "count": 0,
+        "named": 0
+      },
+      {
+        "south": 13.995,
+        "west": 44.185,
+        "north": 14.005,
+        "east": 44.195,
+        "count": 0,
+        "named": 0
+      }
+    ]
+  },
+  "license": "ODbL-1.0",
+  "attribution": "© OpenStreetMap contributors",
+  "limitations": [
+    "Does not represent a citywide census or verified municipal boundary.",
+    "An empty cell means no matched object was returned, not that it has no businesses.",
+    "Way/relation coordinates are approximate centers; not verified store entrances.",
+    "No Google Maps content was scraped.",
+    "This snapshot returns hundreds at most, not thousands of verified establishments."
+  ]
+}
