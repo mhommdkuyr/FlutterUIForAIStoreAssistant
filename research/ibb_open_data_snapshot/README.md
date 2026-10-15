@@ -22,6 +22,7 @@
 - `legacy_dataset_audit.md`: فحص ملفات 9,000 و9,500 القديمة.
 - `places.csv`: السجلات الحيّة المعرّفة بمعرّفات OSM ومصدر كل سجل.
 - `places.geojson`: نقاط الخريطة بإحداثيات [longitude, latitude].
+- `urban_district_boundaries.geojson`: مضلعا الظهار والمشنة الإداريان للمقارنة، وليسا حدود المدينة وحدها.
 - `coverage_grid.geojson`: شبكة خلايا للدلالة على مواقع وجود نتائج OSM، لا على الخلو الحقيقي من المتاجر.
 - `possible_duplicates.csv`: مرشحو التكرار للمراجعة البشرية فقط.
 - `collect_ibb_osm.py`: أداة قابلة لإعادة التشغيل لجلب اللقطة مستقبلًا.
