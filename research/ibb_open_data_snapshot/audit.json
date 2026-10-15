@@ -418,5 +418,15 @@
       ],
       "caveat": "District union includes the full administrative polygons and may include settlements outside the urban city boundary."
     }
+  },
+  "legacy_csv_quality_metrics": {
+    "rows": 9000,
+    "unique_names": 211,
+    "rows_with_names_appearing_more_than_once": 8969,
+    "excess_rows_beyond_one_per_unique_name": 8789,
+    "unique_coordinate_pairs": 7030,
+    "rows_with_coordinate_pair_appearing_more_than_once": 3940,
+    "excess_coordinate_rows_beyond_first_occurrence": 1970,
+    "exact_duplicate_full_rows": 0
   }
 }
