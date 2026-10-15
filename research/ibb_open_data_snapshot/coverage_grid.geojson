@@ -1,0 +1,1519 @@
+{
+  "type": "FeatureCollection",
+  "name": "ibb_study_envelope_grid_0_01deg",
+  "notes": "Approximate rectangle, not municipal boundary. Empty cell means no queried OSM object; it does not indicate a vacant area.",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "count": 0,
+        "named": 0,
+        "missing_names": 0,
+        "status": "NO_MATCHING_OSM_OBJECTS"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              44.135,
+              13.935
+            ],
+            [
+              44.145,
+              13.935
+            ],
+            [
+              44.145,
+              13.945
+            ],
+            [
+              44.135,
+              13.945
+            ],
+            [
+              44.135,
+              13.935
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "count": 0,
+        "named": 0,
+        "missing_names": 0,
+        "status": "NO_MATCHING_OSM_OBJECTS"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              44.145,
+              13.935
+            ],
+            [
+              44.155,
+              13.935
+            ],
+            [
+              44.155,
+              13.945
+            ],
+            [
+              44.145,
+              13.945
+            ],
+            [
+              44.145,
+              13.935
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "count": 0,
+        "named": 0,
+        "missing_names": 0,
+        "status": "NO_MATCHING_OSM_OBJECTS"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              44.155,
+              13.935
+            ],
+            [
+              44.165,
+              13.935
+            ],
+            [
+              44.165,
+              13.945
+            ],
+            [
+              44.155,
+              13.945
+            ],
+            [
+              44.155,
+              13.935
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "count": 1,
+        "named": 1,
+        "missing_names": 0,
+        "status": "HAS_MATCHING_OSM_OBJECTS"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              44.165,
+              13.935
+            ],
+            [
+              44.175,
+              13.935
+            ],
+            [
+              44.175,
+              13.945
+            ],
+            [
+              44.165,
+              13.945
+            ],
+            [
+              44.165,
+              13.935
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "count": 3,
+        "named": 3,
+        "missing_names": 0,
+        "status": "HAS_MATCHING_OSM_OBJECTS"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              44.175,
+              13.935
+            ],
+            [
+              44.185,
+              13.935
+            ],
+            [
+              44.185,
+              13.945
+            ],
+            [
+              44.175,
+              13.945
+            ],
+            [
+              44.175,
+              13.935
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "count": 0,
+        "named": 0,
+        "missing_names": 0,
+        "status": "NO_MATCHING_OSM_OBJECTS"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              44.185,
+              13.935
+            ],
+            [
+              44.195,
+              13.935
+            ],
+            [
+              44.195,
+              13.945
+            ],
+            [
+              44.185,
+              13.945
+            ],
+            [
+              44.185,
+              13.935
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "count": 0,
+        "named": 0,
+        "missing_names": 0,
+        "status": "NO_MATCHING_OSM_OBJECTS"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              44.135,
+              13.945
+            ],
+            [
+              44.145,
+              13.945
+            ],
+            [
+              44.145,
+              13.955
+            ],
+            [
+              44.135,
+              13.955
+            ],
+            [
+              44.135,
+              13.945
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "count": 0,
+        "named": 0,
+        "missing_names": 0,
+        "status": "NO_MATCHING_OSM_OBJECTS"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              44.145,
+              13.945
+            ],
+            [
+              44.155,
+              13.945
+            ],
+            [
+              44.155,
+              13.955
+            ],
+            [
+              44.145,
+              13.955
+            ],
+            [
+              44.145,
+              13.945
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "count": 1,
+        "named": 1,
+        "missing_names": 0,
+        "status": "HAS_MATCHING_OSM_OBJECTS"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              44.155,
+              13.945
+            ],
+            [
+              44.165,
+              13.945
+            ],
+            [
+              44.165,
+              13.955
+            ],
+            [
+              44.155,
+              13.955
+            ],
+            [
+              44.155,
+              13.945
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "count": 6,
+        "named": 6,
+        "missing_names": 0,
+        "status": "HAS_MATCHING_OSM_OBJECTS"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              44.165,
+              13.945
+            ],
+            [
+              44.175,
+              13.945
+            ],
+            [
+              44.175,
+              13.955
+            ],
+            [
+              44.165,
+              13.955
+            ],
+            [
+              44.165,
+              13.945
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "count": 22,
+        "named": 21,
+        "missing_names": 1,
+        "status": "HAS_MATCHING_OSM_OBJECTS"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              44.175,
+              13.945
+            ],
+            [
+              44.185,
+              13.945
+            ],
+            [
+              44.185,
+              13.955
+            ],
+            [
+              44.175,
+              13.955
+            ],
+            [
+              44.175,
+              13.945
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "count": 2,
+        "named": 2,
+        "missing_names": 0,
+        "status": "HAS_MATCHING_OSM_OBJECTS"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              44.185,
+              13.945
+            ],
+            [
+              44.195,
+              13.945
+            ],
+            [
+              44.195,
+              13.955
+            ],
+            [
+              44.185,
+              13.955
+            ],
+            [
+              44.185,
+              13.945
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "count": 0,
+        "named": 0,
+        "missing_names": 0,
+        "status": "NO_MATCHING_OSM_OBJECTS"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              44.135,
+              13.955
+            ],
+            [
+              44.145,
+              13.955
+            ],
+            [
+              44.145,
+              13.965
+            ],
+            [
+              44.135,
+              13.965
+            ],
+            [
+              44.135,
+              13.955
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "count": 3,
+        "named": 3,
+        "missing_names": 0,
+        "status": "HAS_MATCHING_OSM_OBJECTS"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              44.145,
+              13.955
+            ],
+            [
+              44.155,
+              13.955
+            ],
+            [
+              44.155,
+              13.965
+            ],
+            [
+              44.145,
+              13.965
+            ],
+            [
+              44.145,
+              13.955
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "count": 3,
+        "named": 3,
+        "missing_names": 0,
+        "status": "HAS_MATCHING_OSM_OBJECTS"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              44.155,
+              13.955
+            ],
+            [
+              44.165,
+              13.955
+            ],
+            [
+              44.165,
+              13.965
+            ],
+            [
+              44.155,
+              13.965
+            ],
+            [
+              44.155,
+              13.955
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "count": 8,
+        "named": 7,
+        "missing_names": 1,
+        "status": "HAS_MATCHING_OSM_OBJECTS"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              44.165,
+              13.955
+            ],
+            [
+              44.175,
+              13.955
+            ],
+            [
+              44.175,
+              13.965
+            ],
+            [
+              44.165,
+              13.965
+            ],
+            [
+              44.165,
+              13.955
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "count": 24,
+        "named": 23,
+        "missing_names": 1,
+        "status": "HAS_MATCHING_OSM_OBJECTS"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              44.175,
+              13.955
+            ],
+            [
+              44.185,
+              13.955
+            ],
+            [
+              44.185,
+              13.965
+            ],
+            [
+              44.175,
+              13.965
+            ],
+            [
+              44.175,
+              13.955
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "count": 6,
+        "named": 6,
+        "missing_names": 0,
+        "status": "HAS_MATCHING_OSM_OBJECTS"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              44.185,
+              13.955
+            ],
+            [
+              44.195,
+              13.955
+            ],
+            [
+              44.195,
+              13.965
+            ],
+            [
+              44.185,
+              13.965
+            ],
+            [
+              44.185,
+              13.955
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "count": 6,
+        "named": 6,
+        "missing_names": 0,
+        "status": "HAS_MATCHING_OSM_OBJECTS"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              44.135,
+              13.965
+            ],
+            [
+              44.145,
+              13.965
+            ],
+            [
+              44.145,
+              13.975
+            ],
+            [
+              44.135,
+              13.975
+            ],
+            [
+              44.135,
+              13.965
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "count": 9,
+        "named": 9,
+        "missing_names": 0,
+        "status": "HAS_MATCHING_OSM_OBJECTS"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              44.145,
+              13.965
+            ],
+            [
+              44.155,
+              13.965
+            ],
+            [
+              44.155,
+              13.975
+            ],
+            [
+              44.145,
+              13.975
+            ],
+            [
+              44.145,
+              13.965
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "count": 29,
+        "named": 28,
+        "missing_names": 1,
+        "status": "HAS_MATCHING_OSM_OBJECTS"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              44.155,
+              13.965
+            ],
+            [
+              44.165,
+              13.965
+            ],
+            [
+              44.165,
+              13.975
+            ],
+            [
+              44.155,
+              13.975
+            ],
+            [
+              44.155,
+              13.965
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "count": 22,
+        "named": 20,
+        "missing_names": 2,
+        "status": "HAS_MATCHING_OSM_OBJECTS"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              44.165,
+              13.965
+            ],
+            [
+              44.175,
+              13.965
+            ],
+            [
+              44.175,
+              13.975
+            ],
+            [
+              44.165,
+              13.975
+            ],
+            [
+              44.165,
+              13.965
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "count": 33,
+        "named": 33,
+        "missing_names": 0,
+        "status": "HAS_MATCHING_OSM_OBJECTS"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              44.175,
+              13.965
+            ],
+            [
+              44.185,
+              13.965
+            ],
+            [
+              44.185,
+              13.975
+            ],
+            [
+              44.175,
+              13.975
+            ],
+            [
+              44.175,
+              13.965
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "count": 0,
+        "named": 0,
+        "missing_names": 0,
+        "status": "NO_MATCHING_OSM_OBJECTS"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              44.185,
+              13.965
+            ],
+            [
+              44.195,
+              13.965
+            ],
+            [
+              44.195,
+              13.975
+            ],
+            [
+              44.185,
+              13.975
+            ],
+            [
+              44.185,
+              13.965
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "count": 0,
+        "named": 0,
+        "missing_names": 0,
+        "status": "NO_MATCHING_OSM_OBJECTS"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              44.135,
+              13.975
+            ],
+            [
+              44.145,
+              13.975
+            ],
+            [
+              44.145,
+              13.985
+            ],
+            [
+              44.135,
+              13.985
+            ],
+            [
+              44.135,
+              13.975
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "count": 0,
+        "named": 0,
+        "missing_names": 0,
+        "status": "NO_MATCHING_OSM_OBJECTS"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              44.145,
+              13.975
+            ],
+            [
+              44.155,
+              13.975
+            ],
+            [
+              44.155,
+              13.985
+            ],
+            [
+              44.145,
+              13.985
+            ],
+            [
+              44.145,
+              13.975
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "count": 14,
+        "named": 13,
+        "missing_names": 1,
+        "status": "HAS_MATCHING_OSM_OBJECTS"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              44.155,
+              13.975
+            ],
+            [
+              44.165,
+              13.975
+            ],
+            [
+              44.165,
+              13.985
+            ],
+            [
+              44.155,
+              13.985
+            ],
+            [
+              44.155,
+              13.975
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "count": 9,
+        "named": 9,
+        "missing_names": 0,
+        "status": "HAS_MATCHING_OSM_OBJECTS"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              44.165,
+              13.975
+            ],
+            [
+              44.175,
+              13.975
+            ],
+            [
+              44.175,
+              13.985
+            ],
+            [
+              44.165,
+              13.985
+            ],
+            [
+              44.165,
+              13.975
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "count": 18,
+        "named": 17,
+        "missing_names": 1,
+        "status": "HAS_MATCHING_OSM_OBJECTS"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              44.175,
+              13.975
+            ],
+            [
+              44.185,
+              13.975
+            ],
+            [
+              44.185,
+              13.985
+            ],
+            [
+              44.175,
+              13.985
+            ],
+            [
+              44.175,
+              13.975
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "count": 5,
+        "named": 5,
+        "missing_names": 0,
+        "status": "HAS_MATCHING_OSM_OBJECTS"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              44.185,
+              13.975
+            ],
+            [
+              44.195,
+              13.975
+            ],
+            [
+              44.195,
+              13.985
+            ],
+            [
+              44.185,
+              13.985
+            ],
+            [
+              44.185,
+              13.975
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "count": 0,
+        "named": 0,
+        "missing_names": 0,
+        "status": "NO_MATCHING_OSM_OBJECTS"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              44.135,
+              13.985
+            ],
+            [
+              44.145,
+              13.985
+            ],
+            [
+              44.145,
+              13.995
+            ],
+            [
+              44.135,
+              13.995
+            ],
+            [
+              44.135,
+              13.985
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "count": 0,
+        "named": 0,
+        "missing_names": 0,
+        "status": "NO_MATCHING_OSM_OBJECTS"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              44.145,
+              13.985
+            ],
+            [
+              44.155,
+              13.985
+            ],
+            [
+              44.155,
+              13.995
+            ],
+            [
+              44.145,
+              13.995
+            ],
+            [
+              44.145,
+              13.985
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "count": 0,
+        "named": 0,
+        "missing_names": 0,
+        "status": "NO_MATCHING_OSM_OBJECTS"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              44.155,
+              13.985
+            ],
+            [
+              44.165,
+              13.985
+            ],
+            [
+              44.165,
+              13.995
+            ],
+            [
+              44.155,
+              13.995
+            ],
+            [
+              44.155,
+              13.985
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "count": 1,
+        "named": 1,
+        "missing_names": 0,
+        "status": "HAS_MATCHING_OSM_OBJECTS"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              44.165,
+              13.985
+            ],
+            [
+              44.175,
+              13.985
+            ],
+            [
+              44.175,
+              13.995
+            ],
+            [
+              44.165,
+              13.995
+            ],
+            [
+              44.165,
+              13.985
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "count": 0,
+        "named": 0,
+        "missing_names": 0,
+        "status": "NO_MATCHING_OSM_OBJECTS"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              44.175,
+              13.985
+            ],
+            [
+              44.185,
+              13.985
+            ],
+            [
+              44.185,
+              13.995
+            ],
+            [
+              44.175,
+              13.995
+            ],
+            [
+              44.175,
+              13.985
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "count": 0,
+        "named": 0,
+        "missing_names": 0,
+        "status": "NO_MATCHING_OSM_OBJECTS"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              44.185,
+              13.985
+            ],
+            [
+              44.195,
+              13.985
+            ],
+            [
+              44.195,
+              13.995
+            ],
+            [
+              44.185,
+              13.995
+            ],
+            [
+              44.185,
+              13.985
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "count": 0,
+        "named": 0,
+        "missing_names": 0,
+        "status": "NO_MATCHING_OSM_OBJECTS"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              44.135,
+              13.995
+            ],
+            [
+              44.145,
+              13.995
+            ],
+            [
+              44.145,
+              14.005
+            ],
+            [
+              44.135,
+              14.005
+            ],
+            [
+              44.135,
+              13.995
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "count": 0,
+        "named": 0,
+        "missing_names": 0,
+        "status": "NO_MATCHING_OSM_OBJECTS"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              44.145,
+              13.995
+            ],
+            [
+              44.155,
+              13.995
+            ],
+            [
+              44.155,
+              14.005
+            ],
+            [
+              44.145,
+              14.005
+            ],
+            [
+              44.145,
+              13.995
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "count": 0,
+        "named": 0,
+        "missing_names": 0,
+        "status": "NO_MATCHING_OSM_OBJECTS"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              44.155,
+              13.995
+            ],
+            [
+              44.165,
+              13.995
+            ],
+            [
+              44.165,
+              14.005
+            ],
+            [
+              44.155,
+              14.005
+            ],
+            [
+              44.155,
+              13.995
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "count": 0,
+        "named": 0,
+        "missing_names": 0,
+        "status": "NO_MATCHING_OSM_OBJECTS"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              44.165,
+              13.995
+            ],
+            [
+              44.175,
+              13.995
+            ],
+            [
+              44.175,
+              14.005
+            ],
+            [
+              44.165,
+              14.005
+            ],
+            [
+              44.165,
+              13.995
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "count": 0,
+        "named": 0,
+        "missing_names": 0,
+        "status": "NO_MATCHING_OSM_OBJECTS"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              44.175,
+              13.995
+            ],
+            [
+              44.185,
+              13.995
+            ],
+            [
+              44.185,
+              14.005
+            ],
+            [
+              44.175,
+              14.005
+            ],
+            [
+              44.175,
+              13.995
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "count": 0,
+        "named": 0,
+        "missing_names": 0,
+        "status": "NO_MATCHING_OSM_OBJECTS"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              44.185,
+              13.995
+            ],
+            [
+              44.195,
+              13.995
+            ],
+            [
+              44.195,
+              14.005
+            ],
+            [
+              44.185,
+              14.005
+            ],
+            [
+              44.185,
+              13.995
+            ]
+          ]
+        ]
+      }
+    }
+  ]
+}
