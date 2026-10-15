@@ -399,5 +399,24 @@
     "office": 11,
     "shop": 66,
     "tourism": 41
+  },
+  "administrative_boundary_reference": {
+    "source": "OpenStreetMap Nominatim",
+    "municipal_city_polygon_found": false,
+    "note": "The city geocode result is a point. The two available polygons are the administrative districts Al Dhihar (relation 9886705) and Al Mashannah (relation 9886704); they are not official city-only boundaries.",
+    "district_union_count_query": {
+      "timestamp": "2026-10-15T00:49:26Z",
+      "unique_elements_count": 231,
+      "tags": [
+        "shop",
+        "amenity",
+        "office",
+        "craft",
+        "tourism",
+        "healthcare",
+        "leisure"
+      ],
+      "caveat": "District union includes the full administrative polygons and may include settlements outside the urban city boundary."
+    }
   }
 }
