@@ -3,7 +3,7 @@
   "name": "ibb_osm_live_snapshot",
   "license": "ODbL-1.0",
   "source": "OpenStreetMap contributors via Overpass API",
-  "source_csv_sha": "e3f4cbda607ddb91eefdb6c38ec888a07a94c968",
+  "osm_base_timestamp": "2026-10-15T00:39:20Z",
   "study_bbox": [
     44.135,
     13.935,
@@ -8065,7 +8065,5 @@
         ]
       }
     }
-  ],
-  "osm_base_timestamp": "2026-10-15T00:39:20Z",
-  "source_timestamp_note": "Data exported from a live Overpass query; repeated snapshots can differ as OpenStreetMap is edited."
+  ]
 }
