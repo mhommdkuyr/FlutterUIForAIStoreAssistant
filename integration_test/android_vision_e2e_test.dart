@@ -145,7 +145,9 @@ void main() {
         stdout.writeln('✅ ACCESSIBILITY NODE FOUND: Done');
         await tester.ensureVisible(doneSemantics);
         await tester.tap(doneSemantics);
-        await tester.pumpAndSettle(const Duration(milliseconds: 500));
+        for (var i = 0; i < 30 && find.text('Invoice').evaluate().isEmpty; i++) {
+          await tester.pump(const Duration(milliseconds: 100));
+        }
         expect(find.text('Invoice'), findsOneWidget);
         stdout.writeln(
           '✅ ACCESSIBILITY UI ACTION PASS: Done -> Invoice via semantic control',
@@ -157,7 +159,11 @@ void main() {
         stdout.writeln('✅ ACCESSIBILITY NODE FOUND: Complete Sale');
         await tester.ensureVisible(completeSaleSemantics);
         await tester.tap(completeSaleSemantics);
-        await tester.pumpAndSettle(const Duration(seconds: 2));
+        for (var i = 0;
+            i < 50 && find.text('Sale saved successfully!').evaluate().isEmpty;
+            i++) {
+          await tester.pump(const Duration(milliseconds: 100));
+        }
         expect(find.text('Sale saved successfully!'), findsOneWidget);
         expect(find.text('AI Store Assistant'), findsOneWidget);
         stdout.writeln(
@@ -166,7 +172,9 @@ void main() {
 
         stdout.writeln('E2E STEP 8: explicitly unmount scanner and dispose native resources');
         await tester.pumpWidget(const SizedBox.shrink());
-        await tester.pumpAndSettle();
+        for (var i = 0; i < 10; i++) {
+          await tester.pump(const Duration(milliseconds: 100));
+        }
         stdout.writeln('✅ REAL ANDROID VISION E2E PASS');
       } finally {
         await referenceController?.dispose();
