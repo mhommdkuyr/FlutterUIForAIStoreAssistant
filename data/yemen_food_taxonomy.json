@@ -1,0 +1,28 @@
+{
+  "schemaVersion": "yemen-food-taxonomy/v1",
+  "country": "YE",
+  "source": {
+    "name": "World Food Map - Yemen",
+    "url": "https://worldfoodmap.org/country/yemen/",
+    "description": "Broad food-category reference reported for Yemen; this taxonomy is for catalog categories and discovery, not a visual training set."
+  },
+  "foods": [
+    {"category":"grains","nameEn":"bread"},{"category":"grains","nameEn":"flatbread"},{"category":"grains","nameEn":"injera/lahoh"},{"category":"grains","nameEn":"maize meal/asida"},{"category":"grains","nameEn":"naan"},{"category":"grains","nameEn":"paratha"},{"category":"grains","nameEn":"rice"},{"category":"grains","nameEn":"wheat meal/asida"},
+    {"category":"whole_grains","nameEn":"millet"},{"category":"whole_grains","nameEn":"oats"},{"category":"whole_grains","nameEn":"sorghum"},{"category":"whole_grains","nameEn":"whole grain bread"},
+    {"category":"roots_and_tubers","nameEn":"potato"},{"category":"roots_and_tubers","nameEn":"turnip"},{"category":"roots_and_tubers","nameEn":"sweet potato"},
+    {"category":"legumes","nameEn":"falafel"},{"category":"legumes","nameEn":"fava beans"},{"category":"legumes","nameEn":"kidney beans"},{"category":"legumes","nameEn":"lentils"},{"category":"legumes","nameEn":"white beans"},
+    {"category":"orange_vegetables","nameEn":"butternut squash"},{"category":"orange_vegetables","nameEn":"carrots"},{"category":"orange_vegetables","nameEn":"pumpkin"},
+    {"category":"leafy_vegetables","nameEn":"arugula"},{"category":"leafy_vegetables","nameEn":"jute mallow"},{"category":"leafy_vegetables","nameEn":"spinach"},{"category":"leafy_vegetables","nameEn":"beet"},{"category":"leafy_vegetables","nameEn":"cabbage"},
+    {"category":"other_vegetables","nameEn":"cauliflower"},{"category":"other_vegetables","nameEn":"cucumber"},{"category":"other_vegetables","nameEn":"eggplant"},{"category":"other_vegetables","nameEn":"green beans"},{"category":"other_vegetables","nameEn":"green pepper"},{"category":"other_vegetables","nameEn":"leek"},{"category":"other_vegetables","nameEn":"lettuce"},{"category":"other_vegetables","nameEn":"okra"},{"category":"other_vegetables","nameEn":"radish"},{"category":"other_vegetables","nameEn":"tomatoes"},{"category":"other_vegetables","nameEn":"zucchini"},
+    {"category":"fruits","nameEn":"apricots"},{"category":"fruits","nameEn":"cantaloupe"},{"category":"fruits","nameEn":"mango"},{"category":"fruits","nameEn":"papaya"},{"category":"fruits","nameEn":"grapefruit"},{"category":"fruits","nameEn":"mandarin"},{"category":"fruits","nameEn":"orange"},{"category":"fruits","nameEn":"apple"},{"category":"fruits","nameEn":"banana"},{"category":"fruits","nameEn":"dates"},{"category":"fruits","nameEn":"grapes"},{"category":"fruits","nameEn":"green melon"},{"category":"fruits","nameEn":"guava"},{"category":"fruits","nameEn":"peaches"},{"category":"fruits","nameEn":"pear"},{"category":"fruits","nameEn":"pomegranate"},{"category":"fruits","nameEn":"prickly pear"},{"category":"fruits","nameEn":"raisins"},{"category":"fruits","nameEn":"watermelon"},
+    {"category":"baked_sweets","nameEn":"cakes"},{"category":"baked_sweets","nameEn":"cookies"},{"category":"baked_sweets","nameEn":"donuts"},{"category":"baked_sweets","nameEn":"fried dough"},{"category":"baked_sweets","nameEn":"pastries"},{"category":"baked_sweets","nameEn":"traditional sweets"},
+    {"category":"confectionery","nameEn":"candy"},{"category":"confectionery","nameEn":"chocolate"},{"category":"confectionery","nameEn":"ice cream"},{"category":"confectionery","nameEn":"jellies"},
+    {"category":"dairy_and_eggs","nameEn":"eggs"},{"category":"dairy_and_eggs","nameEn":"cheese"},{"category":"dairy_and_eggs","nameEn":"yoghurt"},
+    {"category":"meat_and_poultry","nameEn":"beef"},{"category":"meat_and_poultry","nameEn":"goat meat"},{"category":"meat_and_poultry","nameEn":"lamb"},{"category":"meat_and_poultry","nameEn":"chicken"},
+    {"category":"fish_and_seafood","nameEn":"fish"},{"category":"fish_and_seafood","nameEn":"tuna"},
+    {"category":"nuts_and_seeds","nameEn":"almonds"},{"category":"nuts_and_seeds","nameEn":"peanuts"},{"category":"nuts_and_seeds","nameEn":"sesame"},{"category":"nuts_and_seeds","nameEn":"sunflower seeds"},{"category":"nuts_and_seeds","nameEn":"mixed nuts"},
+    {"category":"packaged_snacks","nameEn":"packaged salty snacks"},{"category":"instant_foods","nameEn":"instant noodles"},
+    {"category":"milk_and_drinks","nameEn":"milk"},{"category":"milk_and_drinks","nameEn":"powdered milk"},{"category":"milk_and_drinks","nameEn":"tea"},{"category":"milk_and_drinks","nameEn":"coffee"},{"category":"milk_and_drinks","nameEn":"barley drink"},{"category":"milk_and_drinks","nameEn":"qishr"},{"category":"milk_and_drinks","nameEn":"fruit juices"},{"category":"milk_and_drinks","nameEn":"soft drinks"},{"category":"milk_and_drinks","nameEn":"energy drinks"},
+    {"category":"prepared_foods","nameEn":"fast food"},{"category":"traditional_foods","nameEn":"locust"}
+  ]
+}
